@@ -1,5 +1,6 @@
 import React from "react";
 import { spring, useCurrentFrame, useVideoConfig } from "remotion";
+import { fitText } from "@remotion/layout-utils";
 import { theme, toneColor, Tone } from "../lib/theme";
 
 /** Бейдж состояния («Соединение установлено»), появляется пружинкой. */
@@ -15,6 +16,10 @@ export const Badge: React.FC<{
   if (frame < enterFrame) return null;
   const scale = spring({ frame: frame - enterFrame, fps, config: { damping: 12 } });
   const color = toneColor(tone);
+  const fontSize = Math.min(
+    42,
+    fitText({ text: label, withinWidth: 820, fontFamily: theme.font, fontWeight: 700 }).fontSize
+  );
   return (
     <div
       style={{
@@ -27,7 +32,7 @@ export const Badge: React.FC<{
         background: `${color}1A`,
         fontFamily: theme.font,
         fontWeight: 700,
-        fontSize: 42,
+        fontSize,
         padding: "18px 44px",
         borderRadius: 999,
         whiteSpace: "nowrap",

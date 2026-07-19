@@ -1,5 +1,6 @@
 import React from "react";
 import { useCurrentFrame, useVideoConfig } from "remotion";
+import { fitText } from "@remotion/layout-utils";
 import { layout, theme, LEAD_SEC } from "./theme";
 import type { Word } from "./types";
 
@@ -43,6 +44,17 @@ export const Karaoke: React.FC<{ words: Word[] }> = ({ words }) => {
   );
   if (!active) return null;
 
+  // автоподгонка: длинная строка ужимается, чтобы не вылезать и не переноситься
+  const lineText = active.words.map((w) => w.text).join(" ");
+  const { fontSize } = fitText({
+    text: lineText,
+    withinWidth: 900,
+    fontFamily: theme.font,
+    fontWeight: 800,
+    textTransform: "uppercase",
+  });
+  const size = Math.min(72, fontSize * 0.94);
+
   return (
     <div
       style={{
@@ -71,7 +83,7 @@ export const Karaoke: React.FC<{ words: Word[] }> = ({ words }) => {
             style={{
               fontFamily: theme.font,
               fontWeight: 800,
-              fontSize: 72,
+              fontSize: size,
               lineHeight: 1.15,
               textTransform: "uppercase",
               color: said ? theme.accent : theme.text,

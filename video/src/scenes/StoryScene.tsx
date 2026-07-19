@@ -1,5 +1,6 @@
 import React from "react";
 import { interpolate, random, spring, useCurrentFrame, useVideoConfig } from "remotion";
+import { fitText } from "@remotion/layout-utils";
 import { layout, theme, toneColor } from "../lib/theme";
 import { wordFrame } from "../lib/timeline";
 import type { StoryScene as StoryProps, StoryBeat, Word } from "../lib/types";
@@ -39,6 +40,25 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
     if (beat.visual === "title-slam") impact = start + 8;
     return { beat, start, end, impact };
   });
+};
+
+/** Звуковые события: вуш на смену бита, клик/слэм/дзынь на удары визуалов. */
+export const storySfx = (
+  scene: StoryProps,
+  words: Word[],
+  frames: number
+): { frame: number; sound: string }[] => {
+  const slots = storySchedule(scene, words, frames);
+  const events: { frame: number; sound: string }[] = [];
+  for (const [i, s] of slots.entries()) {
+    if (i > 0) events.push({ frame: s.start, sound: "whoosh-short" });
+    if (s.impact === null) continue;
+    if (s.beat.visual === "browser-click") events.push({ frame: s.impact, sound: "click" });
+    if (s.beat.visual === "handshake")
+      events.push({ frame: s.impact, sound: "slam" }, { frame: s.impact + 2, sound: "ding" });
+    if (s.beat.visual === "title-slam") events.push({ frame: s.impact, sound: "slam" });
+  }
+  return events;
 };
 
 export const storyImpacts = (scene: StoryProps, words: Word[], frames: number): number[] => {
@@ -311,6 +331,10 @@ const TitleSlam: React.FC<{ local: number; fps: number; impactLocal: number; tex
   const scale = interpolate(s, [0, 1], [2.6, 1]);
   const landed = local >= impactLocal;
   const breathe = 1 + 0.025 * Math.sin(local / 12);
+  const titleSize = Math.min(
+    120,
+    fitText({ text: (text || "").split("\n")[0], withinWidth: 940, fontFamily: theme.font, fontWeight: 800 }).fontSize
+  );
   return (
     <>
       {landed ? <PulseRing x={W / 2} y={820} triggerFrame={impactLocal} size={520} /> : null}
@@ -325,7 +349,7 @@ const TitleSlam: React.FC<{ local: number; fps: number; impactLocal: number; tex
           opacity: s,
           fontFamily: theme.font,
           fontWeight: 800,
-          fontSize: 120,
+          fontSize: titleSize,
           lineHeight: 1.05,
           color: theme.accent,
           textShadow: `0 0 60px ${theme.accent}55, 0 8px 40px rgba(0,0,0,0.7)`,

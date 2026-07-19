@@ -1,5 +1,6 @@
 import React from "react";
 import { spring, useCurrentFrame, useVideoConfig, random } from "remotion";
+import { fitText } from "@remotion/layout-utils";
 import { theme, toneColor, Tone } from "../lib/theme";
 import { IconGlyph } from "./IconGlyph";
 
@@ -34,6 +35,11 @@ export const NodeBox: React.FC<{
   }
 
   const color = toneColor(tone);
+  const labelWidth = width - 64 - (icon ? 104 : 0);
+  const labelSize = Math.min(
+    46,
+    fitText({ text: label, withinWidth: labelWidth, fontFamily: theme.font, fontWeight: 700 }).fontSize
+  );
   return (
     <div
       style={{
@@ -58,7 +64,7 @@ export const NodeBox: React.FC<{
         style={{
           fontFamily: theme.font,
           fontWeight: 700,
-          fontSize: 46,
+          fontSize: labelSize,
           color: theme.text,
           lineHeight: 1.1,
         }}

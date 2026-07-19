@@ -50,6 +50,20 @@ cd video && npx remotion render Episode out/<slug>.mp4 --props='{"episodeId":"<s
 - Иконки узлов — любые из lucide (kebab-case): smartphone, server, globe, skull,
   lock, key, shield, database, wifi, file-text, user, bug, cloud...
 
+## Кузница: быстрая проверка сцены без озвучки
+
+Композиция `Preview` рендерит ОДНУ сцену с синтетическими таймингами слов —
+кадр готов за секунды, TTS не нужен:
+
+```bash
+cd video && npx remotion still Preview /tmp/preview.png --frame=<N> \
+  --props='{"scene": {<полный JSON сцены с narration>}}'
+```
+
+Используй для: проверки нового визуала, отладки композиции кадра, подбора
+параметров. Смотри результат инструментом Read. Итерация дешёвая — не бойся
+пробовать варианты.
+
 ## Если нужной сцены нет в каталоге
 
 Не выкручивайся через неподходящую сцену. Расширь язык:

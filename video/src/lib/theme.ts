@@ -1,3 +1,5 @@
+import { displayFont, monoFont } from "./fonts";
+
 export const theme = {
   bg: "#0B0E14",
   panel: "#141A26",
@@ -9,8 +11,8 @@ export const theme = {
   success: "#34D399",
   danger: "#F87171",
   warning: "#FBBF24",
-  font: "'Liberation Sans', 'DejaVu Sans', sans-serif",
-  mono: "'DejaVu Sans Mono', monospace",
+  font: displayFont,
+  mono: monoFont,
 } as const;
 
 export type Tone = "accent" | "accent2" | "success" | "danger" | "warning";

@@ -8,7 +8,9 @@ import {
   useCurrentFrame,
 } from "remotion";
 import { FPS, layout, theme } from "./lib/theme";
-import { buildTimeline, totalFrames } from "./lib/timeline";
+import { buildTimeline, sceneFrames, totalFrames } from "./lib/timeline";
+import { fakeMeta } from "./lib/fakeWords";
+import { sceneSfx, SFX_VOLUME } from "./lib/sfx";
 import type { Episode, Scene, SceneMeta } from "./lib/types";
 import { Karaoke } from "./lib/Karaoke";
 import { Particles, SceneContainer } from "./lib/Motion";
@@ -72,6 +74,13 @@ const SceneRenderer: React.FC<{ scene: Scene; meta: SceneMeta; frames: number }>
   }
 };
 
+const sceneImpacts = (scene: Scene, meta: SceneMeta, frames: number): number[] =>
+  scene.type === "diagram"
+    ? diagramImpacts(scene, meta.words, frames)
+    : scene.type === "story"
+      ? storyImpacts(scene, meta.words, frames)
+      : [];
+
 interface EpisodeProps extends Record<string, unknown> {
   episodeId: string;
   episode: Episode | null;
@@ -85,12 +94,7 @@ const EpisodeComp: React.FC<EpisodeProps> = ({ episodeId, episode, metas }) => {
     <AbsoluteFill style={{ width: layout.width, height: layout.height }}>
       <Background />
       {episode.scenes.map((scene, i) => {
-        const impacts =
-          scene.type === "diagram"
-            ? diagramImpacts(scene, metas[i].words, slots[i].frames)
-            : scene.type === "story"
-              ? storyImpacts(scene, metas[i].words, slots[i].frames)
-              : [];
+        const impacts = sceneImpacts(scene, metas[i], slots[i].frames);
         return (
           <Sequence
             key={i}
@@ -101,6 +105,11 @@ const EpisodeComp: React.FC<EpisodeProps> = ({ episodeId, episode, metas }) => {
             <Sequence from={slots[i].audioDelay} name={`audio-${i}`}>
               <Audio src={staticFile(`episodes/${episodeId}/audio/scene-${i}.mp3`)} />
             </Sequence>
+            {sceneSfx(scene, metas[i], slots[i].frames).map((e, k) => (
+              <Sequence key={`sfx-${k}`} from={Math.max(0, e.frame)} name={`sfx-${e.sound}`}>
+                <Audio src={staticFile(`sfx/${e.sound}.wav`)} volume={SFX_VOLUME} />
+              </Sequence>
+            ))}
             <SceneContainer frames={slots[i].frames} impacts={impacts}>
               <SceneRenderer scene={scene} meta={metas[i]} frames={slots[i].frames} />
             </SceneContainer>
@@ -112,7 +121,40 @@ const EpisodeComp: React.FC<EpisodeProps> = ({ episodeId, episode, metas }) => {
   );
 };
 
+interface PreviewProps extends Record<string, unknown> {
+  scene: Scene | null;
+}
+
+/** Кузница: рендер одной сцены с синтетическими таймингами — проверка визуала без TTS. */
+const PreviewComp: React.FC<PreviewProps> = ({ scene }) => {
+  if (!scene) return <Background />;
+  const meta = fakeMeta(scene.narration);
+  const frames = sceneFrames(meta);
+  return (
+    <AbsoluteFill style={{ width: layout.width, height: layout.height }}>
+      <Background />
+      <SceneContainer frames={frames} impacts={sceneImpacts(scene, meta, frames)}>
+        <SceneRenderer scene={scene} meta={meta} frames={frames} />
+      </SceneContainer>
+      {scene.type !== "hook" ? <Karaoke words={meta.words} /> : null}
+    </AbsoluteFill>
+  );
+};
+
 export const Root: React.FC = () => (
+  <>
+  <Composition
+    id="Preview"
+    component={PreviewComp}
+    width={layout.width}
+    height={layout.height}
+    fps={FPS}
+    durationInFrames={300}
+    defaultProps={{ scene: null } as PreviewProps}
+    calculateMetadata={({ props }) => ({
+      durationInFrames: props.scene ? sceneFrames(fakeMeta(props.scene.narration)) : 300,
+    })}
+  />
   <Composition
     id="Episode"
     component={EpisodeComp}
@@ -132,4 +174,5 @@ export const Root: React.FC = () => (
       };
     }}
   />
+  </>
 );

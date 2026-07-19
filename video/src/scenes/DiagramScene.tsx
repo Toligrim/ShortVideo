@@ -33,6 +33,23 @@ const schedule = (scene: DiagramProps, words: Word[], frames: number) => {
   });
 };
 
+/** Звуковые события сцены: вуш на вылет пакета, поп на прилёт, дзынь на бейдж. */
+export const diagramSfx = (
+  scene: DiagramProps,
+  words: Word[],
+  frames: number
+): { frame: number; sound: string }[] => {
+  const events = schedule(scene, words, frames).flatMap((p) => [
+    { frame: p.start, sound: "whoosh" },
+    { frame: p.end, sound: "pop" },
+  ]);
+  if (scene.state) {
+    const anchored = scene.state.onWord ? wordFrame(words, scene.state.onWord) : null;
+    events.push({ frame: anchored ?? Math.round(frames * 0.72), sound: "ding" });
+  }
+  return events;
+};
+
 /** Кадры-импакты сцены (прилёты пакетов + появление бейджа) — для тряски камеры. */
 export const diagramImpacts = (scene: DiagramProps, words: Word[], frames: number): number[] => {
   const impacts = schedule(scene, words, frames).map((p) => p.end);
