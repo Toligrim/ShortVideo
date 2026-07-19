@@ -7,10 +7,19 @@ import {
   staticFile,
   useCurrentFrame,
 } from "remotion";
-import { FPS, layout, theme } from "./lib/theme";
-import { buildTimeline, sceneFrames, totalFrames } from "./lib/timeline";
+import { TransitionSeries, linearTiming } from "@remotion/transitions";
+import { slide } from "@remotion/transitions/slide";
+import { fade } from "@remotion/transitions/fade";
+import { FPS, LEAD_SEC, layout, theme } from "./lib/theme";
+import { sceneFrames } from "./lib/timeline";
 import { fakeMeta } from "./lib/fakeWords";
 import { sceneSfx, SFX_VOLUME } from "./lib/sfx";
+
+export const TRANSITION_FRAMES = 10;
+
+export const episodeFrames = (metas: SceneMeta[]): number =>
+  metas.reduce((acc, m) => acc + sceneFrames(m), 0) -
+  TRANSITION_FRAMES * Math.max(0, metas.length - 1);
 import type { Episode, Scene, SceneMeta } from "./lib/types";
 import { Karaoke } from "./lib/Karaoke";
 import { Particles, SceneContainer } from "./lib/Motion";
@@ -89,34 +98,60 @@ interface EpisodeProps extends Record<string, unknown> {
 
 const EpisodeComp: React.FC<EpisodeProps> = ({ episodeId, episode, metas }) => {
   if (!episode) return <Background />;
-  const slots = buildTimeline(metas);
+  const frames = metas.map(sceneFrames);
+  const audioDelay = Math.round(LEAD_SEC * FPS);
+
+  // интервалы речи в глобальных кадрах — для приглушения музыки под голосом
+  const speech: [number, number][] = [];
+  let cursor = 0;
+  for (let i = 0; i < metas.length; i++) {
+    speech.push([cursor + audioDelay, cursor + audioDelay + Math.round(metas[i].duration * FPS)]);
+    cursor += frames[i] - TRANSITION_FRAMES;
+  }
+  const musicVolume = (f: number) => {
+    const speaking = speech.some(([a, b]) => f >= a - 5 && f <= b + 8);
+    return speaking ? 0.045 : 0.1;
+  };
+
+  const items: React.ReactNode[] = [];
+  episode.scenes.forEach((scene, i) => {
+    if (i > 0) {
+      items.push(
+        <TransitionSeries.Transition
+          key={`t-${i}`}
+          timing={linearTiming({ durationInFrames: TRANSITION_FRAMES })}
+          presentation={
+            scene.type === "outro" ? fade() : slide({ direction: "from-bottom" })
+          }
+        />
+      );
+    }
+    items.push(
+      <TransitionSeries.Sequence key={i} durationInFrames={frames[i]} name={`scene-${i}-${scene.type}`}>
+        <Sequence from={audioDelay} name={`audio-${i}`}>
+          <Audio src={staticFile(`episodes/${episodeId}/audio/scene-${i}.mp3`)} />
+        </Sequence>
+        {i > 0 ? (
+          <Audio src={staticFile("sfx/whoosh-short.wav")} volume={SFX_VOLUME} />
+        ) : null}
+        {sceneSfx(scene, metas[i], frames[i]).map((e, k) => (
+          <Sequence key={`sfx-${k}`} from={Math.max(0, e.frame)} name={`sfx-${e.sound}`}>
+            <Audio src={staticFile(`sfx/${e.sound}.wav`)} volume={SFX_VOLUME} />
+          </Sequence>
+        ))}
+        <SceneContainer frames={frames[i]} impacts={sceneImpacts(scene, metas[i], frames[i])}>
+          <SceneRenderer scene={scene} meta={metas[i]} frames={frames[i]} />
+        </SceneContainer>
+        {scene.type !== "hook" ? <Karaoke words={metas[i].words} /> : null}
+      </TransitionSeries.Sequence>
+    );
+  });
+
   return (
     <AbsoluteFill style={{ width: layout.width, height: layout.height }}>
       <Background />
-      {episode.scenes.map((scene, i) => {
-        const impacts = sceneImpacts(scene, metas[i], slots[i].frames);
-        return (
-          <Sequence
-            key={i}
-            from={slots[i].from}
-            durationInFrames={slots[i].frames}
-            name={`scene-${i}-${scene.type}`}
-          >
-            <Sequence from={slots[i].audioDelay} name={`audio-${i}`}>
-              <Audio src={staticFile(`episodes/${episodeId}/audio/scene-${i}.mp3`)} />
-            </Sequence>
-            {sceneSfx(scene, metas[i], slots[i].frames).map((e, k) => (
-              <Sequence key={`sfx-${k}`} from={Math.max(0, e.frame)} name={`sfx-${e.sound}`}>
-                <Audio src={staticFile(`sfx/${e.sound}.wav`)} volume={SFX_VOLUME} />
-              </Sequence>
-            ))}
-            <SceneContainer frames={slots[i].frames} impacts={impacts}>
-              <SceneRenderer scene={scene} meta={metas[i]} frames={slots[i].frames} />
-            </SceneContainer>
-            {scene.type !== "hook" ? <Karaoke words={metas[i].words} /> : null}
-          </Sequence>
-        );
-      })}
+      <Audio loop src={staticFile("music/bed.wav")} volume={musicVolume} />
+      <TransitionSeries>{items}</TransitionSeries>
     </AbsoluteFill>
   );
 };
@@ -169,7 +204,7 @@ export const Root: React.FC = () => (
         fetch(staticFile(`episodes/${props.episodeId}/meta.json`)).then((r) => r.json()),
       ]);
       return {
-        durationInFrames: totalFrames(metas),
+        durationInFrames: episodeFrames(metas),
         props: { ...props, episode, metas },
       };
     }}

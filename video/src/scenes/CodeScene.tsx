@@ -12,6 +12,7 @@ export const CodeScene: React.FC<{ scene: CodeProps }> = ({ scene }) => (
       <CodePanel
         code={scene.code}
         highlight={scene.highlight}
+        language={scene.language}
         x={layout.width / 2}
         y={layout.safeTop + (scene.heading ? 300 : 180)}
         startFrame={12}

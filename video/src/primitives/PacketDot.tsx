@@ -4,7 +4,7 @@ import { theme, toneColor, Tone } from "../lib/theme";
 
 const easeInOut = (t: number) => t * t * (3 - 2 * t);
 
-/** Пакет: пилюля со шлейфом, летящая из A в B; покачивается в полёте. */
+/** Пакет: пилюля со шлейфом, летящая из A в B по дуге; наклоняется по касательной. */
 export const PacketDot: React.FC<{
   label: string;
   fromX: number;
@@ -14,23 +14,42 @@ export const PacketDot: React.FC<{
   startFrame: number;
   endFrame: number;
   tone?: Tone;
-}> = ({ label, fromX, fromY, toX, toY, startFrame, endFrame, tone }) => {
+  arc?: number; // боковой прогиб дуги в px (знак = сторона); 0 — прямая
+}> = ({ label, fromX, fromY, toX, toY, startFrame, endFrame, tone, arc = 0 }) => {
   const frame = useCurrentFrame();
   if (frame < startFrame) return null;
   const color = toneColor(tone);
 
+  // квадратичная Безье: контрольная точка сбоку от середины пути
+  const cx = (fromX + toX) / 2 + arc;
+  const cy = (fromY + toY) / 2;
   const posAt = (f: number) => {
     const t = interpolate(f, [startFrame, endFrame], [0, 1], {
       extrapolateLeft: "clamp",
       extrapolateRight: "clamp",
     });
     const e = easeInOut(t);
-    return { x: fromX + (toX - fromX) * e, y: fromY + (toY - fromY) * e, t };
+    const u = 1 - e;
+    return {
+      x: u * u * fromX + 2 * u * e * cx + e * e * toX,
+      y: u * u * fromY + 2 * u * e * cy + e * e * toY,
+      // касательная — для наклона пилюли по ходу движения
+      angle:
+        (Math.atan2(
+          2 * u * (cy - fromY) + 2 * e * (toY - cy),
+          2 * u * (cx - fromX) + 2 * e * (toX - cx)
+        ) *
+          180) /
+          Math.PI -
+        90,
+      t: e,
+    };
   };
 
-  const { x, y, t } = posAt(frame);
+  const { x, y, t, angle } = posAt(frame);
   const flying = t > 0 && t < 1;
-  const wobble = flying ? 7 * Math.sin(frame * 0.9) : 0;
+  const tilt = flying ? angle * 0.35 : 0;
+  const wobble = (flying ? 5 * Math.sin(frame * 0.9) : 0) + tilt;
   const fade = interpolate(frame, [endFrame + 8, endFrame + 20], [1, 0], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",

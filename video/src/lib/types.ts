@@ -53,6 +53,7 @@ export interface CodeScene {
   heading?: string;
   code: string;
   highlight?: number[]; // номера строк с 1
+  language?: string; // bash | python | json | yaml | c | typescript (по умолчанию bash)
 }
 
 export interface OutroScene {

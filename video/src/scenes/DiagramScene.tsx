@@ -247,6 +247,7 @@ export const DiagramScene: React.FC<{
             startFrame={p.start}
             endFrame={p.end}
             tone={p.tone}
+            arc={(i % 2 === 0 ? 1 : -1) * 150}
           />
         );
       })}

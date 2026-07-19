@@ -168,7 +168,8 @@
         "heading": { "type": "string", "maxLength": 40 },
         "narration": { "$ref": "#/$defs/narration" },
         "code": { "type": "string", "description": "≤14 строк, ≤46 символов в строке" },
-        "highlight": { "type": "array", "items": { "type": "integer", "minimum": 1 } }
+        "highlight": { "type": "array", "items": { "type": "integer", "minimum": 1 } },
+        "language": { "enum": ["bash", "python", "json", "yaml", "c", "typescript"] }
       }
     },
     "outro": {
