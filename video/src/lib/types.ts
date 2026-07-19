@@ -62,7 +62,7 @@ export interface OutroScene {
 }
 
 export interface StoryBeat {
-  visual: "browser-click" | "devices-meet" | "handshake" | "title-slam";
+  visual: "browser-click" | "devices-meet" | "handshake" | "title-slam" | "password-leak";
   onWord?: string; // бит начинается на этом слове реплики
   params?: Record<string, unknown>;
 }

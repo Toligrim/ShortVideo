@@ -38,6 +38,7 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
     if (beat.visual === "browser-click") impact = start + Math.round(dur * 0.55);
     if (beat.visual === "handshake") impact = start + 10;
     if (beat.visual === "title-slam") impact = start + 8;
+    if (beat.visual === "password-leak") impact = start + Math.round(dur * 0.4);
     return { beat, start, end, impact };
   });
 };
@@ -57,6 +58,7 @@ export const storySfx = (
     if (s.beat.visual === "handshake")
       events.push({ frame: s.impact, sound: "slam" }, { frame: s.impact + 2, sound: "ding" });
     if (s.beat.visual === "title-slam") events.push({ frame: s.impact, sound: "slam" });
+    if (s.beat.visual === "password-leak") events.push({ frame: s.impact, sound: "click" });
   }
   return events;
 };
@@ -378,6 +380,133 @@ const TitleSlam: React.FC<{ local: number; fps: number; impactLocal: number; tex
   );
 };
 
+/** Пароль печатается точками, по энтеру буквы голым текстом улетают по проводу — читает их глаз сбоку. */
+const PasswordLeak: React.FC<{ local: number; fps: number; impactLocal: number; password?: string }> = ({
+  local,
+  fps,
+  impactLocal,
+  password = "hunter2",
+}) => {
+  const enter = spring({ frame: local, fps, config: { damping: 15, mass: 0.8 } });
+  const boxW = 760;
+  const boxX = W / 2 - boxW / 2;
+  const boxY = 760;
+  const promptY = boxY + 130;
+  const dotsY = boxY + 190;
+  const typedCount = Math.min(password.length, Math.floor((local / Math.max(impactLocal, 1)) * password.length));
+  const pressed = local >= impactLocal;
+  const flash = pressed ? Math.exp(-(local - impactLocal) * 0.2) : 0;
+  const leakP = pressed ? clamp01((local - impactLocal - 6) / 32) : 0;
+  return (
+    <>
+      <div
+        style={{
+          position: "absolute",
+          left: boxX,
+          top: boxY,
+          width: boxW,
+          height: 260,
+          transform: `translateY(${(1 - enter) * 100}px) scale(${0.92 + 0.08 * enter})`,
+          opacity: enter,
+          background: "#0A0F18",
+          border: `2px solid ${theme.panelBorder}`,
+          borderRadius: 24,
+          boxShadow: "0 40px 100px rgba(0,0,0,0.6)",
+          overflow: "hidden",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "16px 22px", background: theme.panel }}>
+          {["#FF5F57", "#FEBC2E", "#28C840"].map((c) => (
+            <div key={c} style={{ width: 18, height: 18, borderRadius: 9, background: c }} />
+          ))}
+        </div>
+        <div
+          style={{
+            position: "absolute",
+            left: 34,
+            top: promptY - boxY,
+            fontFamily: theme.mono,
+            fontSize: 34,
+            color: theme.subtext,
+          }}
+        >
+          user@host:~$ ssh login
+        </div>
+        <div style={{ position: "absolute", left: 34, top: promptY - boxY + 60, display: "flex", gap: 12 }}>
+          {Array.from({ length: typedCount }).map((_, i) => (
+            <div key={i} style={{ width: 20, height: 20, borderRadius: 10, background: theme.text }} />
+          ))}
+          {!pressed ? (
+            <div
+              style={{
+                width: 4,
+                height: 30,
+                background: theme.text,
+                opacity: 0.5 + 0.5 * Math.sin(local / 4),
+              }}
+            />
+          ) : null}
+        </div>
+      </div>
+      {pressed && flash > 0.05 ? <PulseRing x={W / 2} y={dotsY} triggerFrame={impactLocal} tone="danger" size={260} /> : null}
+      {pressed ? (
+        <div
+          style={{
+            position: "absolute",
+            left: boxX + boxW,
+            top: dotsY - 2,
+            width: W - (boxX + boxW) + 220,
+            height: 4,
+            background: `${theme.danger}AA`,
+            boxShadow: `0 0 20px ${theme.danger}88`,
+          }}
+        />
+      ) : null}
+      {pressed
+        ? password.split("").map((ch, i) => {
+            const t = clamp01(leakP - i * 0.045);
+            if (t <= 0) return null;
+            const x = interpolate(t, [0, 1], [boxX + boxW - 10, W + 90]);
+            const y = dotsY + 14 * Math.sin((local + i * 7) / 8);
+            const op = interpolate(t, [0, 0.15, 0.85, 1], [0, 1, 1, 0]);
+            return (
+              <div
+                key={i}
+                style={{
+                  position: "absolute",
+                  left: x,
+                  top: y,
+                  transform: "translate(-50%, -50%)",
+                  fontFamily: theme.mono,
+                  fontWeight: 800,
+                  fontSize: 46,
+                  color: theme.danger,
+                  textShadow: `0 0 20px ${theme.danger}`,
+                  opacity: op,
+                }}
+              >
+                {ch}
+              </div>
+            );
+          })
+        : null}
+      {pressed && leakP > 0.25 ? (
+        <div
+          style={{
+            position: "absolute",
+            right: 130,
+            top: dotsY - 130,
+            opacity: interpolate(leakP, [0.25, 0.45], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" }),
+            filter: `drop-shadow(0 0 20px ${theme.danger}aa)`,
+          }}
+        >
+          <IconGlyph name="eye" size={92} color={theme.danger} strokeWidth={1.6} />
+        </div>
+      ) : null}
+    </>
+  );
+};
+
 /* ──────────────────────────── сцена-сториборд ──────────────────────────── */
 
 /** Каждая фраза диктора — свой бит с движением камеры между битами. */
@@ -401,6 +530,7 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     "devices-meet": { scale: 1.12, y: -60 },
     handshake: { scale: 1.22, y: -110 },
     "title-slam": { scale: 1.0, y: 0 },
+    "password-leak": { scale: 1.05, y: -30 },
   };
   const cur = cams[slot.beat.visual] ?? { scale: 1, y: 0 };
   const prev = idx > 0 ? cams[slots[idx - 1].beat.visual] ?? cur : cur;
@@ -433,6 +563,15 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             impactLocal={impactLocal}
             text={slot.beat.params?.text as string}
             sub={slot.beat.params?.sub as string | undefined}
+          />
+        );
+      case "password-leak":
+        return (
+          <PasswordLeak
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            password={slot.beat.params?.password as string | undefined}
           />
         );
       default:
