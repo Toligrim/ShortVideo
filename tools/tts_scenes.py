@@ -25,6 +25,7 @@ import re
 import subprocess
 import sys
 import time
+import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -32,7 +33,16 @@ ROOT = Path(__file__).resolve().parent.parent
 
 EDGE_VOICE = "ru-RU-DmitryNeural"
 EDGE_RATE = "+8%"
-GEMINI_MODEL = "gemini-3.1-flash-tts-preview"
+# Порядок = приоритет; при 429 переходим к следующей (квоты у моделей раздельные).
+# GEMINI_TTS_MODEL в env ставит выбранную модель первой — для консистентности тембра.
+GEMINI_MODELS = [
+    "gemini-3.1-flash-tts-preview",
+    "gemini-2.5-flash-preview-tts",
+    "gemini-2.5-pro-preview-tts",
+]
+if os.environ.get("GEMINI_TTS_MODEL"):
+    m = os.environ["GEMINI_TTS_MODEL"]
+    GEMINI_MODELS = [m] + [x for x in GEMINI_MODELS if x != m]
 GEMINI_VOICE = "Fenrir"
 STYLE_PROMPT = (
     "Прочитай энергично и живо, по-русски, как харизматичный ведущий коротких "
@@ -111,26 +121,35 @@ def synth_gemini(spoken: str, mp3_path: Path, key: str):
             "speechConfig": {"voiceConfig": {"prebuiltVoiceConfig": {"voiceName": GEMINI_VOICE}}},
         },
     }).encode()
-    url = (f"https://generativelanguage.googleapis.com/v1beta/models/"
-           f"{GEMINI_MODEL}:generateContent")
-    req = urllib.request.Request(url, data=body, headers={
-        "Content-Type": "application/json", "x-goog-api-key": key})
     last_err = None
-    for attempt in range(4):
-        try:
-            with urllib.request.urlopen(req, timeout=120) as resp:
-                data = json.load(resp)
-            pcm = base64.b64decode(
-                data["candidates"][0]["content"]["parts"][0]["inlineData"]["data"])
-            p = subprocess.run(
-                ["ffmpeg", "-v", "quiet", "-y", "-f", "s16le", "-ar", "24000", "-ac", "1",
-                 "-i", "pipe:0", "-b:a", "128k", str(mp3_path)], input=pcm)
-            if p.returncode != 0:
-                raise RuntimeError("ffmpeg encode failed")
-            return
-        except Exception as e:  # 429/5xx/сеть — бэкофф
-            last_err = e
-            time.sleep(5 * (attempt + 1))
+    for model in GEMINI_MODELS:
+        url = (f"https://generativelanguage.googleapis.com/v1beta/models/"
+               f"{model}:generateContent")
+        req = urllib.request.Request(url, data=body, headers={
+            "Content-Type": "application/json", "x-goog-api-key": key})
+        for attempt in range(3):
+            try:
+                with urllib.request.urlopen(req, timeout=120) as resp:
+                    data = json.load(resp)
+                pcm = base64.b64decode(
+                    data["candidates"][0]["content"]["parts"][0]["inlineData"]["data"])
+                p = subprocess.run(
+                    ["ffmpeg", "-v", "quiet", "-y", "-f", "s16le", "-ar", "24000", "-ac", "1",
+                     "-i", "pipe:0", "-b:a", "128k", str(mp3_path)], input=pcm)
+                if p.returncode != 0:
+                    raise RuntimeError("ffmpeg encode failed")
+                if model != GEMINI_MODELS[0]:
+                    print(f"  (модель: {model})", file=sys.stderr)
+                return
+            except urllib.error.HTTPError as e:
+                last_err = e
+                if e.code == 429:
+                    print(f"  {model}: 429, пробую следующую модель", file=sys.stderr)
+                    break  # квота этой модели кончилась — к следующей
+                time.sleep(5 * (attempt + 1))
+            except Exception as e:  # 5xx/сеть — бэкофф
+                last_err = e
+                time.sleep(5 * (attempt + 1))
     sys.exit(f"gemini synth failed: {last_err}")
 
 
