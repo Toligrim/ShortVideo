@@ -1,0 +1,80 @@
+{
+  "id": "ssh-basics",
+  "title": "Как работает SSH",
+  "scenes": [
+    {
+      "type": "story",
+      "narration": "Ты вводишь пароль в терминал и жмёшь энтер. Где-то на проводе эти буквы летят голым текстом. Так больше тридцати лет назад обокрали создателя будущей защиты интернета.",
+      "beats": [
+        { "visual": "password-leak", "params": { "password": "hunter2" } },
+        { "visual": "title-slam", "onWord": "обокрали", "params": { "text": "1995", "sub": "кто-то читает твой пароль" } }
+      ]
+    },
+    {
+      "type": "diagram",
+      "heading": "Кража в сети университета",
+      "narration": "Финского исследователя Тату Юлёнена обокрали в собственном университете: чужие пароли читались прямо в сети, как открытая почта без конверта. Он разозлился и написал защиту сам.",
+      "channel": "open",
+      "nodes": [
+        { "id": "julonen", "label": "Тату Юлёнен", "icon": "user", "tone": "accent" },
+        { "id": "sniffer", "label": "Атакующий", "icon": "eye", "tone": "danger" }
+      ],
+      "packets": [
+        { "label": "пароль", "from": "julonen", "to": "sniffer", "tone": "danger", "onWord": "пароли" }
+      ],
+      "state": { "label": "Пароль как на ладони", "tone": "danger", "onWord": "конверта" }
+    },
+    {
+      "type": "diagram",
+      "heading": "Настоящий виновник",
+      "narration": "Виновником оказался не хакер-гений, а сам протокол связи: он пересылал пароль слово в слово, и подслушать его мог любой сосед по сети.",
+      "channel": "open",
+      "nodes": [
+        { "id": "protocol", "label": "Протокол связи", "icon": "cable", "tone": "warning" },
+        { "id": "neighbor", "label": "Сосед по сети", "icon": "eye", "tone": "danger" }
+      ],
+      "packets": [
+        { "label": "паро", "from": "protocol", "to": "neighbor", "tone": "danger", "onWord": "пересылал" },
+        { "label": "ль", "from": "protocol", "to": "neighbor", "tone": "danger", "onWord": "слово" }
+      ],
+      "state": { "label": "Слушает любой сосед", "tone": "danger", "onWord": "любой" }
+    },
+    {
+      "type": "diagram",
+      "heading": "Шифрованный туннель",
+      "narration": "Юлёнен придумал шифрованный туннель: компьютеры обмениваются только открытыми числами, тайное число каждый бережёт при себе — и оба получают один и тот же секретный ключ, который по проводу не летит.",
+      "channel": "encrypted",
+      "nodes": [
+        { "id": "a", "label": "Компьютер A", "icon": "monitor", "tone": "accent", "secret": "тайное A" },
+        { "id": "b", "label": "Компьютер B", "icon": "server", "tone": "accent2", "secret": "тайное B" }
+      ],
+      "packets": [
+        { "label": "число A", "from": "a", "to": "b", "tone": "accent", "onWord": "числами" },
+        { "label": "число B", "from": "b", "to": "a", "tone": "accent2", "onWord": "себе" }
+      ],
+      "state": { "label": "Общий секретный ключ", "tone": "success", "onWord": "ключ" }
+    },
+    {
+      "type": "terminal",
+      "heading": "Проверь сам",
+      "narration": "Пароль вводится, только когда туннель уже готов, и уходит зашифрованным. Проверь сам: набери {SSH|эс эс эйч} с флагом минус ви ви — обмен ключами идёт раньше строки с паролем.",
+      "commands": [
+        {
+          "cmd": "ssh -vv user@host",
+          "output": [
+            "debug1: SSH2_MSG_KEXINIT sent",
+            "debug1: kex: algorithm: curve25519",
+            "debug1: Next auth: password"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "outro",
+      "title": "Запомни",
+      "bullets": ["Пароль летит зашифрованным", "Числа открытые, ключ — нет", "Сначала туннель, потом логин"],
+      "cta": "Подпишись: дальше — поддельный ключ",
+      "narration": "Сначала строится туннель, и только потом внутрь ныряет пароль — подслушивать там уже нечего. Дальше — как поддельный ключ сервера обманывает эту защиту. Подпишись, чтобы не пропустить."
+    }
+  ]
+}

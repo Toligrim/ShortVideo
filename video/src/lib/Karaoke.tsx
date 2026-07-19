@@ -64,7 +64,8 @@ export const Karaoke: React.FC<{ words: Word[] }> = ({ words }) => {
         top: layout.karaokeY,
         display: "flex",
         justifyContent: "center",
-        gap: 34,
+        // зазор пропорционален кеглю и учитывает поп-масштаб соседних слов
+        gap: Math.round(size * 0.62),
         flexWrap: "wrap",
       }}
     >
@@ -72,11 +73,12 @@ export const Karaoke: React.FC<{ words: Word[] }> = ({ words }) => {
         const said = t >= w.start;
         // пружинный поп в момент произнесения: 1 → 1.22 → 1.06
         const dt = t - w.start;
+        // поп ограничен 1.06 и без поворота: transform не раздвигает соседей,
+        // и на больших словах масштаб+наклон съедали зазор (слова слипались)
         let scale = 1;
         if (said) {
-          scale = dt < 0.12 ? 1 + 1.0 * dt : dt < 0.3 ? 1.12 - 0.44 * (dt - 0.12) : 1.04;
+          scale = dt < 0.12 ? 1 + 0.5 * dt : dt < 0.3 ? 1.06 - 0.17 * (dt - 0.12) : 1.03;
         }
-        const rot = said && dt < 0.2 ? (i % 2 === 0 ? -2 : 2) * (1 - dt / 0.2) : 0;
         return (
           <span
             key={i}
@@ -87,7 +89,7 @@ export const Karaoke: React.FC<{ words: Word[] }> = ({ words }) => {
               lineHeight: 1.15,
               textTransform: "uppercase",
               color: said ? theme.accent : theme.text,
-              transform: `scale(${scale}) rotate(${rot}deg)`,
+              transform: `scale(${scale})`,
               textShadow: said
                 ? `0 0 34px ${theme.accent}66, 0 4px 24px rgba(0,0,0,0.9)`
                 : "0 4px 24px rgba(0,0,0,0.9), 0 2px 6px rgba(0,0,0,0.9)",
