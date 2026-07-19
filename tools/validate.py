@@ -67,8 +67,19 @@ def main():
         if latin:
             errors.append(f"сцена {i}: латиница без разметки {{SHOW|скажи}}: {latin}")
 
-    if not 95 <= total_words <= 150:
-        errors.append(f"объём реплик: {total_words} слов (норма 110–140, жёсткие рамки 95–150)")
+    if len(scenes) <= 8:  # шортс
+        if not 95 <= total_words <= 150:
+            errors.append(f"объём реплик: {total_words} слов (норма шортса 110–140, рамки 95–150)")
+    else:  # longform: контролируем темп посценно, а не общий объём
+        for i, s in enumerate(scenes):
+            narr = s.get("narration", "")
+            if isinstance(narr, dict):
+                narr = narr.get("ru", "")
+            w = len(narr.split())
+            if not 12 <= w <= 40:
+                errors.append(f"сцена {i}: {w} слов в реплике (longform-норма 18–35, рамки 12–40)")
+        if total_words > 900:
+            errors.append(f"объём реплик: {total_words} слов (>900 — это уже не видео, а лекция)")
 
     if errors:
         fail(errors)

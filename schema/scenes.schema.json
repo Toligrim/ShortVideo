@@ -10,7 +10,7 @@
     "scenes": {
       "type": "array",
       "minItems": 3,
-      "maxItems": 10,
+      "maxItems": 40,
       "items": { "$ref": "#/$defs/scene" }
     }
   },
