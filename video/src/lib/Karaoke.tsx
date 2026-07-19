@@ -1,0 +1,90 @@
+import React from "react";
+import { useCurrentFrame, useVideoConfig } from "remotion";
+import { layout, theme, LEAD_SEC } from "./theme";
+import type { Word } from "./types";
+
+const MAX_TOKENS = 3;
+const MAX_CHARS = 18;
+
+interface Line {
+  words: Word[];
+}
+
+/** Разбивка слов на строки-группы по 2–3 слова (стиль шортсов). */
+const buildLines = (words: Word[]): Line[] => {
+  const lines: Line[] = [];
+  let cur: Word[] = [];
+  let chars = 0;
+  for (const w of words) {
+    const len = w.text.length;
+    if (cur.length > 0 && (cur.length >= MAX_TOKENS || chars + len > MAX_CHARS)) {
+      lines.push({ words: cur });
+      cur = [];
+      chars = 0;
+    }
+    cur.push(w);
+    chars += len + 1;
+  }
+  if (cur.length) lines.push({ words: cur });
+  return lines;
+};
+
+/** Караоке-субтитры: показывается активная строка, произнесённые слова подсвечены. */
+export const Karaoke: React.FC<{ words: Word[] }> = ({ words }) => {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const t = frame / fps - LEAD_SEC; // сек от начала аудио сцены
+  const lines = buildLines(words);
+
+  const active = lines.find(
+    (l, i) =>
+      t < l.words[l.words.length - 1].end + (i === lines.length - 1 ? 999 : 0.05) &&
+      t >= l.words[0].start - (i === 0 ? 999 : 0.05)
+  );
+  if (!active) return null;
+
+  return (
+    <div
+      style={{
+        position: "absolute",
+        left: 60,
+        right: 60,
+        top: layout.karaokeY,
+        display: "flex",
+        justifyContent: "center",
+        gap: 34,
+        flexWrap: "wrap",
+      }}
+    >
+      {active.words.map((w, i) => {
+        const said = t >= w.start;
+        // пружинный поп в момент произнесения: 1 → 1.22 → 1.06
+        const dt = t - w.start;
+        let scale = 1;
+        if (said) {
+          scale = dt < 0.12 ? 1 + 1.0 * dt : dt < 0.3 ? 1.12 - 0.44 * (dt - 0.12) : 1.04;
+        }
+        const rot = said && dt < 0.2 ? (i % 2 === 0 ? -2 : 2) * (1 - dt / 0.2) : 0;
+        return (
+          <span
+            key={i}
+            style={{
+              fontFamily: theme.font,
+              fontWeight: 800,
+              fontSize: 72,
+              lineHeight: 1.15,
+              textTransform: "uppercase",
+              color: said ? theme.accent : theme.text,
+              transform: `scale(${scale}) rotate(${rot}deg)`,
+              textShadow: said
+                ? `0 0 34px ${theme.accent}66, 0 4px 24px rgba(0,0,0,0.9)`
+                : "0 4px 24px rgba(0,0,0,0.9), 0 2px 6px rgba(0,0,0,0.9)",
+            }}
+          >
+            {w.text}
+          </span>
+        );
+      })}
+    </div>
+  );
+};

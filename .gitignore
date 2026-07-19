@@ -1,0 +1,7 @@
+.env
+venv/
+node_modules/
+video/out/
+video/.remotion/
+*.mp4
+__pycache__/

@@ -1,0 +1,71 @@
+{
+  "id": "tcp-handshake",
+  "title": "Что такое TCP handshake",
+  "scenes": [
+    {
+      "type": "story",
+      "narration": "Каждый раз, когда ты открываешь сайт, твой телефон и сервер жмут друг другу руки. Это {TCP|ти си пи} {handshake|хендше́йк}. Вот как он устроен.",
+      "beats": [
+        { "visual": "browser-click", "params": { "url": "example.com" } },
+        { "visual": "devices-meet", "onWord": "телефон" },
+        { "visual": "handshake", "onWord": "жмут" },
+        { "visual": "title-slam", "onWord": "TCP", "params": { "text": "TCP HANDSHAKE", "sub": "3 пакета, без которых нет интернета" } }
+      ]
+    },
+    {
+      "type": "diagram",
+      "heading": "Шаг 1: клиент стучится",
+      "nodes": [
+        { "id": "client", "label": "Клиент", "icon": "smartphone", "tone": "accent" },
+        { "id": "server", "label": "Сервер", "icon": "server", "tone": "accent2" }
+      ],
+      "packets": [{ "label": "SYN", "from": "client", "to": "server", "onWord": "SYN" }],
+      "narration": "Сначала клиент отправляет пакет {SYN|син} — «привет, хочу соединение». Внутри — случайный номер, с которого начнётся отсчёт байтов."
+    },
+    {
+      "type": "diagram",
+      "heading": "Шаг 2: сервер отвечает",
+      "nodes": [
+        { "id": "client", "label": "Клиент", "icon": "smartphone", "tone": "accent" },
+        { "id": "server", "label": "Сервер", "icon": "server", "tone": "accent2" }
+      ],
+      "packets": [
+        { "label": "SYN-ACK", "from": "server", "to": "client", "tone": "accent2", "onWord": "SYN-ACK" }
+      ],
+      "narration": "Сервер отвечает пакетом {SYN-ACK|син ак}: «слышу тебя, давай общаться. И вот мой встречный номер»."
+    },
+    {
+      "type": "diagram",
+      "heading": "Шаг 3: рукопожатие",
+      "nodes": [
+        { "id": "client", "label": "Клиент", "icon": "smartphone", "tone": "accent" },
+        { "id": "server", "label": "Сервер", "icon": "server", "tone": "accent2" }
+      ],
+      "packets": [{ "label": "ACK", "from": "client", "to": "server", "tone": "success", "onWord": "ACK" }],
+      "state": { "label": "Соединение установлено", "tone": "success", "onWord": "установлено" },
+      "narration": "Клиент подтверждает пакетом {ACK|ак} — и всё: соединение установлено. Три ша́га — поэтому его зовут тройным рукопожатием."
+    },
+    {
+      "type": "terminal",
+      "heading": "Проверь сам",
+      "commands": [
+        {
+          "cmd": "sudo tcpdump -n port 443",
+          "output": [
+            "IP 10.0.0.5 > 93.184.216.34: Flags [S]",
+            "IP 93.184.216.34 > 10.0.0.5: Flags [S.]",
+            "IP 10.0.0.5 > 93.184.216.34: Flags [.]"
+          ]
+        }
+      ],
+      "narration": "Это видно вживую: запусти {tcpdump|ти си пи дамп} и открой любой сайт. Флаги {[S]|эс}, {[S.]|эс точка} и {[.]|просто точка} — те самые три пакета."
+    },
+    {
+      "type": "outro",
+      "title": "Запомни",
+      "bullets": ["SYN — хочу соединение", "SYN-ACK — давай", "ACK — поехали"],
+      "cta": "Подпишись: дальше — SYN-flood",
+      "narration": "Запомни: {SYN|син}, {SYN-ACK|син ак}, {ACK|ак}. В следующем ролике — как этим же механизмом топят серверы: атака {SYN-flood|син флад}. Подпишись, чтобы не пропустить."
+    }
+  ]
+}

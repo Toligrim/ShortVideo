@@ -1,0 +1,182 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Episode",
+  "type": "object",
+  "required": ["id", "title", "scenes"],
+  "additionalProperties": false,
+  "properties": {
+    "id": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+    "title": { "type": "string" },
+    "scenes": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 10,
+      "items": { "$ref": "#/$defs/scene" }
+    }
+  },
+  "$defs": {
+    "narration": {
+      "description": "Реплика диктора в устной форме. Разметка {SHOW|скажи}: на экране SHOW, голос произносит «скажи». Либо строка, либо {ru, en}.",
+      "oneOf": [
+        { "type": "string", "minLength": 10 },
+        {
+          "type": "object",
+          "required": ["ru"],
+          "properties": { "ru": { "type": "string" }, "en": { "type": "string" } },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "tone": { "enum": ["accent", "accent2", "success", "danger", "warning"] },
+    "scene": {
+      "oneOf": [
+        { "$ref": "#/$defs/hook" },
+        { "$ref": "#/$defs/story" },
+        { "$ref": "#/$defs/diagram" },
+        { "$ref": "#/$defs/terminal" },
+        { "$ref": "#/$defs/code" },
+        { "$ref": "#/$defs/outro" }
+      ]
+    },
+    "hook": {
+      "type": "object",
+      "required": ["type", "title", "narration"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "hook" },
+        "title": { "type": "string", "maxLength": 60 },
+        "subtitle": { "type": "string", "maxLength": 60 },
+        "narration": { "$ref": "#/$defs/narration" }
+      }
+    },
+    "story": {
+      "type": "object",
+      "required": ["type", "beats", "narration"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "story" },
+        "heading": { "type": "string", "maxLength": 40 },
+        "narration": { "$ref": "#/$defs/narration" },
+        "beats": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 6,
+          "items": {
+            "type": "object",
+            "required": ["visual"],
+            "additionalProperties": false,
+            "properties": {
+              "visual": { "enum": ["browser-click", "devices-meet", "handshake", "title-slam"] },
+              "onWord": { "type": "string" },
+              "params": { "type": "object" }
+            }
+          }
+        }
+      }
+    },
+    "diagram": {
+      "type": "object",
+      "required": ["type", "nodes", "narration"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "diagram" },
+        "heading": { "type": "string", "maxLength": 40 },
+        "narration": { "$ref": "#/$defs/narration" },
+        "nodes": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 3,
+          "items": {
+            "type": "object",
+            "required": ["id", "label"],
+            "additionalProperties": false,
+            "properties": {
+              "id": { "type": "string" },
+              "label": { "type": "string", "maxLength": 20 },
+              "icon": { "type": "string", "description": "имя иконки lucide в kebab-case" },
+              "tone": { "$ref": "#/$defs/tone" }
+            }
+          }
+        },
+        "packets": {
+          "type": "array",
+          "maxItems": 4,
+          "items": {
+            "type": "object",
+            "required": ["label", "from", "to"],
+            "additionalProperties": false,
+            "properties": {
+              "label": { "type": "string", "maxLength": 14 },
+              "from": { "type": "string" },
+              "to": { "type": "string" },
+              "tone": { "$ref": "#/$defs/tone" },
+              "onWord": { "type": "string", "description": "слово реплики, на котором пакет стартует" }
+            }
+          }
+        },
+        "state": {
+          "type": "object",
+          "required": ["label"],
+          "additionalProperties": false,
+          "properties": {
+            "label": { "type": "string", "maxLength": 30 },
+            "tone": { "$ref": "#/$defs/tone" },
+            "onWord": { "type": "string" }
+          }
+        }
+      }
+    },
+    "terminal": {
+      "type": "object",
+      "required": ["type", "commands", "narration"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "terminal" },
+        "heading": { "type": "string", "maxLength": 40 },
+        "narration": { "$ref": "#/$defs/narration" },
+        "commands": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 3,
+          "items": {
+            "type": "object",
+            "required": ["cmd"],
+            "additionalProperties": false,
+            "properties": {
+              "cmd": { "type": "string", "maxLength": 46 },
+              "output": {
+                "type": "array",
+                "maxItems": 6,
+                "items": { "type": "string", "maxLength": 46 }
+              }
+            }
+          }
+        }
+      }
+    },
+    "code": {
+      "type": "object",
+      "required": ["type", "code", "narration"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "code" },
+        "heading": { "type": "string", "maxLength": 40 },
+        "narration": { "$ref": "#/$defs/narration" },
+        "code": { "type": "string", "description": "≤14 строк, ≤46 символов в строке" },
+        "highlight": { "type": "array", "items": { "type": "integer", "minimum": 1 } }
+      }
+    },
+    "outro": {
+      "type": "object",
+      "required": ["type", "title", "narration"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "outro" },
+        "title": { "type": "string", "maxLength": 30 },
+        "bullets": { "type": "array", "maxItems": 4, "items": { "type": "string", "maxLength": 34 } },
+        "cta": { "type": "string", "maxLength": 40 },
+        "narration": { "$ref": "#/$defs/narration" }
+      }
+    }
+  }
+}
