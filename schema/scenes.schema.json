@@ -94,9 +94,14 @@
               "id": { "type": "string" },
               "label": { "type": "string", "maxLength": 20 },
               "icon": { "type": "string", "description": "имя иконки lucide в kebab-case" },
-              "tone": { "$ref": "#/$defs/tone" }
+              "tone": { "$ref": "#/$defs/tone" },
+              "secret": { "type": "string", "maxLength": 16, "description": "тайное число/ключ, который узел держит при себе — рисуется бейджем рядом, не летит пакетом" }
             }
           }
+        },
+        "channel": {
+          "enum": ["open", "encrypted"],
+          "description": "визуал канала между узлами: open — дырявый красный провод (перехват), encrypted — светящийся туннель с замком"
         },
         "packets": {
           "type": "array",

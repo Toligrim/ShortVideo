@@ -14,6 +14,7 @@ export interface DiagramNode {
   label: string;
   icon?: string; // имя иконки lucide в kebab-case: "smartphone", "server", "skull"
   tone?: Tone;
+  secret?: string; // тайное число/ключ, который узел держит при себе (не летит пакетом)
 }
 
 export interface DiagramPacket {
@@ -31,6 +32,7 @@ export interface DiagramScene {
   nodes: DiagramNode[];
   packets?: DiagramPacket[];
   state?: { label: string; tone?: Tone; onWord?: string }; // бейдж итога
+  channel?: "open" | "encrypted"; // канал между узлами: дырявый провод / светящийся туннель
 }
 
 export interface TerminalCommand {
