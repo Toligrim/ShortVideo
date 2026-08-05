@@ -1,16 +1,19 @@
 from __future__ import annotations
 
 import contextlib
+from datetime import datetime, timedelta, timezone
 from fractions import Fraction
 from hashlib import sha256
 import io
 from pathlib import Path
 import tempfile
+import urllib.error
 import unittest
+from unittest.mock import patch
 
 from publishing.db import PublishingStore
 from publishing.metadata import metadata_sha256, write_metadata_snapshot
-from publishing.models import ExecutionMode, OutboxState, PublicationState
+from publishing.models import ExecutionMode, OutboxState, PublicationState, TargetState
 from publishing.preflight import MediaProbe
 from publishing.review import ReviewError, VerifiedReview
 from publishing.telegram import (
@@ -20,7 +23,7 @@ from publishing.telegram import (
     callback_data,
     parse_callback_data,
 )
-from telegram_bot import TelegramApi, TelegramError
+from telegram_bot import TelegramApi, TelegramError, TelegramMessageNotModified
 
 
 def metadata() -> dict[str, object]:
@@ -44,6 +47,17 @@ def metadata() -> dict[str, object]:
             },
         },
     }
+
+
+class StatusClock:
+    def __init__(self, value: str = "2099-01-01T00:00:00.000000Z"):
+        self.current = datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+    def __call__(self) -> str:
+        return self.current.astimezone(timezone.utc).isoformat(timespec="microseconds").replace("+00:00", "Z")
+
+    def advance(self, seconds: int) -> None:
+        self.current += timedelta(seconds=seconds)
 
 
 class FakeTelegramApi:
@@ -178,12 +192,13 @@ class TelegramApprovalTests(unittest.TestCase):
             ),
         )
 
-    def service(self, api):
+    def service(self, api, **overrides):
         return TelegramReviewService(
             store=self.store,
             api=api,
             settings=self.settings,
             review_loader=self.review_loader,
+            **overrides,
         )
 
     def deliver(self, api=None):
@@ -222,6 +237,28 @@ class TelegramApprovalTests(unittest.TestCase):
             [method for method, _ in api.calls[2:]],
             ["answerCallbackQuery", "editMessageText", "editMessageReplyMarkup"],
         )
+
+    def test_transport_classifies_message_not_modified_without_exposing_response_text(self):
+        api = TelegramApi("not-a-real-token")
+        response = io.BytesIO(
+            b'{"ok": false, "description": "Bad Request: message is not modified: diagnostic"}'
+        )
+        with patch("urllib.request.urlopen", return_value=response):
+            with self.assertRaises(TelegramMessageNotModified) as caught:
+                api.edit_message_text("chat", 2, "unchanged", reply_markup={"inline_keyboard": []})
+        self.assertEqual(str(caught.exception), "Telegram API: message is not modified")
+
+        http_error = urllib.error.HTTPError(
+            "https://api.telegram.org/botnot-a-real-token/editMessageText",
+            400,
+            "Bad Request",
+            None,
+            io.BytesIO(b'{"ok": false, "description": "Bad Request: message is not modified"}'),
+        )
+        with patch("urllib.request.urlopen", side_effect=http_error):
+            with self.assertRaises(TelegramMessageNotModified) as caught_http:
+                api.edit_message_text("chat", 2, "unchanged", reply_markup={"inline_keyboard": []})
+        self.assertEqual(str(caught_http.exception), "Telegram API: message is not modified")
 
     def test_review_partial_retry_persists_video_before_card_and_skips_reupload(self):
         publication = self.create_publication()
@@ -305,6 +342,7 @@ class TelegramApprovalTests(unittest.TestCase):
             "telegram.review_card",
             "target.publish",
             "target.publish",
+            "telegram.status_card",
         ]
         self.assertEqual(
             [item.kind for item in self.store.list_outbox(publication_id=publication.id)], expected_jobs
@@ -327,7 +365,7 @@ class TelegramApprovalTests(unittest.TestCase):
         )
         self.assertEqual(self.store.get_bot_state(UPDATE_CURSOR_KEY), "50")
 
-    def test_authorized_callback_answers_before_atomic_apply_and_removes_buttons(self):
+    def test_authorized_callback_answers_before_atomic_apply_and_queues_versioned_status_edit(self):
         events: list[str] = []
         self.store = RecordingStore(self.root / "publisher.sqlite3", event_log=events)
         publication, delivery_api = self.deliver()
@@ -338,9 +376,188 @@ class TelegramApprovalTests(unittest.TestCase):
         self.service(api).poll_once(timeout=0)
 
         self.assertEqual(events[:2], ["answer", "apply"])
+        self.assertFalse(any(call[0] == "edit_message_text" for call in api.calls))
+        self.assertTrue(
+            any(
+                item.kind == "telegram.status_card" and item.state is OutboxState.PENDING
+                for item in self.store.list_outbox(publication_id=publication.id)
+            )
+        )
+        self.service(api).deliver_pending_status_updates()
         self.assertTrue(any(call[0] == "edit_message_text" for call in api.calls))
-        self.assertTrue(any(call[0] == "edit_message_reply_markup" for call in api.calls))
+        status_edit = next(payload for method, payload in api.calls if method == "edit_message_text")
+        self.assertEqual(status_edit["reply_markup"], {"inline_keyboard": []})
         self.assertEqual(self.store.get_publication(publication.id).state, PublicationState.APPROVED)
+
+    def test_durable_status_updates_edit_existing_card_without_resending_video_or_buttons(self):
+        publication, api = self.deliver()
+        approve = self.store.issue_telegram_action(publication.id, "approve")
+        self.store.apply_telegram_action(update_id=91, action_token=approve.token, actor_user_id="42")
+        youtube = self.store.list_targets(publication.id)[0]
+        self.store.transition_target(youtube.id, TargetState.UPLOADING)
+        self.store.transition_target(youtube.id, TargetState.PUBLISHED)
+
+        calls_before = len(api.calls)
+        video_calls_before = len(api.video_calls)
+        message_calls_before = len(api.message_calls)
+        delivered = self.service(api).deliver_pending_status_updates()
+
+        self.assertTrue(any(not result.skipped_stale for result in delivered))
+        self.assertEqual(len(api.video_calls), video_calls_before)
+        self.assertEqual(len(api.message_calls), message_calls_before)
+        new_methods = [method for method, _ in api.calls[calls_before:]]
+        self.assertEqual(new_methods, ["edit_message_text"])
+        self.assertEqual(api.calls[-1][1]["reply_markup"], {"inline_keyboard": []})
+        status_rows = [
+            item for item in self.store.list_outbox(publication_id=publication.id) if item.kind == "telegram.status_card"
+        ]
+        self.assertTrue(status_rows)
+        self.assertTrue(all(item.state is OutboxState.COMPLETED for item in status_rows))
+
+    def test_status_delivery_failure_isolated_and_keeps_durable_retry(self):
+        publication, delivery_api = self.deliver()
+        approve = self.store.issue_telegram_action(publication.id, "approve")
+        self.store.apply_telegram_action(update_id=92, action_token=approve.token, actor_user_id="42")
+
+        class FailingEditApi(FakeTelegramApi):
+            def edit_message_text(self, *args, **kwargs):
+                raise TelegramError("planned edit failure")
+
+        service = self.service(FailingEditApi())
+        delivered = service.deliver_pending_status_updates()
+        self.assertEqual(delivered, [])
+        self.assertEqual(len(service.last_status_failures), 1)
+        status_rows = [
+            item for item in self.store.list_outbox(publication_id=publication.id) if item.kind == "telegram.status_card"
+        ]
+        self.assertTrue(any(item.state is OutboxState.PENDING for item in status_rows))
+        self.assertEqual(self.store.get_publication(publication.id).state, PublicationState.APPROVED)
+
+    def test_message_not_modified_completes_status_delivery_idempotently(self):
+        publication, _delivery_api = self.deliver()
+        approve = self.store.issue_telegram_action(publication.id, "approve")
+        self.store.apply_telegram_action(update_id=921, action_token=approve.token, actor_user_id="42")
+
+        class AlreadyCurrentApi(FakeTelegramApi):
+            def edit_message_text(self, *args, **kwargs):
+                self.calls.append(("edit_message_text", {"text": kwargs.get("text")}))
+                raise TelegramError("Telegram API: Bad Request: message is not modified")
+
+        service = self.service(AlreadyCurrentApi())
+        delivered = service.deliver_pending_status_updates()
+        self.assertEqual([(item.publication_id, item.revision) for item in delivered], [(publication.id, 1)])
+        self.assertEqual(service.last_status_failures, [])
+        status_rows = [
+            item for item in self.store.list_outbox(publication_id=publication.id) if item.kind == "telegram.status_card"
+        ]
+        self.assertTrue(all(item.state is OutboxState.COMPLETED for item in status_rows))
+
+    def test_expired_status_lease_never_starts_a_telegram_edit(self):
+        publication, _delivery_api = self.deliver()
+        approve = self.store.issue_telegram_action(publication.id, "approve")
+        self.store.apply_telegram_action(update_id=922, action_token=approve.token, actor_user_id="42")
+        clock = StatusClock()
+        api = FakeTelegramApi()
+        service = self.service(api, clock=clock, status_lease_seconds=5)
+        item = self.store.claim_telegram_status("stale-worker", lease_seconds=5, now=clock())
+        self.assertIsNotNone(item)
+        clock.advance(6)
+        self.assertIsNone(service._deliver_status_update(item))
+        self.assertFalse(any(method == "edit_message_text" for method, _payload in api.calls))
+
+    def test_known_status_write_after_lost_fence_always_queues_a_repair(self):
+        publication, _delivery_api = self.deliver()
+        approve = self.store.issue_telegram_action(publication.id, "approve")
+        self.store.apply_telegram_action(update_id=9221, action_token=approve.token, actor_user_id="42")
+        clock = StatusClock()
+        item = self.store.claim_telegram_status("old-worker", lease_seconds=5, now=clock())
+        self.assertIsNotNone(item)
+        clock.advance(6)
+        completed, repaired = self.store.complete_telegram_status_delivery(
+            item.id,
+            item.lease_token,
+            publication_id=publication.id,
+            revision=1,
+            now=clock(),
+        )
+        self.assertFalse(completed)
+        self.assertTrue(repaired)
+        self.assertEqual(self.store.get_publication(publication.id).status_revision, 2)
+        repair = self.store.get_outbox_by_dedupe_key(f"telegram-status:{publication.id}:r2")
+        self.assertEqual(repair.state, OutboxState.PENDING)
+
+    def test_delayed_status_edit_after_lost_lease_gets_a_current_repair(self):
+        publication, _delivery_api = self.deliver()
+        approve = self.store.issue_telegram_action(publication.id, "approve")
+        self.store.apply_telegram_action(update_id=923, action_token=approve.token, actor_user_id="42")
+        clock = StatusClock()
+        newer_api = FakeTelegramApi()
+        newer_service = self.service(newer_api, clock=clock, status_lease_seconds=5)
+        store = self.store
+
+        class DelayedOldApi(FakeTelegramApi):
+            def __init__(self):
+                super().__init__()
+                self.delayed = False
+
+            def edit_message_text(self, *args, **kwargs):
+                if not self.delayed:
+                    self.delayed = True
+                    # The old worker renewed r1, then stalled until its lease
+                    # expired.  A new worker writes r2 before this delayed
+                    # r1 request reaches Telegram.
+                    clock.advance(6)
+                    youtube = store.list_targets(publication.id)[0]
+                    store.transition_target(youtube.id, TargetState.UPLOADING)
+                    newer_service.deliver_pending_status_updates()
+                return super().edit_message_text(*args, **kwargs)
+
+        old_api = DelayedOldApi()
+        delivered = self.service(old_api, clock=clock, status_lease_seconds=5).deliver_pending_status_updates()
+        self.assertTrue(delivered)
+        text_edits = [payload["text"] for method, payload in old_api.calls if method == "edit_message_text"]
+        self.assertGreaterEqual(len(text_edits), 2)
+        self.assertIn("Publishing", text_edits[-1])
+        self.assertEqual(self.store.get_publication(publication.id).status_revision, 3)
+        status_rows = [
+            item for item in self.store.list_outbox(publication_id=publication.id) if item.kind == "telegram.status_card"
+        ]
+        self.assertTrue(all(item.state is OutboxState.COMPLETED for item in status_rows))
+
+    def test_stale_status_edit_is_repaired_after_a_concurrent_newer_delivery(self):
+        publication, _delivery_api = self.deliver()
+        approve = self.store.issue_telegram_action(publication.id, "approve")
+        self.store.apply_telegram_action(update_id=93, action_token=approve.token, actor_user_id="42")
+        newer_api = FakeTelegramApi()
+        newer_service = self.service(newer_api)
+        store = self.store
+        settings = self.settings
+
+        class RacingApi(FakeTelegramApi):
+            def __init__(self):
+                super().__init__()
+                self.raced = False
+
+            def edit_message_text(self, *args, **kwargs):
+                if not self.raced:
+                    self.raced = True
+                    youtube = store.list_targets(publication.id)[0]
+                    store.transition_target(youtube.id, TargetState.UPLOADING)
+                    # A different bot instance completes r2 before this stale
+                    # r1 text edit is issued.
+                    newer_service.deliver_pending_status_updates()
+                return super().edit_message_text(*args, **kwargs)
+
+        racing_api = RacingApi()
+        delivered = self.service(racing_api).deliver_pending_status_updates()
+        self.assertTrue(any(result.skipped_stale for result in delivered))
+        text_edits = [payload["text"] for method, payload in racing_api.calls if method == "edit_message_text"]
+        self.assertGreaterEqual(len(text_edits), 2)
+        self.assertIn("Publishing", text_edits[-1])
+        status_rows = [
+            item for item in self.store.list_outbox(publication_id=publication.id) if item.kind == "telegram.status_card"
+        ]
+        self.assertTrue(all(item.state is OutboxState.COMPLETED for item in status_rows))
 
     def test_tampered_snapshot_blocks_delivery_before_any_telegram_call(self):
         publication = self.create_publication()

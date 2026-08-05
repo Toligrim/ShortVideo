@@ -20,6 +20,7 @@ from publishing.models import ExecutionMode, Publication, PublicationTarget
 from publishing.preflight import PreflightError
 from publishing.review import ReviewError, prepare_review
 from publishing.telegram import TelegramApprovalError
+from publishing.worker import PublishWorker, PublishWorkerError
 from telegram_bot import TelegramError
 
 
@@ -36,6 +37,7 @@ def _publication_json(publication: Publication, targets: list[PublicationTarget]
         "asset_sha256": publication.asset_sha256,
         "metadata_sha256": publication.metadata_sha256,
         "approval_fingerprint": publication.approval_fingerprint,
+        "status_revision": publication.status_revision,
         "created_at": publication.created_at,
         "approved_at": publication.approved_at,
         "targets": [
@@ -44,7 +46,13 @@ def _publication_json(publication: Publication, targets: list[PublicationTarget]
                 "platform": target.platform,
                 "state": target.state.value,
                 "attempts": target.attempts,
+                "next_attempt_at": target.next_attempt_at,
+                "dispatch_generation": target.dispatch_generation,
+                "external_session_id": target.external_session_id,
+                "external_media_id": target.external_media_id,
                 "external_url": target.external_url,
+                "last_error_code": target.last_error_code,
+                "last_error_detail": target.last_error_detail,
             }
             for target in targets
         ],
@@ -90,6 +98,34 @@ def build_parser() -> argparse.ArgumentParser:
     bot = sub.add_parser("bot", parents=[common], help="run Telegram approval long-polling")
     bot.add_argument("--once", action="store_true", help="deliver/poll one cycle, then exit")
     bot.add_argument("--timeout", type=int, default=25, help="getUpdates long-poll timeout in seconds")
+
+    worker = sub.add_parser("worker", parents=[common], help="run durable platform publish jobs")
+    worker.add_argument("--once", action="store_true", help="drain currently due target.publish jobs, then exit")
+    worker.add_argument("--worker-id", help="stable diagnostic lease owner ID")
+    worker.add_argument("--max-attempts", type=int, default=3, help="maximum automatic attempts per dispatch")
+    worker.add_argument("--lease-seconds", type=int, default=120, help="lease duration for each target job")
+    worker.add_argument("--idle-seconds", type=float, default=1.0, help="idle delay in forever mode")
+
+    retry = sub.add_parser("retry", parents=[common], help="explicitly requeue one failed target")
+    retry_selector = retry.add_mutually_exclusive_group(required=True)
+    retry_selector.add_argument("--publication-id")
+    retry_selector.add_argument("--slug")
+    retry.add_argument("--target", required=True, choices=["youtube", "instagram"])
+
+    reconcile = sub.add_parser("reconcile", parents=[common], help="resolve one ambiguous target explicitly")
+    reconcile_selector = reconcile.add_mutually_exclusive_group(required=True)
+    reconcile_selector.add_argument("--publication-id")
+    reconcile_selector.add_argument("--slug")
+    reconcile.add_argument("--target", required=True, choices=["youtube", "instagram"])
+    reconcile.add_argument("--outcome", required=True, choices=["mark-published", "requeue"])
+    reconcile.add_argument("--external-id", help="provider media ID for mark-published")
+    reconcile.add_argument("--external-url", help="provider URL for mark-published")
+    reconcile.add_argument("--external-session-id", help="optional provider correlation/session ID")
+    reconcile.add_argument(
+        "--confirm-not-published",
+        action="store_true",
+        help="required for requeue after an operator confirmed no external publish happened",
+    )
     return parser
 
 
@@ -103,6 +139,26 @@ def _status(store: PublishingStore, args: argparse.Namespace) -> list[dict[str, 
         _publication_json(publication, store.list_targets(publication.id))
         for publication in publications
     ]
+
+
+def _selected_target(store: PublishingStore, args: argparse.Namespace) -> tuple[Publication, PublicationTarget]:
+    if args.publication_id:
+        publication = store.get_publication(args.publication_id)
+        if publication is None:
+            raise StoreError(f"unknown publication ID: {args.publication_id}")
+    else:
+        publications = store.list_publications(slug=args.slug)
+        if not publications:
+            raise StoreError(f"no publication matches slug: {args.slug}")
+        if len(publications) != 1:
+            raise StoreError(
+                f"slug {args.slug!r} matches {len(publications)} publications; select --publication-id explicitly"
+            )
+        publication = publications[0]
+    for target in store.list_targets(publication.id):
+        if target.platform == args.target:
+            return publication, target
+    raise StoreError(f"publication {publication.id} has no {args.target} target")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -165,9 +221,86 @@ def main(argv: list[str] | None = None) -> int:
                 service.run_once(timeout=args.timeout)
             else:
                 service.run_forever(timeout=args.timeout)
+        elif args.command == "worker":
+            config.ensure_directories()
+            worker = PublishWorker(
+                store=PublishingStore(config.database_path),
+                worker_id=args.worker_id,
+                max_attempts=args.max_attempts,
+                lease_seconds=args.lease_seconds,
+            )
+            if args.once:
+                results = []
+                while True:
+                    result = worker.run_once()
+                    if result is None:
+                        break
+                    results.append(
+                        {
+                            "outbox_id": result.outbox_id,
+                            "target_id": result.target_id,
+                            "outcome": result.outcome,
+                            "detail": result.detail,
+                        }
+                    )
+                _print_json(results)
+            else:
+                worker.run_forever(idle_seconds=args.idle_seconds)
+        elif args.command == "retry":
+            store = PublishingStore(config.database_path)
+            publication, target = _selected_target(store, args)
+            updated = store.retry_failed_target(target.id)
+            _print_json(
+                {
+                    "publication_id": publication.id,
+                    "target": updated.platform,
+                    "state": updated.state.value,
+                    "dispatch_generation": updated.dispatch_generation,
+                }
+            )
+        elif args.command == "reconcile":
+            if args.outcome == "mark-published" and (not args.external_id or not args.external_url):
+                raise StoreError("mark-published requires --external-id and --external-url")
+            if args.outcome == "mark-published" and args.confirm_not_published:
+                raise StoreError("mark-published must not include --confirm-not-published")
+            if args.outcome == "requeue" and not args.confirm_not_published:
+                raise StoreError("requeue requires --confirm-not-published")
+            if args.outcome == "requeue" and (
+                args.external_id or args.external_url or args.external_session_id
+            ):
+                raise StoreError("requeue must not include external publication identifiers")
+            store = PublishingStore(config.database_path)
+            publication, target = _selected_target(store, args)
+            updated = store.reconcile_target(
+                target.id,
+                outcome=args.outcome,
+                external_media_id=args.external_id,
+                external_url=args.external_url,
+                external_session_id=args.external_session_id,
+                confirmed_absent=args.confirm_not_published,
+            )
+            _print_json(
+                {
+                    "publication_id": publication.id,
+                    "target": updated.platform,
+                    "state": updated.state.value,
+                    "dispatch_generation": updated.dispatch_generation,
+                    "external_media_id": updated.external_media_id,
+                    "external_url": updated.external_url,
+                }
+            )
         else:  # argparse keeps this unreachable; retain a safe failure mode.
             raise StoreError(f"unsupported command: {args.command}")
-    except (MetadataError, PreflightError, ReviewError, StoreError, TelegramApprovalError, TelegramError, OSError) as exc:
+    except (
+        MetadataError,
+        PreflightError,
+        ReviewError,
+        StoreError,
+        TelegramApprovalError,
+        TelegramError,
+        PublishWorkerError,
+        OSError,
+    ) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
     return 0

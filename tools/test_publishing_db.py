@@ -34,7 +34,7 @@ class PublishingStoreTests(unittest.TestCase):
         return self.store.create_publication(**params)
 
     def test_migrates_with_required_pragmas_and_restart_is_safe(self):
-        self.assertEqual(self.store.schema_version(), 1)
+        self.assertEqual(self.store.schema_version(), 2)
         conn = self.store._connect()
         try:
             self.assertEqual(conn.execute("PRAGMA foreign_keys").fetchone()[0], 1)
@@ -43,7 +43,7 @@ class PublishingStoreTests(unittest.TestCase):
         finally:
             conn.close()
         restarted = PublishingStore(self.store.path)
-        self.assertEqual(restarted.schema_version(), 1)
+        self.assertEqual(restarted.schema_version(), 2)
 
     def test_create_is_idempotent_by_immutable_approval_fingerprint(self):
         first = self.create_publication()
@@ -102,8 +102,9 @@ class PublishingStoreTests(unittest.TestCase):
             [item.dedupe_key for item in self.store.list_outbox(publication_id=publication.id)],
             [
                 "telegram-review-card:publication-1",
-                "target-publish:publication-1:youtube",
-                "target-publish:publication-1:instagram",
+                "target-publish:publication-1:youtube:g0",
+                "target-publish:publication-1:instagram:g0",
+                "telegram-status:publication-1:r1",
             ],
         )
 
@@ -121,7 +122,10 @@ class PublishingStoreTests(unittest.TestCase):
         result = self.store.apply_telegram_action(update_id=1, action_token=reject.token, actor_user_id="owner")
         self.assertTrue(result.accepted)
         self.assertEqual(self.store.get_publication(publication.id).state, PublicationState.REJECTED)
-        self.assertEqual([item.kind for item in self.store.list_outbox(publication_id=publication.id)], ["telegram.review_card"])
+        self.assertEqual(
+            [item.kind for item in self.store.list_outbox(publication_id=publication.id)],
+            ["telegram.review_card", "telegram.status_card"],
+        )
 
     def test_target_transitions_compute_partial_publication_state(self):
         publication = self.create_publication()
@@ -145,18 +149,18 @@ class PublishingStoreTests(unittest.TestCase):
             kind="test.job",
             dedupe_key="job:one",
             payload={"n": 1},
-            available_at="2026-01-01T00:00:00.000000Z",
+            available_at="2099-01-01T00:00:00.000000Z",
         )
         again = self.store.enqueue_outbox(kind="ignored", dedupe_key="job:one", payload={"n": 2})
         self.assertEqual(item.id, again.id)
         self.assertEqual(again.kind, "test.job")
-        claimed = self.store.claim_outbox("worker-a", lease_seconds=10, now="2026-01-01T00:00:00.000000Z")
+        claimed = self.store.claim_outbox("worker-a", lease_seconds=10, now="2099-01-01T00:00:00.000000Z")
         self.assertEqual(claimed.id, item.id)
         self.assertEqual(claimed.state, OutboxState.LEASED)
         self.assertEqual(claimed.attempts, 1)
         self.assertFalse(self.store.complete_outbox(item.id, "wrong-token"))
-        self.assertIsNone(self.store.claim_outbox("worker-b", now="2026-01-01T00:00:05.000000Z"))
-        reclaimed = self.store.claim_outbox("worker-b", now="2026-01-01T00:00:11.000000Z")
+        self.assertIsNone(self.store.claim_outbox("worker-b", now="2099-01-01T00:00:05.000000Z"))
+        reclaimed = self.store.claim_outbox("worker-b", now="2099-01-01T00:00:11.000000Z")
         self.assertEqual(reclaimed.id, item.id)
         self.assertEqual(reclaimed.attempts, 2)
         self.assertTrue(self.store.complete_outbox(item.id, reclaimed.lease_token))
@@ -172,10 +176,22 @@ class PublishingStoreTests(unittest.TestCase):
         foreign_target = self.store.list_targets(second.id)[0]
         with self.assertRaisesRegex(StoreError, "does not belong"):
             self.store.enqueue_outbox(
-                kind="target.publish",
+                kind="test.target",
                 dedupe_key="bad-target-link",
                 publication_id=first.id,
                 target_id=foreign_target.id,
+            )
+
+    def test_target_publish_jobs_cannot_bypass_approval_dispatch_api(self):
+        publication = self.create_publication()
+        target = self.store.list_targets(publication.id)[0]
+        with self.assertRaisesRegex(StoreError, "created only by approved dispatch"):
+            self.store.enqueue_outbox(
+                kind="target.publish",
+                dedupe_key="manual-target-publish",
+                publication_id=publication.id,
+                target_id=target.id,
+                payload={"publication_id": publication.id, "target_id": target.id, "platform": target.platform},
             )
 
     def test_bot_state_and_event_log_are_persistent(self):

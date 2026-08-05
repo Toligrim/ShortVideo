@@ -169,6 +169,16 @@ MIGRATIONS: tuple[tuple[int, tuple[str, ...]], ...] = (
             """,
         ),
     ),
+    (
+        2,
+        (
+            # Keep the v1 schema immutable for already-created stores.  These
+            # append-only columns make each operator re-dispatch and each
+            # Telegram status delivery independently durable.
+            "ALTER TABLE publications ADD COLUMN status_revision INTEGER NOT NULL DEFAULT 0 CHECK (status_revision >= 0)",
+            "ALTER TABLE publication_targets ADD COLUMN dispatch_generation INTEGER NOT NULL DEFAULT 0 CHECK (dispatch_generation >= 0)",
+        ),
+    ),
 )
 
 
@@ -177,6 +187,7 @@ TARGET_TRANSITIONS: dict[TargetState, frozenset[TargetState]] = {
     TargetState.UPLOADING: frozenset(
         {
             TargetState.PROCESSING,
+            TargetState.PUBLISHED,
             TargetState.RETRY_WAIT,
             TargetState.FAILED,
             TargetState.RECONCILIATION_REQUIRED,
@@ -205,13 +216,29 @@ def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="microseconds").replace("+00:00", "Z")
 
 
+def _normalize_timestamp(value: str, *, label: str = "timestamp") -> str:
+    """Validate and canonically render a timezone-aware UTC timestamp.
+
+    SQLite compares the canonical ISO-8601 strings lexicographically in the
+    lease predicates below.  Accepting a non-canonical offset or a naive
+    timestamp here would silently weaken those predicates.
+    """
+    if not isinstance(value, str) or not value:
+        raise StoreError(f"{label} must be a non-empty UTC timestamp")
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise StoreError(f"invalid {label}: {value!r}") from exc
+    if parsed.tzinfo is None:
+        raise StoreError(f"{label} must include a timezone")
+    return parsed.astimezone(timezone.utc).isoformat(timespec="microseconds").replace("+00:00", "Z")
+
+
 def _future_timestamp(now: str, seconds: int) -> str:
     if seconds <= 0:
         raise StoreError("lease duration must be positive")
-    try:
-        parsed = datetime.fromisoformat(now.replace("Z", "+00:00"))
-    except ValueError as exc:
-        raise StoreError(f"invalid UTC timestamp: {now!r}") from exc
+    normalized_now = _normalize_timestamp(now, label="current time")
+    parsed = datetime.fromisoformat(normalized_now.replace("Z", "+00:00"))
     return (parsed + timedelta(seconds=seconds)).isoformat(timespec="microseconds").replace("+00:00", "Z")
 
 
@@ -282,6 +309,7 @@ def _publication_from_row(row: sqlite3.Row) -> Publication:
         approved_by_user_id=row["approved_by_user_id"],
         rejected_at=row["rejected_at"],
         rejected_by_user_id=row["rejected_by_user_id"],
+        status_revision=row["status_revision"],
     )
 
 
@@ -301,6 +329,7 @@ def _target_from_row(row: sqlite3.Row) -> PublicationTarget:
         created_at=row["created_at"],
         updated_at=row["updated_at"],
         published_at=row["published_at"],
+        dispatch_generation=row["dispatch_generation"],
     )
 
 
@@ -512,6 +541,15 @@ class PublishingStore:
         finally:
             conn.close()
 
+    def get_target(self, target_id: int) -> PublicationTarget | None:
+        """Return one target without exposing raw SQLite rows to workers."""
+        conn = self._connect()
+        try:
+            row = conn.execute("SELECT * FROM publication_targets WHERE id = ?", (target_id,)).fetchone()
+            return _target_from_row(row) if row is not None else None
+        finally:
+            conn.close()
+
     def list_pending_review_deliveries(self) -> list[Publication]:
         """Return review cards that still need Telegram delivery or completion.
 
@@ -710,10 +748,17 @@ class PublishingStore:
                     self._enqueue_outbox_txn(
                         conn,
                         kind="target.publish",
-                        dedupe_key=f"target-publish:{publication.id}:{target.platform}",
+                        dedupe_key=(
+                            f"target-publish:{publication.id}:{target.platform}:g{target.dispatch_generation}"
+                        ),
                         publication_id=publication.id,
                         target_id=target.id,
-                        payload={"publication_id": publication.id, "target_id": target.id, "platform": target.platform},
+                        payload={
+                            "publication_id": publication.id,
+                            "target_id": target.id,
+                            "platform": target.platform,
+                            "dispatch_generation": target.dispatch_generation,
+                        },
                         now=now,
                     )
                 event_type = "publication.approved"
@@ -742,7 +787,7 @@ class PublishingStore:
                 "UPDATE telegram_actions SET consumed_at = ? WHERE publication_id = ? AND consumed_at IS NULL",
                 (now, publication.id),
             )
-            self._append_event_txn(
+            event_id = self._append_event_txn(
                 conn,
                 publication.id,
                 event_type,
@@ -751,6 +796,7 @@ class PublishingStore:
                 data={"action": action.kind.value},
                 now=now,
             )
+            self._enqueue_status_update_txn(conn, publication.id, event_id, now)
             return self._finish_update_txn(conn, update_id, True, new_state, None)
 
     def transition_target(
@@ -773,6 +819,12 @@ class PublishingStore:
             if row is None:
                 raise StoreError(f"unknown publication target: {target_id}")
             current = _target_from_row(row)
+            publication_row = conn.execute(
+                "SELECT approved_at FROM publications WHERE id = ?", (current.publication_id,)
+            ).fetchone()
+            assert publication_row is not None
+            if publication_row["approved_at"] is None:
+                raise InvalidTransition("cannot transition a target before publication approval")
             if desired is current.state:
                 return current
             if desired not in TARGET_TRANSITIONS[current.state]:
@@ -796,7 +848,7 @@ class PublishingStore:
                     target_id,
                 ),
             )
-            self._append_event_txn(
+            event_id = self._append_event_txn(
                 conn,
                 current.publication_id,
                 "target.state_changed",
@@ -805,6 +857,7 @@ class PublishingStore:
                 now=now,
             )
             self._refresh_publication_state_txn(conn, current.publication_id, now)
+            self._enqueue_status_update_txn(conn, current.publication_id, event_id, now)
             updated = conn.execute("SELECT * FROM publication_targets WHERE id = ?", (target_id,)).fetchone()
             assert updated is not None
             return _target_from_row(updated)
@@ -819,6 +872,10 @@ class PublishingStore:
         payload: Mapping[str, Any] | None = None,
         available_at: str | None = None,
     ) -> OutboxItem:
+        if kind == "target.publish":
+            raise StoreError(
+                "target.publish jobs are created only by approved dispatch and explicit retry/reconcile commands"
+            )
         now = _utc_now()
         with self._write_transaction() as conn:
             return self._enqueue_outbox_txn(
@@ -859,28 +916,47 @@ class PublishingStore:
         *,
         lease_seconds: int = 60,
         now: str | None = None,
+        kinds: Iterable[str] | None = None,
     ) -> OutboxItem | None:
+        """Atomically claim one due outbox item.
+
+        ``kinds`` is deliberately part of the claim predicate, not a
+        post-claim filter.  A platform worker must never lease a Telegram
+        delivery item that happens to sort ahead of a publish job.
+        """
         if not worker_id:
             raise StoreError("worker_id must not be empty")
-        current_time = now or _utc_now()
+        selected_kinds = tuple(kinds) if kinds is not None else ()
+        if any(not isinstance(kind, str) or not kind for kind in selected_kinds):
+            raise StoreError("outbox kinds must be non-empty strings")
+        if len(set(selected_kinds)) != len(selected_kinds):
+            raise StoreError("outbox kinds must be unique")
+        current_time = _normalize_timestamp(now or _utc_now(), label="current time")
         expires_at = _future_timestamp(current_time, lease_seconds)
+        kind_clause = ""
+        if selected_kinds:
+            kind_clause = " AND kind IN (" + ", ".join("?" for _ in selected_kinds) + ")"
         with self._write_transaction() as conn:
             conn.execute(
                 """
                 UPDATE outbox
                 SET state = ?, lease_owner = NULL, lease_token = NULL, lease_expires_at = NULL
                 WHERE state = ? AND lease_expires_at IS NOT NULL AND lease_expires_at <= ?
-                """,
-                (OutboxState.PENDING.value, OutboxState.LEASED.value, current_time),
+                """
+                + kind_clause,
+                (OutboxState.PENDING.value, OutboxState.LEASED.value, current_time, *selected_kinds),
             )
             row = conn.execute(
                 """
                 SELECT * FROM outbox
                 WHERE state = ? AND available_at <= ?
+                """
+                + kind_clause
+                + """
                 ORDER BY available_at, id
                 LIMIT 1
                 """,
-                (OutboxState.PENDING.value, current_time),
+                (OutboxState.PENDING.value, current_time, *selected_kinds),
             ).fetchone()
             if row is None:
                 return None
@@ -906,16 +982,125 @@ class PublishingStore:
             assert claimed is not None
             return _outbox_from_row(claimed)
 
-    def complete_outbox(self, outbox_id: int, lease_token: str) -> bool:
-        now = _utc_now()
+    def claim_target_publish(
+        self,
+        worker_id: str,
+        *,
+        lease_seconds: int = 60,
+        now: str | None = None,
+    ) -> OutboxItem | None:
+        """Claim only platform publish work; Telegram work is never touched."""
+        return self.claim_outbox(
+            worker_id,
+            lease_seconds=lease_seconds,
+            now=now,
+            kinds=("target.publish",),
+        )
+
+    def claim_telegram_status(
+        self,
+        worker_id: str,
+        *,
+        lease_seconds: int = 60,
+        now: str | None = None,
+    ) -> OutboxItem | None:
+        """Claim only card-status edits; it never consumes review delivery work."""
+        return self.claim_outbox(
+            worker_id,
+            lease_seconds=lease_seconds,
+            now=now,
+            kinds=("telegram.status_card",),
+        )
+
+    def lease_is_current(
+        self,
+        outbox_id: int,
+        lease_token: str,
+        *,
+        now: str | None = None,
+        kind: str | None = None,
+    ) -> bool:
+        """Check the fencing token immediately before an external effect."""
+        if not lease_token:
+            return False
+        current_time = _normalize_timestamp(now or _utc_now(), label="current time")
+        clauses = [
+            "id = ?",
+            "state = ?",
+            "lease_token = ?",
+            "lease_expires_at IS NOT NULL",
+            "lease_expires_at > ?",
+        ]
+        parameters: list[object] = [
+            outbox_id,
+            OutboxState.LEASED.value,
+            lease_token,
+            current_time,
+        ]
+        if kind is not None:
+            clauses.append("kind = ?")
+            parameters.append(kind)
+        conn = self._connect()
+        try:
+            row = conn.execute(
+                "SELECT 1 FROM outbox WHERE " + " AND ".join(clauses), parameters
+            ).fetchone()
+            return row is not None
+        finally:
+            conn.close()
+
+    def renew_outbox_lease(
+        self,
+        outbox_id: int,
+        lease_token: str,
+        *,
+        lease_seconds: int = 60,
+        now: str | None = None,
+    ) -> bool:
+        """Extend a live lease without ever reviving a stale owner."""
+        if not lease_token:
+            return False
+        current_time = _normalize_timestamp(now or _utc_now(), label="current time")
+        expires_at = _future_timestamp(current_time, lease_seconds)
+        with self._write_transaction() as conn:
+            changed = conn.execute(
+                """
+                UPDATE outbox
+                SET lease_expires_at = ?
+                WHERE id = ? AND state = ? AND lease_token = ?
+                  AND lease_expires_at IS NOT NULL AND lease_expires_at > ?
+                """,
+                (
+                    expires_at,
+                    outbox_id,
+                    OutboxState.LEASED.value,
+                    lease_token,
+                    current_time,
+                ),
+            ).rowcount
+            return changed == 1
+
+    def complete_outbox(self, outbox_id: int, lease_token: str, *, now: str | None = None) -> bool:
+        """Complete a leased item only while its fencing token is current."""
+        if not lease_token:
+            return False
+        current_time = _normalize_timestamp(now or _utc_now(), label="current time")
         with self._write_transaction() as conn:
             changed = conn.execute(
                 """
                 UPDATE outbox
                 SET state = ?, completed_at = ?, lease_owner = NULL, lease_token = NULL, lease_expires_at = NULL
                 WHERE id = ? AND state = ? AND lease_token = ?
+                  AND lease_expires_at IS NOT NULL AND lease_expires_at > ?
                 """,
-                (OutboxState.COMPLETED.value, now, outbox_id, OutboxState.LEASED.value, lease_token),
+                (
+                    OutboxState.COMPLETED.value,
+                    current_time,
+                    outbox_id,
+                    OutboxState.LEASED.value,
+                    lease_token,
+                    current_time,
+                ),
             ).rowcount
             return changed == 1
 
@@ -926,9 +1111,12 @@ class PublishingStore:
         *,
         available_at: str,
         error: str,
+        now: str | None = None,
     ) -> bool:
         if not error:
             raise StoreError("rescheduled outbox item needs a non-empty error")
+        current_time = _normalize_timestamp(now or _utc_now(), label="current time")
+        next_time = _normalize_timestamp(available_at, label="available_at")
         with self._write_transaction() as conn:
             changed = conn.execute(
                 """
@@ -936,17 +1124,696 @@ class PublishingStore:
                 SET state = ?, available_at = ?, last_error = ?,
                     lease_owner = NULL, lease_token = NULL, lease_expires_at = NULL
                 WHERE id = ? AND state = ? AND lease_token = ?
+                  AND lease_expires_at IS NOT NULL AND lease_expires_at > ?
                 """,
                 (
                     OutboxState.PENDING.value,
-                    available_at,
+                    next_time,
                     error,
                     outbox_id,
                     OutboxState.LEASED.value,
                     lease_token,
+                    current_time,
                 ),
             ).rowcount
             return changed == 1
+
+    def dead_outbox(
+        self,
+        outbox_id: int,
+        lease_token: str,
+        *,
+        error: str,
+        now: str | None = None,
+    ) -> bool:
+        """Terminally stop a leased item while its fencing token is current."""
+        if not lease_token:
+            return False
+        if not error:
+            raise StoreError("dead outbox item needs a non-empty error")
+        current_time = _normalize_timestamp(now or _utc_now(), label="current time")
+        with self._write_transaction() as conn:
+            changed = conn.execute(
+                """
+                UPDATE outbox
+                SET state = ?, last_error = ?, lease_owner = NULL, lease_token = NULL, lease_expires_at = NULL
+                WHERE id = ? AND state = ? AND lease_token = ?
+                  AND lease_expires_at IS NOT NULL AND lease_expires_at > ?
+                """,
+                (
+                    OutboxState.DEAD.value,
+                    error,
+                    outbox_id,
+                    OutboxState.LEASED.value,
+                    lease_token,
+                    current_time,
+                ),
+            ).rowcount
+            return changed == 1
+
+    def complete_telegram_status_delivery(
+        self,
+        outbox_id: int,
+        lease_token: str,
+        *,
+        publication_id: str,
+        revision: int,
+        now: str | None = None,
+    ) -> tuple[bool, bool]:
+        """Complete a known status write and repair every lost-fence write.
+
+        A Telegram edit cannot participate in SQLite's transaction.  If a
+        newer status revision committed while an older edit was in flight, a
+        fresh repair revision is appended.  More importantly, once the API
+        call has returned, a worker that lost its lease must *also* append a
+        repair revision even when the durable revision has not changed yet:
+        another owner may be about to write, and this delayed worker has
+        already performed an unfenced external effect.
+
+        The first return value says whether this worker atomically completed
+        its original outbox row.  The second says whether a repair row was
+        appended; it can be true even after the original lease was lost.
+        """
+        if not lease_token:
+            return False, False
+        if not publication_id or not isinstance(revision, int) or isinstance(revision, bool) or revision < 1:
+            raise StoreError("invalid Telegram status delivery identity")
+        current_time = _normalize_timestamp(now or _utc_now(), label="current time")
+        with self._write_transaction() as conn:
+            outbox_row = conn.execute(
+                """
+                SELECT * FROM outbox
+                WHERE id = ? AND kind = ? AND publication_id = ?
+                """,
+                (
+                    outbox_id,
+                    "telegram.status_card",
+                    publication_id,
+                ),
+            ).fetchone()
+            if outbox_row is None:
+                return False, False
+            outbox = _outbox_from_row(outbox_row)
+            if outbox.payload != {"publication_id": publication_id, "revision": revision}:
+                self._dead_outbox_txn(
+                    conn,
+                    outbox_id,
+                    lease_token,
+                    current_time,
+                    "invalid telegram.status_card payload",
+                )
+                return False, False
+            publication_row = conn.execute(
+                "SELECT * FROM publications WHERE id = ?", (publication_id,)
+            ).fetchone()
+            if publication_row is None:
+                self._dead_outbox_txn(
+                    conn,
+                    outbox_id,
+                    lease_token,
+                    current_time,
+                    "telegram.status_card references an unknown publication",
+                )
+                return False, False
+            publication = _publication_from_row(publication_row)
+            if revision > publication.status_revision:
+                self._dead_outbox_txn(
+                    conn,
+                    outbox_id,
+                    lease_token,
+                    current_time,
+                    "telegram.status_card revision is ahead of publication state",
+                )
+                return False, False
+            completed = self._complete_outbox_txn(conn, outbox_id, lease_token, current_time)
+            # A successful completion still needs a repair when newer state
+            # was committed during the external edit.  A failed completion is
+            # a lost/reclaimed fence after a known Telegram write; always
+            # enqueue a fresh current revision in that case, even if the
+            # durable revision happens to be unchanged at this instant.
+            needs_repair = not completed or publication.status_revision != revision
+            if needs_repair:
+                self._enqueue_telegram_status_repair_txn(
+                    conn,
+                    publication,
+                    written_revision=revision,
+                    reason="lost_fence" if not completed else "stale_revision",
+                    now=current_time,
+                )
+            return completed, needs_repair
+
+    def repair_telegram_status_after_external_attempt(
+        self,
+        outbox_id: int,
+        lease_token: str,
+        *,
+        publication_id: str,
+        revision: int,
+        now: str | None = None,
+    ) -> bool:
+        """Repair a possibly-applied status edit after an ambiguous API error.
+
+        This is intentionally narrower than completion: it never completes
+        the original row.  If the fence is still live, normal retry handling
+        remains responsible for it.  If the attempt lost its fence, the
+        request may have reached Telegram after a newer card update, so a
+        current repair revision is made durable immediately.
+        """
+        if not lease_token:
+            return False
+        if not publication_id or not isinstance(revision, int) or isinstance(revision, bool) or revision < 1:
+            raise StoreError("invalid Telegram status delivery identity")
+        current_time = _normalize_timestamp(now or _utc_now(), label="current time")
+        with self._write_transaction() as conn:
+            outbox_row = conn.execute(
+                """
+                SELECT * FROM outbox
+                WHERE id = ? AND kind = ? AND publication_id = ?
+                """,
+                (outbox_id, "telegram.status_card", publication_id),
+            ).fetchone()
+            if outbox_row is None:
+                return False
+            outbox = _outbox_from_row(outbox_row)
+            if outbox.payload != {"publication_id": publication_id, "revision": revision}:
+                return False
+            publication_row = conn.execute(
+                "SELECT * FROM publications WHERE id = ?", (publication_id,)
+            ).fetchone()
+            if publication_row is None:
+                return False
+            publication = _publication_from_row(publication_row)
+            if revision > publication.status_revision:
+                return False
+            still_fenced = (
+                outbox.state is OutboxState.LEASED
+                and outbox.lease_token == lease_token
+                and outbox.lease_expires_at is not None
+                and outbox.lease_expires_at > current_time
+            )
+            if still_fenced:
+                return False
+            self._enqueue_telegram_status_repair_txn(
+                conn,
+                publication,
+                written_revision=revision,
+                reason="ambiguous_external_attempt_after_lost_fence",
+                now=current_time,
+            )
+            return True
+
+    def start_target_publish(
+        self,
+        outbox_id: int,
+        lease_token: str,
+        *,
+        now: str | None = None,
+    ) -> PublicationTarget | None:
+        """Fence and start a target publish attempt before an adapter call.
+
+        The outbox row, its denormalized payload, target, and approved
+        publication are checked together inside the write transaction.  A
+        malformed or stale job therefore cannot reach an adapter.
+        """
+        if not lease_token:
+            return None
+        current_time = _normalize_timestamp(now or _utc_now(), label="current time")
+        with self._write_transaction() as conn:
+            context, reason = self._leased_target_publish_context_txn(
+                conn, outbox_id, lease_token, current_time
+            )
+            if context is None:
+                return None
+            outbox, publication, target = context
+            if reason is not None:
+                self._dead_outbox_txn(conn, outbox.id, lease_token, current_time, reason)
+                if publication is not None:
+                    self._append_event_txn(
+                        conn,
+                        publication.id,
+                        "target.publish_job_rejected",
+                        actor_type="worker",
+                        data={"target_id": target.id if target is not None else None, "reason": reason},
+                        now=current_time,
+                    )
+                return None
+            assert publication is not None and target is not None
+            if target.state is TargetState.PUBLISHED:
+                self._complete_outbox_txn(conn, outbox.id, lease_token, current_time)
+                return None
+            if target.state in {
+                TargetState.FAILED,
+                TargetState.RECONCILIATION_REQUIRED,
+                TargetState.CANCELLED,
+            }:
+                self._dead_outbox_txn(
+                    conn,
+                    outbox.id,
+                    lease_token,
+                    current_time,
+                    f"target is terminal: {target.state.value}",
+                )
+                return None
+            if target.state in {TargetState.UPLOADING, TargetState.PROCESSING} and (
+                publication.execution_mode is not ExecutionMode.DRY_RUN
+            ):
+                # A process can disappear after starting an external call but
+                # before saving its response.  Live adapters are not assumed
+                # idempotent/resumable until they prove that contract, so a
+                # reclaimed in-flight lease goes to operator reconciliation.
+                conn.execute(
+                    """
+                    UPDATE publication_targets
+                    SET state = ?, next_attempt_at = NULL, last_error_code = ?, last_error_detail = ?,
+                        updated_at = ?
+                    WHERE id = ?
+                    """,
+                    (
+                        TargetState.RECONCILIATION_REQUIRED.value,
+                        "lease_expired_after_publish_started",
+                        "lease expired after a live publish attempt started; external outcome is unknown",
+                        current_time,
+                        target.id,
+                    ),
+                )
+                self._dead_outbox_txn(
+                    conn,
+                    outbox.id,
+                    lease_token,
+                    current_time,
+                    "lease expired after live publish started; reconciliation required",
+                )
+                event_id = self._append_event_txn(
+                    conn,
+                    publication.id,
+                    "target.state_changed",
+                    actor_type="worker",
+                    data={
+                        "platform": target.platform,
+                        "from": target.state.value,
+                        "to": TargetState.RECONCILIATION_REQUIRED.value,
+                        "error_code": "lease_expired_after_publish_started",
+                    },
+                    now=current_time,
+                )
+                self._refresh_publication_state_txn(conn, publication.id, current_time)
+                self._enqueue_status_update_txn(conn, publication.id, event_id, current_time)
+                return None
+            if target.state not in {
+                TargetState.QUEUED,
+                TargetState.RETRY_WAIT,
+                TargetState.UPLOADING,
+                TargetState.PROCESSING,
+            }:
+                self._dead_outbox_txn(
+                    conn,
+                    outbox.id,
+                    lease_token,
+                    current_time,
+                    f"target is not runnable: {target.state.value}",
+                )
+                return None
+
+            previous_state = target.state
+            # A reclaimed in-flight job uses the same outbox dedupe key as an
+            # idempotency key.  Adapters must therefore make a repeat call a
+            # lookup/continuation rather than an independent upload.
+            conn.execute(
+                """
+                UPDATE publication_targets
+                SET state = ?, next_attempt_at = NULL, attempts = attempts + 1, updated_at = ?
+                WHERE id = ?
+                """,
+                (TargetState.UPLOADING.value, current_time, target.id),
+            )
+            event_id = self._append_event_txn(
+                conn,
+                publication.id,
+                "target.state_changed",
+                actor_type="worker",
+                data={
+                    "platform": target.platform,
+                    "from": previous_state.value,
+                    "to": TargetState.UPLOADING.value,
+                    "outbox_id": outbox.id,
+                },
+                now=current_time,
+            )
+            self._refresh_publication_state_txn(conn, publication.id, current_time)
+            self._enqueue_status_update_txn(conn, publication.id, event_id, current_time)
+            updated = conn.execute("SELECT * FROM publication_targets WHERE id = ?", (target.id,)).fetchone()
+            assert updated is not None
+            return _target_from_row(updated)
+
+    def complete_target_publish(
+        self,
+        outbox_id: int,
+        lease_token: str,
+        *,
+        external_media_id: str,
+        external_url: str,
+        external_session_id: str | None = None,
+        now: str | None = None,
+    ) -> bool:
+        """Persist a successful target and complete its leased outbox atomically."""
+        if not lease_token:
+            return False
+        if not isinstance(external_media_id, str) or not external_media_id.strip():
+            raise StoreError("external_media_id must be a non-empty string")
+        if not isinstance(external_url, str) or not external_url.strip():
+            raise StoreError("external_url must be a non-empty string")
+        if external_session_id is not None and (
+            not isinstance(external_session_id, str) or not external_session_id.strip()
+        ):
+            raise StoreError("external_session_id must be a non-empty string when provided")
+        current_time = _normalize_timestamp(now or _utc_now(), label="current time")
+        with self._write_transaction() as conn:
+            context, reason = self._leased_target_publish_context_txn(
+                conn, outbox_id, lease_token, current_time
+            )
+            if context is None:
+                return False
+            outbox, publication, target = context
+            if reason is not None or target.state not in {TargetState.UPLOADING, TargetState.PROCESSING}:
+                return False
+            changed = conn.execute(
+                """
+                UPDATE publication_targets
+                SET state = ?, next_attempt_at = NULL, external_session_id = ?, external_media_id = ?,
+                    external_url = ?, last_error_code = NULL, last_error_detail = NULL,
+                    updated_at = ?, published_at = ?
+                WHERE id = ?
+                """,
+                (
+                    TargetState.PUBLISHED.value,
+                    external_session_id,
+                    external_media_id.strip(),
+                    external_url.strip(),
+                    current_time,
+                    current_time,
+                    target.id,
+                ),
+            ).rowcount
+            assert changed == 1
+            completed = self._complete_outbox_txn(conn, outbox.id, lease_token, current_time)
+            if not completed:
+                raise StoreError("lost current lease while completing target publish")
+            event_id = self._append_event_txn(
+                conn,
+                publication.id,
+                "target.state_changed",
+                actor_type="worker",
+                data={
+                    "platform": target.platform,
+                    "from": target.state.value,
+                    "to": TargetState.PUBLISHED.value,
+                    "external_media_id": external_media_id.strip(),
+                    "external_url": external_url.strip(),
+                },
+                now=current_time,
+            )
+            self._refresh_publication_state_txn(conn, publication.id, current_time)
+            self._enqueue_status_update_txn(conn, publication.id, event_id, current_time)
+            return True
+
+    def reschedule_target_publish(
+        self,
+        outbox_id: int,
+        lease_token: str,
+        *,
+        available_at: str,
+        error_code: str,
+        error_detail: str,
+        now: str | None = None,
+    ) -> bool:
+        """Move a retryable attempt and its outbox back to a due time atomically."""
+        if not lease_token:
+            return False
+        if not error_code or not error_detail:
+            raise StoreError("retryable target failure needs error_code and error_detail")
+        current_time = _normalize_timestamp(now or _utc_now(), label="current time")
+        next_time = _normalize_timestamp(available_at, label="available_at")
+        with self._write_transaction() as conn:
+            context, reason = self._leased_target_publish_context_txn(
+                conn, outbox_id, lease_token, current_time
+            )
+            if context is None:
+                return False
+            outbox, publication, target = context
+            if reason is not None or target.state not in {TargetState.UPLOADING, TargetState.PROCESSING}:
+                return False
+            conn.execute(
+                """
+                UPDATE publication_targets
+                SET state = ?, next_attempt_at = ?, last_error_code = ?, last_error_detail = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                (
+                    TargetState.RETRY_WAIT.value,
+                    next_time,
+                    error_code,
+                    error_detail,
+                    current_time,
+                    target.id,
+                ),
+            )
+            rescheduled = self._reschedule_outbox_txn(
+                conn, outbox.id, lease_token, next_time, error_detail, current_time
+            )
+            if not rescheduled:
+                raise StoreError("lost current lease while rescheduling target publish")
+            event_id = self._append_event_txn(
+                conn,
+                publication.id,
+                "target.state_changed",
+                actor_type="worker",
+                data={
+                    "platform": target.platform,
+                    "from": target.state.value,
+                    "to": TargetState.RETRY_WAIT.value,
+                    "error_code": error_code,
+                    "next_attempt_at": next_time,
+                },
+                now=current_time,
+            )
+            self._refresh_publication_state_txn(conn, publication.id, current_time)
+            self._enqueue_status_update_txn(conn, publication.id, event_id, current_time)
+            return True
+
+    def fail_target_publish(
+        self,
+        outbox_id: int,
+        lease_token: str,
+        *,
+        error_code: str,
+        error_detail: str,
+        ambiguous: bool = False,
+        external_session_id: str | None = None,
+        now: str | None = None,
+    ) -> bool:
+        """Terminally fail a target or require reconciliation, atomically with outbox death."""
+        if not lease_token:
+            return False
+        if not error_code or not error_detail:
+            raise StoreError("terminal target failure needs error_code and error_detail")
+        if external_session_id is not None and (
+            not isinstance(external_session_id, str) or not external_session_id.strip()
+        ):
+            raise StoreError("external_session_id must be a non-empty string when provided")
+        current_time = _normalize_timestamp(now or _utc_now(), label="current time")
+        final_state = TargetState.RECONCILIATION_REQUIRED if ambiguous else TargetState.FAILED
+        with self._write_transaction() as conn:
+            context, reason = self._leased_target_publish_context_txn(
+                conn, outbox_id, lease_token, current_time
+            )
+            if context is None:
+                return False
+            outbox, publication, target = context
+            if reason is not None or target.state not in {TargetState.UPLOADING, TargetState.PROCESSING}:
+                return False
+            conn.execute(
+                """
+                UPDATE publication_targets
+                SET state = ?, next_attempt_at = NULL, external_session_id = COALESCE(?, external_session_id),
+                    last_error_code = ?, last_error_detail = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                (
+                    final_state.value,
+                    external_session_id.strip() if external_session_id is not None else None,
+                    error_code,
+                    error_detail,
+                    current_time,
+                    target.id,
+                ),
+            )
+            dead = self._dead_outbox_txn(conn, outbox.id, lease_token, current_time, error_detail)
+            if not dead:
+                raise StoreError("lost current lease while terminally failing target publish")
+            event_id = self._append_event_txn(
+                conn,
+                publication.id,
+                "target.state_changed",
+                actor_type="worker",
+                data={
+                    "platform": target.platform,
+                    "from": target.state.value,
+                    "to": final_state.value,
+                    "error_code": error_code,
+                },
+                now=current_time,
+            )
+            self._refresh_publication_state_txn(conn, publication.id, current_time)
+            self._enqueue_status_update_txn(conn, publication.id, event_id, current_time)
+            return True
+
+    def retry_failed_target(self, target_id: int, *, now: str | None = None) -> PublicationTarget:
+        """Explicitly requeue only a terminally failed target after operator review."""
+        current_time = _normalize_timestamp(now or _utc_now(), label="current time")
+        with self._write_transaction() as conn:
+            row = conn.execute("SELECT * FROM publication_targets WHERE id = ?", (target_id,)).fetchone()
+            if row is None:
+                raise StoreError(f"unknown publication target: {target_id}")
+            target = _target_from_row(row)
+            if target.state is not TargetState.FAILED:
+                raise InvalidTransition("only a failed target can be retried explicitly")
+            publication_row = conn.execute(
+                "SELECT * FROM publications WHERE id = ?", (target.publication_id,)
+            ).fetchone()
+            assert publication_row is not None
+            publication = _publication_from_row(publication_row)
+            if publication.approved_at is None:
+                raise StoreError("cannot retry a target whose publication was never approved")
+            next_generation = target.dispatch_generation + 1
+            conn.execute(
+                """
+                UPDATE publication_targets
+                SET state = ?, next_attempt_at = NULL, external_session_id = NULL,
+                    external_media_id = NULL, external_url = NULL, published_at = NULL,
+                    last_error_code = NULL, last_error_detail = NULL,
+                    dispatch_generation = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                (TargetState.QUEUED.value, next_generation, current_time, target.id),
+            )
+            self._requeue_target_outbox_txn(conn, publication, target, next_generation, current_time)
+            self._set_publication_publishing_txn(conn, publication, current_time, reason="explicit_retry")
+            event_id = self._append_event_txn(
+                conn,
+                publication.id,
+                "target.state_changed",
+                actor_type="operator",
+                data={
+                    "platform": target.platform,
+                    "from": TargetState.FAILED.value,
+                    "to": TargetState.QUEUED.value,
+                    "reason": "explicit_retry",
+                },
+                now=current_time,
+            )
+            self._enqueue_status_update_txn(conn, publication.id, event_id, current_time)
+            updated = conn.execute("SELECT * FROM publication_targets WHERE id = ?", (target.id,)).fetchone()
+            assert updated is not None
+            return _target_from_row(updated)
+
+    def reconcile_target(
+        self,
+        target_id: int,
+        *,
+        outcome: str,
+        external_media_id: str | None = None,
+        external_url: str | None = None,
+        external_session_id: str | None = None,
+        confirmed_absent: bool = False,
+        now: str | None = None,
+    ) -> PublicationTarget:
+        """Resolve an ambiguous target only through an explicit operator outcome."""
+        if outcome not in {"mark-published", "requeue"}:
+            raise StoreError("reconcile outcome must be mark-published or requeue")
+        if outcome == "mark-published":
+            if not isinstance(external_media_id, str) or not external_media_id.strip():
+                raise StoreError("mark-published reconciliation requires external_media_id")
+            if not isinstance(external_url, str) or not external_url.strip():
+                raise StoreError("mark-published reconciliation requires external_url")
+        elif not confirmed_absent:
+            raise StoreError("requeue reconciliation requires confirmed_absent=True")
+        if outcome == "requeue" and any(
+            value is not None for value in (external_media_id, external_url, external_session_id)
+        ):
+            raise StoreError("requeue reconciliation must not include external identifiers")
+        if external_session_id is not None and (
+            not isinstance(external_session_id, str) or not external_session_id.strip()
+        ):
+            raise StoreError("external_session_id must be a non-empty string when provided")
+        current_time = _normalize_timestamp(now or _utc_now(), label="current time")
+        with self._write_transaction() as conn:
+            row = conn.execute("SELECT * FROM publication_targets WHERE id = ?", (target_id,)).fetchone()
+            if row is None:
+                raise StoreError(f"unknown publication target: {target_id}")
+            target = _target_from_row(row)
+            if target.state is not TargetState.RECONCILIATION_REQUIRED:
+                raise InvalidTransition("only a reconciliation_required target can be reconciled")
+            publication_row = conn.execute(
+                "SELECT * FROM publications WHERE id = ?", (target.publication_id,)
+            ).fetchone()
+            assert publication_row is not None
+            publication = _publication_from_row(publication_row)
+            if outcome == "mark-published":
+                desired = TargetState.PUBLISHED
+                conn.execute(
+                    """
+                    UPDATE publication_targets
+                    SET state = ?, next_attempt_at = NULL, external_session_id = COALESCE(?, external_session_id),
+                        external_media_id = ?, external_url = ?,
+                        last_error_code = NULL, last_error_detail = NULL, updated_at = ?, published_at = ?
+                    WHERE id = ?
+                    """,
+                    (
+                        desired.value,
+                        external_session_id.strip() if external_session_id is not None else None,
+                        external_media_id.strip(),
+                        external_url.strip(),
+                        current_time,
+                        current_time,
+                        target.id,
+                    ),
+                )
+                self._refresh_publication_state_txn(conn, publication.id, current_time)
+            else:
+                desired = TargetState.QUEUED
+                next_generation = target.dispatch_generation + 1
+                conn.execute(
+                    """
+                    UPDATE publication_targets
+                    SET state = ?, next_attempt_at = NULL, external_session_id = NULL,
+                        external_media_id = NULL, external_url = NULL, published_at = NULL,
+                        last_error_code = NULL, last_error_detail = NULL,
+                        dispatch_generation = ?, updated_at = ?
+                    WHERE id = ?
+                    """,
+                    (desired.value, next_generation, current_time, target.id),
+                )
+                self._requeue_target_outbox_txn(
+                    conn, publication, target, next_generation, current_time
+                )
+                self._set_publication_publishing_txn(conn, publication, current_time, reason="reconcile_requeue")
+            event_id = self._append_event_txn(
+                conn,
+                publication.id,
+                "target.state_changed",
+                actor_type="operator",
+                data={
+                    "platform": target.platform,
+                    "from": TargetState.RECONCILIATION_REQUIRED.value,
+                    "to": desired.value,
+                    "reason": f"reconcile:{outcome}",
+                },
+                now=current_time,
+            )
+            self._enqueue_status_update_txn(conn, publication.id, event_id, current_time)
+            updated = conn.execute("SELECT * FROM publication_targets WHERE id = ?", (target.id,)).fetchone()
+            assert updated is not None
+            return _target_from_row(updated)
 
     def set_bot_state(self, key: str, value: str) -> None:
         if not key:
@@ -1047,6 +1914,289 @@ class PublishingStore:
             )
             return message_id
 
+    def _leased_target_publish_context_txn(
+        self,
+        conn: sqlite3.Connection,
+        outbox_id: int,
+        lease_token: str,
+        now: str,
+    ) -> tuple[
+        tuple[OutboxItem, Publication | None, PublicationTarget | None] | None,
+        str | None,
+    ]:
+        """Load and validate a fenced target.publish job inside a write txn."""
+        outbox_row = conn.execute(
+            """
+            SELECT * FROM outbox
+            WHERE id = ? AND kind = ? AND state = ? AND lease_token = ?
+              AND lease_expires_at IS NOT NULL AND lease_expires_at > ?
+            """,
+            (
+                outbox_id,
+                "target.publish",
+                OutboxState.LEASED.value,
+                lease_token,
+                now,
+            ),
+        ).fetchone()
+        if outbox_row is None:
+            return None, None
+        outbox = _outbox_from_row(outbox_row)
+        if outbox.publication_id is None or outbox.target_id is None:
+            return (outbox, None, None), "target.publish job must link publication and target"
+        target_row = conn.execute(
+            "SELECT * FROM publication_targets WHERE id = ?", (outbox.target_id,)
+        ).fetchone()
+        if target_row is None:
+            return (outbox, None, None), "target.publish job references an unknown target"
+        target = _target_from_row(target_row)
+        publication_row = conn.execute(
+            "SELECT * FROM publications WHERE id = ?", (outbox.publication_id,)
+        ).fetchone()
+        if publication_row is None:
+            return (outbox, None, target), "target.publish job references an unknown publication"
+        publication = _publication_from_row(publication_row)
+        if target.publication_id != publication.id:
+            return (outbox, publication, target), "target does not belong to publication"
+
+        payload = outbox.payload
+        if payload.get("publication_id") != publication.id:
+            return (outbox, publication, target), "payload publication_id does not match durable row"
+        if payload.get("target_id") != target.id or isinstance(payload.get("target_id"), bool):
+            return (outbox, publication, target), "payload target_id does not match durable row"
+        if payload.get("platform") != target.platform:
+            return (outbox, publication, target), "payload platform does not match durable target"
+        expected_key = f"target-publish:{publication.id}:{target.platform}:g{target.dispatch_generation}"
+        legacy_key = f"target-publish:{publication.id}:{target.platform}"
+        payload_generation = payload.get("dispatch_generation", _UNSET)
+        if payload_generation is _UNSET:
+            if target.dispatch_generation != 0 or outbox.dedupe_key != legacy_key:
+                return (outbox, publication, target), "legacy dispatch payload/key is invalid"
+        elif (
+            isinstance(payload_generation, bool)
+            or not isinstance(payload_generation, int)
+            or payload_generation != target.dispatch_generation
+            or outbox.dedupe_key != expected_key
+        ):
+            return (outbox, publication, target), "payload dispatch generation does not match durable target"
+        if publication.approved_at is None or publication.state in {
+            PublicationState.REVIEW_PENDING,
+            PublicationState.REJECTED,
+        }:
+            return (outbox, publication, target), "publication was not approved for target publishing"
+        return (outbox, publication, target), None
+
+    @staticmethod
+    def _complete_outbox_txn(
+        conn: sqlite3.Connection,
+        outbox_id: int,
+        lease_token: str,
+        now: str,
+    ) -> bool:
+        return (
+            conn.execute(
+                """
+                UPDATE outbox
+                SET state = ?, completed_at = ?, lease_owner = NULL, lease_token = NULL, lease_expires_at = NULL
+                WHERE id = ? AND state = ? AND lease_token = ?
+                  AND lease_expires_at IS NOT NULL AND lease_expires_at > ?
+                """,
+                (
+                    OutboxState.COMPLETED.value,
+                    now,
+                    outbox_id,
+                    OutboxState.LEASED.value,
+                    lease_token,
+                    now,
+                ),
+            ).rowcount
+            == 1
+        )
+
+    @staticmethod
+    def _reschedule_outbox_txn(
+        conn: sqlite3.Connection,
+        outbox_id: int,
+        lease_token: str,
+        available_at: str,
+        error: str,
+        now: str,
+    ) -> bool:
+        return (
+            conn.execute(
+                """
+                UPDATE outbox
+                SET state = ?, available_at = ?, last_error = ?,
+                    lease_owner = NULL, lease_token = NULL, lease_expires_at = NULL
+                WHERE id = ? AND state = ? AND lease_token = ?
+                  AND lease_expires_at IS NOT NULL AND lease_expires_at > ?
+                """,
+                (
+                    OutboxState.PENDING.value,
+                    available_at,
+                    error,
+                    outbox_id,
+                    OutboxState.LEASED.value,
+                    lease_token,
+                    now,
+                ),
+            ).rowcount
+            == 1
+        )
+
+    @staticmethod
+    def _dead_outbox_txn(
+        conn: sqlite3.Connection,
+        outbox_id: int,
+        lease_token: str,
+        now: str,
+        error: str,
+    ) -> bool:
+        return (
+            conn.execute(
+                """
+                UPDATE outbox
+                SET state = ?, last_error = ?, lease_owner = NULL, lease_token = NULL, lease_expires_at = NULL
+                WHERE id = ? AND state = ? AND lease_token = ?
+                  AND lease_expires_at IS NOT NULL AND lease_expires_at > ?
+                """,
+                (
+                    OutboxState.DEAD.value,
+                    error,
+                    outbox_id,
+                    OutboxState.LEASED.value,
+                    lease_token,
+                    now,
+                ),
+            ).rowcount
+            == 1
+        )
+
+    def _requeue_target_outbox_txn(
+        self,
+        conn: sqlite3.Connection,
+        publication: Publication,
+        target: PublicationTarget,
+        generation: int,
+        now: str,
+    ) -> OutboxItem:
+        """Create a fresh dispatch generation; never rearm a conflicting row."""
+        dedupe_key = f"target-publish:{publication.id}:{target.platform}:g{generation}"
+        existing = conn.execute("SELECT id FROM outbox WHERE dedupe_key = ?", (dedupe_key,)).fetchone()
+        if existing is not None:
+            raise StoreError("refusing to reuse an existing target publish dispatch generation")
+        try:
+            conn.execute(
+                """
+                INSERT INTO outbox(
+                    kind, dedupe_key, publication_id, target_id, payload_json, state, available_at, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    "target.publish",
+                    dedupe_key,
+                    publication.id,
+                    target.id,
+                    _json(
+                        {
+                            "publication_id": publication.id,
+                            "target_id": target.id,
+                            "platform": target.platform,
+                            "dispatch_generation": generation,
+                        }
+                    ),
+                    OutboxState.PENDING.value,
+                    now,
+                    now,
+                ),
+            )
+        except sqlite3.IntegrityError as exc:
+            raise StoreError("cannot create a new target publish dispatch generation") from exc
+        row = conn.execute("SELECT * FROM outbox WHERE dedupe_key = ?", (dedupe_key,)).fetchone()
+        assert row is not None
+        return _outbox_from_row(row)
+
+    def _set_publication_publishing_txn(
+        self,
+        conn: sqlite3.Connection,
+        publication: Publication,
+        now: str,
+        *,
+        reason: str,
+    ) -> None:
+        if publication.state is PublicationState.PUBLISHING:
+            return
+        conn.execute(
+            "UPDATE publications SET state = ?, updated_at = ? WHERE id = ?",
+            (PublicationState.PUBLISHING.value, now, publication.id),
+        )
+        self._append_event_txn(
+            conn,
+            publication.id,
+            "publication.state_changed",
+            actor_type="system",
+            data={"from": publication.state.value, "to": PublicationState.PUBLISHING.value, "reason": reason},
+            now=now,
+        )
+
+    def _enqueue_status_update_txn(
+        self,
+        conn: sqlite3.Connection,
+        publication_id: str,
+        _event_id: int,
+        now: str,
+    ) -> OutboxItem:
+        """Append a revisioned status delivery; later revisions supersede earlier ones."""
+        row = conn.execute(
+            "SELECT status_revision FROM publications WHERE id = ?", (publication_id,)
+        ).fetchone()
+        if row is None:
+            raise StoreError(f"unknown publication: {publication_id}")
+        revision = int(row["status_revision"]) + 1
+        conn.execute(
+            "UPDATE publications SET status_revision = ?, updated_at = ? WHERE id = ?",
+            (revision, now, publication_id),
+        )
+        item = self._enqueue_outbox_txn(
+            conn,
+            kind="telegram.status_card",
+            dedupe_key=f"telegram-status:{publication_id}:r{revision}",
+            publication_id=publication_id,
+            payload={"publication_id": publication_id, "revision": revision},
+            now=now,
+        )
+        if (
+            item.kind != "telegram.status_card"
+            or item.publication_id != publication_id
+            or item.payload != {"publication_id": publication_id, "revision": revision}
+        ):
+            raise StoreError("refusing to reuse a conflicting Telegram status revision")
+        return item
+
+    def _enqueue_telegram_status_repair_txn(
+        self,
+        conn: sqlite3.Connection,
+        publication: Publication,
+        *,
+        written_revision: int,
+        reason: str,
+        now: str,
+    ) -> OutboxItem:
+        """Append the next current-card repair after an unfenced API write."""
+        event_id = self._append_event_txn(
+            conn,
+            publication.id,
+            "telegram.status_card_stale_edit_repaired",
+            actor_type="telegram_bot",
+            data={
+                "written_revision": written_revision,
+                "current_revision": publication.status_revision,
+                "reason": reason,
+            },
+            now=now,
+        )
+        return self._enqueue_status_update_txn(conn, publication.id, event_id, now)
+
     def _enqueue_outbox_txn(
         self,
         conn: sqlite3.Connection,
@@ -1104,14 +2254,15 @@ class PublishingStore:
         data: Mapping[str, Any] | None,
         now: str,
         actor_id: str | None = None,
-    ) -> None:
-        conn.execute(
+    ) -> int:
+        cursor = conn.execute(
             """
             INSERT INTO publication_events(publication_id, event_type, actor_type, actor_id, data_json, created_at)
             VALUES (?, ?, ?, ?, ?, ?)
             """,
             (publication_id, event_type, actor_type, actor_id, _json(data), now),
         )
+        return int(cursor.lastrowid)
 
     def _refresh_publication_state_txn(
         self, conn: sqlite3.Connection, publication_id: str, now: str
@@ -1119,7 +2270,7 @@ class PublishingStore:
         publication_row = conn.execute("SELECT * FROM publications WHERE id = ?", (publication_id,)).fetchone()
         assert publication_row is not None
         publication = _publication_from_row(publication_row)
-        if publication.state not in {PublicationState.APPROVED, PublicationState.PUBLISHING}:
+        if publication.state in {PublicationState.REVIEW_PENDING, PublicationState.REJECTED}:
             return
         states = [
             TargetState(row["state"])
@@ -1135,14 +2286,26 @@ class PublishingStore:
             TargetState.RECONCILIATION_REQUIRED,
             TargetState.CANCELLED,
         }
-        if all(state is TargetState.PUBLISHED for state in states):
+        active = {
+            TargetState.QUEUED,
+            TargetState.UPLOADING,
+            TargetState.PROCESSING,
+            TargetState.RETRY_WAIT,
+        }
+        if publication.state is PublicationState.APPROVED and all(
+            state is TargetState.QUEUED for state in states
+        ):
+            # Approval itself queues jobs but remains visibly distinct from a
+            # worker that has actually started publishing.
+            return
+        if any(state in active for state in states):
+            desired = PublicationState.PUBLISHING
+        elif all(state is TargetState.PUBLISHED for state in states):
             desired = PublicationState.PUBLISHED
         elif any(state is TargetState.PUBLISHED for state in states) and all(state in terminal for state in states):
             desired = PublicationState.PARTIAL
         elif all(state in terminal for state in states):
             desired = PublicationState.FAILED
-        elif any(state in {TargetState.UPLOADING, TargetState.PROCESSING, TargetState.RETRY_WAIT} for state in states):
-            desired = PublicationState.PUBLISHING
         else:
             return
         if desired is publication.state:

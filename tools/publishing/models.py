@@ -69,6 +69,7 @@ class Publication:
     approved_by_user_id: str | None
     rejected_at: str | None
     rejected_by_user_id: str | None
+    status_revision: int
 
 
 @dataclass(frozen=True)
@@ -87,6 +88,7 @@ class PublicationTarget:
     created_at: str
     updated_at: str
     published_at: str | None
+    dispatch_generation: int
 
 
 @dataclass(frozen=True)

@@ -37,6 +37,10 @@ class TelegramError(RuntimeError):
     """Ошибка ответа Telegram Bot API без утечки токена."""
 
 
+class TelegramMessageNotModified(TelegramError):
+    """A successful idempotent edit reported as a Telegram API error."""
+
+
 def dotenv_value(name: str) -> str:
     env_path = ROOT / ".env"
     if not env_path.is_file():
@@ -99,6 +103,22 @@ class TelegramApi:
         """Keep endpoint diagnostics useful without ever exposing the bot token."""
         return str(value).replace(self._base, "https://api.telegram.org/bot[redacted]")[:500]
 
+    @staticmethod
+    def _is_message_not_modified(method: str, description: str) -> bool:
+        return (
+            method in {"editMessageText", "editMessageReplyMarkup"}
+            and "message is not modified" in description.casefold()
+        )
+
+    def _raise_api_error(self, method: str, description: object) -> None:
+        safe_description = self._safe_error_text(description)
+        if self._is_message_not_modified(method, safe_description):
+            # Telegram uses a 400 response for an idempotent edit.  Keep the
+            # transport classification stable and do not retain the
+            # provider's full diagnostic text in this special case.
+            raise TelegramMessageNotModified("Telegram API: message is not modified")
+        raise TelegramError(f"Telegram API: {safe_description}")
+
     def _json_call(self, method: str, payload: dict[str, Any]) -> Any:
         data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         request = urllib.request.Request(
@@ -111,15 +131,22 @@ class TelegramApi:
             with urllib.request.urlopen(request, timeout=120) as response:
                 result = read_json_response(response, method)
         except urllib.error.HTTPError as exc:
-            raise TelegramError(f"Telegram HTTP {exc.code} на {method}") from exc
+            # Bot API application errors normally use HTTP 400 and still
+            # include a JSON ``description``.  Read it when available so an
+            # idempotent "message is not modified" response gets the same
+            # stable classification as an HTTP-200 ``ok: false`` response.
+            try:
+                error_result = read_json_response(exc, method)
+            except TelegramError:
+                raise TelegramError(f"Telegram HTTP {exc.code} на {method}") from exc
+            self._raise_api_error(method, error_result.get("description", f"HTTP {exc.code}"))
         except urllib.error.URLError as exc:
             raise TelegramError(
                 f"не удалось подключиться к Telegram: {self._safe_error_text(exc.reason)}"
             ) from exc
 
         if not result.get("ok"):
-            description = self._safe_error_text(result.get("description", "неизвестная ошибка"))
-            raise TelegramError(f"Telegram API: {description}")
+            self._raise_api_error(method, result.get("description", "неизвестная ошибка"))
         return result.get("result")
 
     def get_me(self) -> dict[str, Any]:

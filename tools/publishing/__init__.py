@@ -1,7 +1,7 @@
 """Durable, approval-gated social publishing primitives.
 
-The package deliberately contains no platform side effects in the first stage.
-Future workers and adapters build on its metadata snapshots and SQLite store.
+Provider effects are isolated behind the fenced worker/adapters contract; the
+built-in dry-run adapter remains entirely local.
 """
 
 from .db import PublishingStore

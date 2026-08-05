@@ -6,17 +6,25 @@ YouTube or Instagram client and never makes a platform publish request.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 import json
 import os
 from pathlib import Path
 import sys
 import time
 from typing import Any, Callable, Mapping
+import uuid
 
-from telegram_bot import MAX_UPLOAD_BYTES, TelegramApi, TelegramError, dotenv_value
+from telegram_bot import (
+    MAX_UPLOAD_BYTES,
+    TelegramApi,
+    TelegramError,
+    TelegramMessageNotModified,
+    dotenv_value,
+)
 
 from .db import PublishingStore, StoreError
-from .models import Publication, PublicationState, TelegramAction, TelegramActionKind
+from .models import OutboxItem, Publication, PublicationState, PublicationTarget, TelegramAction, TelegramActionKind
 from .review import ReviewError, VerifiedReview, verify_review_snapshots
 
 
@@ -25,6 +33,15 @@ CALLBACK_DATA_LIMIT_BYTES = 64
 TELEGRAM_TEXT_LIMIT = 4096
 UPDATE_CURSOR_KEY = "telegram_callback_update_cursor"
 EMPTY_INLINE_KEYBOARD = {"inline_keyboard": []}
+STATUS_LEASE_SECONDS = 60
+STATUS_RETRY_SECONDS = 30
+
+
+Clock = Callable[[], str]
+
+
+def _utc_now() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="microseconds").replace("+00:00", "Z")
 
 
 class TelegramApprovalError(RuntimeError):
@@ -64,6 +81,19 @@ class ReviewDeliveryFailure:
     """A per-publication delivery failure retained for the current bot cycle."""
 
     publication_id: str
+    error: str
+
+
+@dataclass(frozen=True)
+class StatusDeliveryResult:
+    publication_id: str
+    revision: int
+    skipped_stale: bool = False
+
+
+@dataclass(frozen=True)
+class StatusDeliveryFailure:
+    publication_id: str | None
     error: str
 
 
@@ -187,12 +217,23 @@ def format_review_card(publication: Publication, review: VerifiedReview) -> str:
     return card
 
 
-def format_status_card(publication: Publication) -> str:
+def format_status_card(
+    publication: Publication,
+    targets: tuple[PublicationTarget, ...] | list[PublicationTarget] = (),
+) -> str:
     state = publication.state
     if state is PublicationState.APPROVED:
         headline = "✅ Approved — publish jobs queued"
     elif state is PublicationState.REJECTED:
         headline = "❌ Rejected"
+    elif state is PublicationState.PUBLISHING:
+        headline = "⏳ Publishing"
+    elif state is PublicationState.PUBLISHED:
+        headline = "✅ Published on all selected platforms"
+    elif state is PublicationState.PARTIAL:
+        headline = "⚠ Partially published — operator attention needed"
+    elif state is PublicationState.FAILED:
+        headline = "❌ Publishing stopped — operator attention needed"
     else:
         headline = f"Review status: {state.value}"
     mode = "LIVE" if publication.execution_mode.value == "live" else "DRY-RUN"
@@ -204,6 +245,18 @@ def format_status_card(publication: Publication) -> str:
             f"Approval fingerprint: {publication.approval_fingerprint}",
         ]
     )
+    if targets:
+        status_lines = []
+        for target in targets:
+            rendered = f"{target.platform}: {target.state.value}"
+            if target.state.value == "reconciliation_required":
+                rendered += " (manual reconciliation required)"
+            elif target.external_url:
+                rendered += f" — {target.external_url}"
+            elif target.last_error_code:
+                rendered += f" ({target.last_error_code})"
+            status_lines.append(rendered)
+        text += "\n\nTargets:\n" + "\n".join(status_lines)
     _require_text_card(text)
     return text
 
@@ -218,12 +271,20 @@ class TelegramReviewService:
         api: TelegramApi,
         settings: TelegramApprovalSettings,
         review_loader: ReviewLoader = verify_review_snapshots,
+        status_lease_seconds: int = STATUS_LEASE_SECONDS,
+        clock: Clock = _utc_now,
     ):
+        if status_lease_seconds < 1:
+            raise TelegramApprovalError("Telegram status lease must be positive")
         self.store = store
         self.api = api
         self.settings = settings
         self.review_loader = review_loader
+        self._status_lease_seconds = status_lease_seconds
+        self._clock = clock
         self.last_delivery_failures: list[ReviewDeliveryFailure] = []
+        self.last_status_failures: list[StatusDeliveryFailure] = []
+        self._status_worker_id = f"telegram-status-{uuid.uuid4().hex}"
 
     def deliver_pending_reviews(self) -> list[ReviewDeliveryResult]:
         delivered: list[ReviewDeliveryResult] = []
@@ -243,6 +304,167 @@ class TelegramReviewService:
                     flush=True,
                 )
         return delivered
+
+    def deliver_pending_status_updates(self) -> list[StatusDeliveryResult]:
+        """Apply durable card edits without ever resending the video/buttons.
+
+        Each revision is an outbox row.  If workers have already produced a
+        newer revision, an older row is completed locally without a Telegram
+        API call, preventing stale state from overwriting the card.
+        """
+        delivered: list[StatusDeliveryResult] = []
+        self.last_status_failures = []
+        while True:
+            item = self.store.claim_telegram_status(
+                self._status_worker_id,
+                lease_seconds=self._status_lease_seconds,
+                now=self._status_now(),
+            )
+            if item is None:
+                return delivered
+            try:
+                result = self._deliver_status_update(item)
+            except (OSError, StoreError, TelegramApprovalError, TelegramError) as exc:
+                self._reschedule_status_failure(item, exc)
+                continue
+            if result is not None:
+                delivered.append(result)
+
+    def _deliver_status_update(self, item: OutboxItem) -> StatusDeliveryResult | None:
+        if item.lease_token is None:
+            return None
+        publication_id = item.publication_id
+        payload_publication_id = item.payload.get("publication_id")
+        revision = item.payload.get("revision")
+        if (
+            publication_id is None
+            or payload_publication_id != publication_id
+            or not isinstance(revision, int)
+            or isinstance(revision, bool)
+            or revision < 1
+        ):
+            self.store.dead_outbox(
+                item.id,
+                item.lease_token,
+                error="invalid telegram.status_card payload",
+                now=self._status_now(),
+            )
+            return None
+        publication = self.store.get_publication(publication_id)
+        if publication is None:
+            self.store.dead_outbox(
+                item.id,
+                item.lease_token,
+                error="telegram.status_card references an unknown publication",
+                now=self._status_now(),
+            )
+            return None
+        if revision < publication.status_revision:
+            completed = self.store.complete_outbox(item.id, item.lease_token, now=self._status_now())
+            return StatusDeliveryResult(publication.id, revision, skipped_stale=True) if completed else None
+        if revision != publication.status_revision:
+            self.store.dead_outbox(
+                item.id,
+                item.lease_token,
+                error="telegram.status_card revision is ahead of publication state",
+                now=self._status_now(),
+            )
+            return None
+        if publication.review_card_message_id is None:
+            self.store.reschedule_outbox(
+                item.id,
+                item.lease_token,
+                available_at=self._status_retry_at(),
+                error="review card is not available for a status edit",
+                now=self._status_now(),
+            )
+            return None
+        targets = self.store.list_targets(publication.id)
+        card = format_status_card(publication, targets)
+        # Renew immediately before the only external status-card operation.
+        # If the fence is stale, no Telegram request is started at all.
+        if not self.store.renew_outbox_lease(
+            item.id,
+            item.lease_token,
+            lease_seconds=self._status_lease_seconds,
+            now=self._status_now(),
+        ):
+            return None
+        try:
+            # ``editMessageText`` accepts reply_markup, so this single call
+            # updates the existing text and removes review buttons together.
+            self.api.edit_message_text(
+                self.settings.allowed_chat_id,
+                publication.review_card_message_id,
+                card,
+                reply_markup=EMPTY_INLINE_KEYBOARD,
+            )
+        except (OSError, TelegramError) as exc:
+            if not self._is_message_not_modified_error(exc):
+                # A timeout may happen after Telegram applied the edit.  Do
+                # not complete the original row, but if its fence was lost,
+                # make a current repair revision durable before retry logic.
+                self.store.repair_telegram_status_after_external_attempt(
+                    item.id,
+                    item.lease_token,
+                    publication_id=publication.id,
+                    revision=revision,
+                    now=self._status_now(),
+                )
+                raise
+        completed, repaired_stale_write = self.store.complete_telegram_status_delivery(
+            item.id,
+            item.lease_token,
+            publication_id=publication.id,
+            revision=revision,
+            now=self._status_now(),
+        )
+        if not completed:
+            return None
+        return StatusDeliveryResult(publication.id, revision, skipped_stale=repaired_stale_write)
+
+    def _reschedule_status_failure(self, item: OutboxItem, exc: BaseException) -> None:
+        error = self._safe_error_text(exc)
+        try:
+            if item.lease_token is not None:
+                self.store.reschedule_outbox(
+                    item.id,
+                    item.lease_token,
+                    available_at=self._status_retry_at(),
+                    error=error,
+                    now=self._status_now(),
+                )
+        except StoreError:
+            # The original failure remains isolated even if a stale lease or a
+            # concurrent owner makes its retry bookkeeping impossible.
+            pass
+        failure = StatusDeliveryFailure(item.publication_id, error)
+        self.last_status_failures.append(failure)
+        print(
+            f"Telegram status delivery failed for publication {failure.publication_id}: {failure.error}",
+            file=sys.stderr,
+            flush=True,
+        )
+
+    def _status_now(self) -> str:
+        return self._clock()
+
+    def _status_retry_at(self) -> str:
+        try:
+            now = datetime.fromisoformat(self._status_now().replace("Z", "+00:00"))
+        except ValueError as exc:
+            raise TelegramApprovalError("Telegram status clock must return an ISO-8601 timestamp") from exc
+        if now.tzinfo is None:
+            raise TelegramApprovalError("Telegram status clock must return a timezone-aware timestamp")
+        return (now.astimezone(timezone.utc) + timedelta(seconds=STATUS_RETRY_SECONDS)).isoformat(
+            timespec="microseconds"
+        ).replace("+00:00", "Z")
+
+    @staticmethod
+    def _is_message_not_modified_error(exc: BaseException) -> bool:
+        return isinstance(exc, TelegramMessageNotModified) or (
+            isinstance(exc, TelegramError) and "message is not modified" in str(exc).casefold()
+        )
 
     def deliver_review(self, publication_id: str) -> ReviewDeliveryResult:
         publication = self.store.get_publication(publication_id)
@@ -319,6 +541,7 @@ class TelegramReviewService:
 
     def run_once(self, *, timeout: int = 25) -> int:
         self.deliver_pending_reviews()
+        self.deliver_pending_status_updates()
         return self.poll_once(timeout=timeout)
 
     def run_forever(self, *, timeout: int = 25) -> None:
@@ -371,27 +594,10 @@ class TelegramReviewService:
             action_token=token,
             actor_user_id=self.settings.allowed_user_id,
         )
-        publication = self._require_publication(action.publication_id)
-        if publication.state in {PublicationState.APPROVED, PublicationState.REJECTED}:
-            self._update_review_card_status(publication)
+        # apply_telegram_action has already created a revisioned status outbox
+        # row.  Do not issue an unversioned immediate edit here: it could race
+        # a target outcome and overwrite a newer card after its delivery.
         return CallbackResult(update_id, result.accepted, result.reason)
-
-    def _update_review_card_status(self, publication: Publication) -> None:
-        if publication.review_card_message_id is None:
-            return
-        self.api.edit_message_text(
-            self.settings.allowed_chat_id,
-            publication.review_card_message_id,
-            format_status_card(publication),
-            reply_markup=EMPTY_INLINE_KEYBOARD,
-        )
-        # Be explicit: an empty inline keyboard removes the old buttons even
-        # on clients that keep markup when editMessageText changes only text.
-        self.api.edit_message_reply_markup(
-            self.settings.allowed_chat_id,
-            publication.review_card_message_id,
-            reply_markup=EMPTY_INLINE_KEYBOARD,
-        )
 
     @staticmethod
     def _message_id(result: object, method: str) -> int:
