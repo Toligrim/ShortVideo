@@ -39,6 +39,8 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
     if (beat.visual === "handshake") impact = start + 10;
     if (beat.visual === "title-slam") impact = start + 8;
     if (beat.visual === "password-leak") impact = start + Math.round(dur * 0.4);
+    if (beat.visual === "hash-table") impact = start + Math.round(dur * 0.62);
+    if (beat.visual === "collision-compare") impact = start + 18;
     return { beat, start, end, impact };
   });
 };
@@ -59,6 +61,8 @@ export const storySfx = (
       events.push({ frame: s.impact, sound: "slam" }, { frame: s.impact + 2, sound: "ding" });
     if (s.beat.visual === "title-slam") events.push({ frame: s.impact, sound: "slam" });
     if (s.beat.visual === "password-leak") events.push({ frame: s.impact, sound: "click" });
+    if (s.beat.visual === "hash-table") events.push({ frame: s.impact, sound: "click" });
+    if (s.beat.visual === "collision-compare") events.push({ frame: s.impact, sound: "pop" });
   }
   return events;
 };
@@ -507,6 +511,309 @@ const PasswordLeak: React.FC<{ local: number; fps: number; impactLocal: number; 
   );
 };
 
+/** Ключ проходит через хеш-функцию и попадает в конкретную ячейку массива. */
+const HashTableVisual: React.FC<{
+  local: number;
+  fps: number;
+  impactLocal: number;
+  keyLabel?: string;
+  hash?: string;
+  index?: number;
+  value?: string;
+}> = ({ local, fps, impactLocal, keyLabel = "профиль", hash = "#A7", index = 3, value = "профиль" }) => {
+  const enter = spring({ frame: local, fps, config: { damping: 15, mass: 0.8 } });
+  const reveal = spring({ frame: local - impactLocal, fps, config: { damping: 12, mass: 0.7 } });
+  const selected = Math.max(0, Math.min(7, Math.round(index)));
+  const cellWidth = 106;
+  const cellGap = 10;
+  const cellStart = (W - (8 * cellWidth + 7 * cellGap)) / 2;
+  const selectedX = cellStart + selected * (cellWidth + cellGap) + cellWidth / 2;
+  const tableY = 1030;
+  const flowEnd = Math.max(impactLocal - 8, 1);
+  const flowP = smooth(clamp01(local / flowEnd));
+  const movingX = interpolate(flowP, [0, 1], [160, 520]);
+  const movingOpacity = interpolate(local, [0, 14, flowEnd], [1, 1, 0], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+  });
+  const cellPulse = 1 + 0.06 * Math.sin((local - impactLocal) / 5);
+  const safeKey = keyLabel.length > 12 ? `${keyLabel.slice(0, 11)}…` : keyLabel;
+  const safeValue = value.length > 10 ? `${value.slice(0, 9)}…` : value;
+  return (
+    <>
+      <div
+        style={{
+          position: "absolute",
+          left: 74,
+          top: 560,
+          width: 220,
+          height: 170,
+          borderRadius: 26,
+          background: theme.panel,
+          border: `3px solid ${theme.accent}99`,
+          boxShadow: `0 0 55px ${theme.accent}22`,
+          opacity: enter,
+          transform: `translateY(${(1 - enter) * 70}px)`,
+          textAlign: "center",
+          paddingTop: 24,
+        }}
+      >
+        <div style={{ fontFamily: theme.mono, fontSize: 25, color: theme.subtext }}>КЛЮЧ</div>
+        <div style={{ fontFamily: theme.font, fontWeight: 800, fontSize: 38, color: theme.text, marginTop: 18 }}>
+          {safeKey}
+        </div>
+      </div>
+      <div
+        style={{
+          position: "absolute",
+          left: 370,
+          top: 560,
+          width: 300,
+          height: 170,
+          borderRadius: 26,
+          background: `${theme.accent2}12`,
+          border: `3px solid ${theme.accent2}99`,
+          boxShadow: `0 0 55px ${theme.accent2}22`,
+          opacity: enter,
+          transform: `translateY(${(1 - enter) * 70}px)`,
+          textAlign: "center",
+          paddingTop: 18,
+        }}
+      >
+        <IconGlyph name="hash" size={42} color={theme.accent2} strokeWidth={1.8} />
+        <div style={{ fontFamily: theme.font, fontWeight: 800, fontSize: 36, color: theme.text, marginTop: 5 }}>
+          h(ключ)
+        </div>
+        <div style={{ fontFamily: theme.mono, fontSize: 25, color: theme.accent2, marginTop: 7 }}>{hash}</div>
+      </div>
+      {[{ left: 294, width: 68 }, { left: 680, width: selectedX - 680 - 12 }].map((line, i) => (
+        <div
+          key={i}
+          style={{
+            position: "absolute",
+            left: line.left,
+            top: 644,
+            width: Math.max(20, line.width),
+            height: 4,
+            background: i === 0 ? theme.accent : theme.accent2,
+            opacity: enter * 0.8,
+          }}
+        />
+      ))}
+      <div
+        style={{
+          position: "absolute",
+          left: movingX,
+          top: 620,
+          transform: "translate(-50%, -50%)",
+          background: theme.accent,
+          color: "#06121A",
+          borderRadius: 999,
+          padding: "10px 18px",
+          fontFamily: theme.mono,
+          fontWeight: 800,
+          fontSize: 25,
+          opacity: movingOpacity * enter,
+          boxShadow: `0 0 26px ${theme.accent}AA`,
+        }}
+      >
+        {safeKey}
+      </div>
+      <div
+        style={{
+          position: "absolute",
+          left: W / 2,
+          top: 890,
+          transform: "translateX(-50%)",
+          fontFamily: theme.mono,
+          fontSize: 27,
+          color: theme.subtext,
+          opacity: enter,
+          letterSpacing: 3,
+        }}
+      >
+        МАССИВ ВЕДЕР
+      </div>
+      {Array.from({ length: 8 }).map((_, i) => {
+        const active = i === selected && local >= impactLocal;
+        const x = cellStart + i * (cellWidth + cellGap);
+        return (
+          <div
+            key={i}
+            style={{
+              position: "absolute",
+              left: x,
+              top: tableY,
+              width: cellWidth,
+              height: 170,
+              borderRadius: 18,
+              border: `3px solid ${active ? theme.success : theme.panelBorder}`,
+              background: active ? `${theme.success}1A` : theme.panel,
+              boxShadow: active ? `0 0 ${45 + 20 * Math.max(0, reveal)}px ${theme.success}66` : "none",
+              opacity: enter,
+              transform: `scale(${active ? cellPulse : 1})`,
+              textAlign: "center",
+              paddingTop: 14,
+            }}
+          >
+            <div style={{ fontFamily: theme.mono, fontSize: 24, color: active ? theme.success : theme.subtext }}>
+              [{i}]
+            </div>
+            {active ? (
+              <div style={{ fontFamily: theme.font, fontWeight: 800, fontSize: 24, color: theme.text, marginTop: 27 }}>
+                {safeValue}
+              </div>
+            ) : (
+              <div style={{ fontFamily: theme.mono, fontSize: 33, color: theme.panelBorder, marginTop: 24 }}>·</div>
+            )}
+          </div>
+        );
+      })}
+      {local >= impactLocal ? <PulseRing x={selectedX} y={tableY + 85} triggerFrame={impactLocal} tone="success" size={150} /> : null}
+      <div
+        style={{
+          position: "absolute",
+          left: selectedX,
+          top: 1230,
+          transform: "translateX(-50%)",
+          fontFamily: theme.font,
+          fontWeight: 700,
+          fontSize: 30,
+          color: theme.success,
+          opacity: reveal,
+        }}
+      >
+        индекс {selected}
+      </div>
+    </>
+  );
+};
+
+/** Одна коллизия, показанная сразу двумя стратегиями: цепочка и probing. */
+const CollisionCompare: React.FC<{
+  local: number;
+  fps: number;
+  impactLocal: number;
+  keyA?: string;
+  keyB?: string;
+  bucket?: number;
+}> = ({ local, fps, impactLocal, keyA = "профиль", keyB = "платёж", bucket = 3 }) => {
+  const enter = spring({ frame: local, fps, config: { damping: 14, mass: 0.8 } });
+  const second = spring({ frame: local - impactLocal, fps, config: { damping: 12, mass: 0.7 } });
+  const leftX = 270;
+  const rightX = 810;
+  const panelTop = 420;
+  const cellY = 780;
+  const safeA = keyA.length > 10 ? `${keyA.slice(0, 9)}…` : keyA;
+  const safeB = keyB.length > 10 ? `${keyB.slice(0, 9)}…` : keyB;
+  const pill = (label: string, x: number, y: number, color: string, opacity = 1) => (
+    <div
+      style={{
+        position: "absolute",
+        left: x,
+        top: y,
+        transform: "translate(-50%, -50%)",
+        padding: "12px 18px",
+        borderRadius: 999,
+        background: `${color}22`,
+        border: `2px solid ${color}`,
+        color: theme.text,
+        fontFamily: theme.font,
+        fontWeight: 700,
+        fontSize: 27,
+        whiteSpace: "nowrap",
+        opacity: opacity * enter,
+      }}
+    >
+      {label}
+    </div>
+  );
+  const panel = (x: number, title: string, color: string, children: React.ReactNode) => (
+    <div
+      style={{
+        position: "absolute",
+        left: x - 215,
+        top: panelTop,
+        width: 430,
+        height: 860,
+        borderRadius: 28,
+        background: theme.panel,
+        border: `3px solid ${color}77`,
+        boxShadow: `0 0 60px ${color}18`,
+        opacity: enter,
+        transform: `translateY(${(1 - enter) * 90}px)`,
+      }}
+    >
+      <div style={{ textAlign: "center", paddingTop: 26, fontFamily: theme.font, fontWeight: 800, fontSize: 37, color }}>
+        {title}
+      </div>
+      {children}
+    </div>
+  );
+  const cell = (x: number, y: number, label: string, color: string, active = false, bucketLabel = bucket) => (
+    <div
+      style={{
+        position: "absolute",
+        left: x - 155,
+        top: y - 48,
+        width: 310,
+        height: 96,
+        borderRadius: 18,
+        border: `3px solid ${active ? color : theme.panelBorder}`,
+        background: active ? `${color}18` : "#0D1420",
+        boxShadow: active ? `0 0 35px ${color}55` : "none",
+        display: "flex",
+        alignItems: "center",
+        padding: "0 18px",
+        gap: 16,
+      }}
+    >
+      <span style={{ fontFamily: theme.mono, fontSize: 25, color: active ? color : theme.subtext }}>[{bucketLabel}]</span>
+      <span style={{ fontFamily: theme.font, fontWeight: 700, fontSize: 27, color: theme.text }}>{label}</span>
+    </div>
+  );
+  return (
+    <>
+      <div
+        style={{
+          position: "absolute",
+          left: W / 2,
+          top: 300,
+          transform: "translateX(-50%)",
+          fontFamily: theme.mono,
+          fontWeight: 700,
+          fontSize: 29,
+          color: theme.warning,
+          opacity: enter,
+          letterSpacing: 2,
+        }}
+      >
+        ОДИН ИНДЕКС → ДВА ВЫХОДА
+      </div>
+      {panel(leftX, "ЦЕПОЧКА", theme.accent, <>
+        <div style={{ position: "absolute", left: 50, right: 50, top: 115, fontFamily: theme.mono, fontSize: 24, color: theme.subtext }}>ячейка {bucket} → список</div>
+        {cell(215, cellY - panelTop, safeA, theme.accent, true)}
+        {pill(safeB, 215, cellY + 112 - panelTop, theme.accent, second)}
+        <div style={{ position: "absolute", left: 115, top: cellY + 52 - panelTop, color: theme.accent, fontSize: 38, opacity: second * enter }}>↓</div>
+        <div style={{ position: "absolute", left: 50, right: 50, bottom: 55, textAlign: "center", fontFamily: theme.font, fontSize: 28, color: theme.subtext }}>оба живут рядом</div>
+      </>)}
+      {panel(rightX, "ПРОБА", theme.accent2, <>
+        <div style={{ position: "absolute", left: 50, right: 50, top: 115, fontFamily: theme.mono, fontSize: 24, color: theme.subtext }}>ищем свободное место</div>
+        {cell(215, cellY - panelTop, safeA, theme.accent2, true)}
+        {cell(215, cellY + 140 - panelTop, safeB, theme.success, local >= impactLocal, bucket + 1)}
+        <div style={{ position: "absolute", left: 215, top: cellY + 69 - panelTop, color: theme.accent2, fontSize: 34, opacity: second * enter }}>↓</div>
+        <div style={{ position: "absolute", left: 50, right: 50, bottom: 55, textAlign: "center", fontFamily: theme.font, fontSize: 28, color: theme.subtext }}>следующая ячейка</div>
+      </>)}
+      {local >= impactLocal ? (
+        <>
+          <PulseRing x={leftX} y={cellY + 112} triggerFrame={impactLocal} tone="accent" size={130} />
+          <PulseRing x={rightX} y={cellY + 140} triggerFrame={impactLocal} tone="success" size={130} />
+        </>
+      ) : null}
+    </>
+  );
+};
+
 /* ──────────────────────────── сцена-сториборд ──────────────────────────── */
 
 /** Каждая фраза диктора — свой бит с движением камеры между битами. */
@@ -531,6 +838,8 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     handshake: { scale: 1.22, y: -110 },
     "title-slam": { scale: 1.0, y: 0 },
     "password-leak": { scale: 1.05, y: -30 },
+    "hash-table": { scale: 0.98, y: -20 },
+    "collision-compare": { scale: 0.9, y: -20 },
   };
   const cur = cams[slot.beat.visual] ?? { scale: 1, y: 0 };
   const prev = idx > 0 ? cams[slots[idx - 1].beat.visual] ?? cur : cur;
@@ -572,6 +881,29 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             fps={fps}
             impactLocal={impactLocal}
             password={slot.beat.params?.password as string | undefined}
+          />
+        );
+      case "hash-table":
+        return (
+          <HashTableVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            keyLabel={slot.beat.params?.key as string | undefined}
+            hash={slot.beat.params?.hash as string | undefined}
+            index={slot.beat.params?.index as number | undefined}
+            value={slot.beat.params?.value as string | undefined}
+          />
+        );
+      case "collision-compare":
+        return (
+          <CollisionCompare
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            keyA={slot.beat.params?.keyA as string | undefined}
+            keyB={slot.beat.params?.keyB as string | undefined}
+            bucket={slot.beat.params?.bucket as number | undefined}
           />
         );
       default:
