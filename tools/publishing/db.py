@@ -274,6 +274,8 @@ def _publication_from_row(row: sqlite3.Row) -> Publication:
         metadata_path=row["metadata_path"],
         metadata_sha256=row["metadata_sha256"],
         approval_fingerprint=row["approval_fingerprint"],
+        review_video_message_id=row["review_video_message_id"],
+        review_card_message_id=row["review_card_message_id"],
         created_at=row["created_at"],
         updated_at=row["updated_at"],
         approved_at=row["approved_at"],
@@ -510,6 +512,80 @@ class PublishingStore:
         finally:
             conn.close()
 
+    def list_pending_review_deliveries(self) -> list[Publication]:
+        """Return review cards that still need Telegram delivery or completion.
+
+        The durable outbox row is deliberately the selector: a video can have
+        been sent and persisted while the following card send failed, so this
+        list must include such partial deliveries until the card is recorded
+        and the outbox item is completed.
+        """
+        conn = self._connect()
+        try:
+            rows = conn.execute(
+                """
+                SELECT publications.*
+                FROM publications
+                JOIN outbox ON outbox.publication_id = publications.id
+                WHERE publications.state = ?
+                  AND outbox.kind = ?
+                  AND outbox.state = ?
+                ORDER BY outbox.available_at, outbox.id
+                """,
+                (
+                    PublicationState.REVIEW_PENDING.value,
+                    "telegram.review_card",
+                    OutboxState.PENDING.value,
+                ),
+            ).fetchall()
+            return [_publication_from_row(row) for row in rows]
+        finally:
+            conn.close()
+
+    def record_review_video_message(self, publication_id: str, message_id: int) -> int:
+        """Persist the sent-video message ID before any follow-up API call."""
+        return self._record_review_message(publication_id, "review_video_message_id", message_id)
+
+    def record_review_card_message(self, publication_id: str, message_id: int) -> int:
+        """Persist the approval-card message ID before completing its outbox item."""
+        return self._record_review_message(publication_id, "review_card_message_id", message_id)
+
+    def complete_review_delivery(self, publication_id: str) -> bool:
+        """Mark the review delivery complete only after its card has a durable ID."""
+        now = _utc_now()
+        with self._write_transaction() as conn:
+            publication = conn.execute(
+                "SELECT review_card_message_id FROM publications WHERE id = ?", (publication_id,)
+            ).fetchone()
+            if publication is None:
+                raise StoreError(f"unknown publication: {publication_id}")
+            if publication["review_card_message_id"] is None:
+                raise StoreError("cannot complete review delivery before its card message ID is recorded")
+            changed = conn.execute(
+                """
+                UPDATE outbox
+                SET state = ?, completed_at = ?, lease_owner = NULL, lease_token = NULL, lease_expires_at = NULL
+                WHERE publication_id = ? AND kind = ? AND state = ?
+                """,
+                (
+                    OutboxState.COMPLETED.value,
+                    now,
+                    publication_id,
+                    "telegram.review_card",
+                    OutboxState.PENDING.value,
+                ),
+            ).rowcount
+            if changed:
+                self._append_event_txn(
+                    conn,
+                    publication_id,
+                    "telegram.review_card_delivered",
+                    actor_type="telegram_bot",
+                    data={"review_card_message_id": int(publication["review_card_message_id"])},
+                    now=now,
+                )
+            return changed == 1
+
     def issue_telegram_action(
         self,
         publication_id: str,
@@ -559,6 +635,15 @@ class PublishingStore:
             row = conn.execute("SELECT * FROM telegram_actions WHERE token = ?", (generated_token,)).fetchone()
             assert row is not None
             return self._action_from_row(row)
+
+    def get_telegram_action(self, token: str) -> TelegramAction | None:
+        """Look up an opaque callback token without changing publication state."""
+        conn = self._connect()
+        try:
+            row = conn.execute("SELECT * FROM telegram_actions WHERE token = ?", (token,)).fetchone()
+            return self._action_from_row(row) if row is not None else None
+        finally:
+            conn.close()
 
     def apply_telegram_action(
         self,
@@ -930,6 +1015,37 @@ class PublishingStore:
         }
         conn.execute("UPDATE telegram_updates SET result_json = ? WHERE update_id = ?", (_json(result), update_id))
         return ActionResult(accepted, False, publication_state, reason)
+
+    def _record_review_message(self, publication_id: str, column: str, message_id: int) -> int:
+        if column not in {"review_video_message_id", "review_card_message_id"}:
+            raise StoreError("invalid review message column")
+        if not isinstance(message_id, int) or isinstance(message_id, bool) or message_id <= 0:
+            raise StoreError("Telegram message_id must be a positive integer")
+        now = _utc_now()
+        with self._write_transaction() as conn:
+            row = conn.execute(
+                f"SELECT {column} FROM publications WHERE id = ?", (publication_id,)
+            ).fetchone()
+            if row is None:
+                raise StoreError(f"unknown publication: {publication_id}")
+            current = row[column]
+            if current is not None:
+                if int(current) != message_id:
+                    raise StoreError(f"{column} is already recorded with a different message ID")
+                return int(current)
+            conn.execute(
+                f"UPDATE publications SET {column} = ?, updated_at = ? WHERE id = ?",
+                (message_id, now, publication_id),
+            )
+            self._append_event_txn(
+                conn,
+                publication_id,
+                "telegram.review_video_sent" if column == "review_video_message_id" else "telegram.review_card_sent",
+                actor_type="telegram_bot",
+                data={"message_id": message_id},
+                now=now,
+            )
+            return message_id
 
     def _enqueue_outbox_txn(
         self,

@@ -7,7 +7,13 @@ import subprocess
 
 from .config import PublishingConfig
 from .db import PublishingStore, StoreError
-from .metadata import MetadataError, MetadataSnapshot, load_metadata, write_metadata_snapshot
+from .metadata import (
+    MetadataError,
+    MetadataSnapshot,
+    load_metadata,
+    verify_metadata_snapshot,
+    write_metadata_snapshot,
+)
 from .models import ExecutionMode, Publication
 from .preflight import (
     AssetSnapshot,
@@ -33,6 +39,32 @@ class PreparedReview:
     asset: AssetSnapshot
     metadata: MetadataSnapshot
     source_probe: MediaProbe
+
+
+@dataclass(frozen=True)
+class VerifiedReview:
+    """Immutable review inputs rechecked immediately before Telegram delivery."""
+
+    asset_path: Path
+    metadata: dict[str, object]
+    probe: MediaProbe
+
+
+def verify_review_snapshots(
+    publication: Publication,
+    *,
+    ffprobe_bin: str = "ffprobe",
+    run: RunCommand = subprocess.run,
+) -> VerifiedReview:
+    """Fail closed if either approved snapshot no longer matches its hash."""
+    asset_path = Path(publication.asset_path)
+    try:
+        verify_asset_snapshot(asset_path, publication.asset_sha256)
+        metadata = verify_metadata_snapshot(publication.metadata_path, publication.metadata_sha256)
+        probe = probe_video(asset_path, ffprobe_bin=ffprobe_bin, run=run)
+    except (MetadataError, PreflightError, OSError) as exc:
+        raise ReviewError(f"review snapshot verification failed: {exc}") from exc
+    return VerifiedReview(asset_path=asset_path, metadata=metadata, probe=probe)
 
 
 def prepare_review(

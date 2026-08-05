@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Prepare and inspect local approval-gated social publication requests.
+"""Prepare and inspect approval-gated social publication requests.
 
-This CLI intentionally has no Telegram, YouTube, Instagram, R2, or other
-network code. It only prepares immutable local artifacts and SQLite state.
+The ``bot`` command is the only Telegram network entry point.  It delivers
+immutable review cards and records human approvals; it never publishes a
+YouTube or Instagram target itself.
 """
 from __future__ import annotations
 
@@ -18,6 +19,8 @@ from publishing.metadata import MetadataError, load_metadata, metadata_sha256
 from publishing.models import ExecutionMode, Publication, PublicationTarget
 from publishing.preflight import PreflightError
 from publishing.review import ReviewError, prepare_review
+from publishing.telegram import TelegramApprovalError
+from telegram_bot import TelegramError
 
 
 def _config(args: argparse.Namespace) -> PublishingConfig:
@@ -83,6 +86,10 @@ def build_parser() -> argparse.ArgumentParser:
     selector.add_argument("--publication-id")
     selector.add_argument("--slug")
     status.add_argument("--json", action="store_true", help="emit machine-readable output")
+
+    bot = sub.add_parser("bot", parents=[common], help="run Telegram approval long-polling")
+    bot.add_argument("--once", action="store_true", help="deliver/poll one cycle, then exit")
+    bot.add_argument("--timeout", type=int, default=25, help="getUpdates long-poll timeout in seconds")
     return parser
 
 
@@ -142,9 +149,25 @@ def main(argv: list[str] | None = None) -> int:
                         f"{publication['id']} {publication['slug']} "
                         f"{publication['state']} ({publication['execution_mode']})"
                     )
+        elif args.command == "bot":
+            # Keep the transport import inside this explicitly networked
+            # command, so validation/review/status remain local-only.
+            from publishing.telegram import TelegramApprovalSettings, TelegramReviewService
+            from telegram_bot import get_api
+
+            config.ensure_directories()
+            service = TelegramReviewService(
+                store=PublishingStore(config.database_path),
+                api=get_api(),
+                settings=TelegramApprovalSettings.from_environment(),
+            )
+            if args.once:
+                service.run_once(timeout=args.timeout)
+            else:
+                service.run_forever(timeout=args.timeout)
         else:  # argparse keeps this unreachable; retain a safe failure mode.
             raise StoreError(f"unsupported command: {args.command}")
-    except (MetadataError, PreflightError, ReviewError, StoreError, OSError) as exc:
+    except (MetadataError, PreflightError, ReviewError, StoreError, TelegramApprovalError, TelegramError, OSError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
     return 0

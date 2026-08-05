@@ -61,6 +61,8 @@ class Publication:
     metadata_path: str
     metadata_sha256: str
     approval_fingerprint: str
+    review_video_message_id: int | None
+    review_card_message_id: int | None
     created_at: str
     updated_at: str
     approved_at: str | None
