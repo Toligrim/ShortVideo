@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ShortVideo publication metadata",
+  "type": "object",
+  "required": ["schema_version", "slug", "targets"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "type": "integer", "const": 1 },
+    "slug": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "maxLength": 80
+    },
+    "targets": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "properties": {
+        "youtube": { "$ref": "#/$defs/youtube" },
+        "instagram": { "$ref": "#/$defs/instagram" }
+      }
+    }
+  },
+  "$defs": {
+    "youtube": {
+      "type": "object",
+      "required": [
+        "title",
+        "description",
+        "tags",
+        "category_id",
+        "privacy_status",
+        "made_for_kids",
+        "contains_synthetic_media",
+        "notify_subscribers"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "title": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "description": { "type": "string", "maxLength": 5000 },
+        "tags": {
+          "type": "array",
+          "maxItems": 15,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1, "maxLength": 100 }
+        },
+        "category_id": { "type": "string", "pattern": "^[0-9]{1,3}$" },
+        "privacy_status": { "enum": ["private", "unlisted", "public"] },
+        "made_for_kids": { "type": "boolean" },
+        "contains_synthetic_media": { "type": "boolean" },
+        "notify_subscribers": { "type": "boolean" }
+      }
+    },
+    "instagram": {
+      "type": "object",
+      "required": ["caption", "share_to_feed"],
+      "additionalProperties": false,
+      "properties": {
+        "caption": { "type": "string", "maxLength": 2200 },
+        "share_to_feed": { "type": "boolean" }
+      }
+    }
+  }
+}

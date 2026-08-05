@@ -5,3 +5,7 @@ video/out/
 video/.remotion/
 *.mp4
 __pycache__/
+var/publisher/
+secrets/
+credentials/
+*.token.json
