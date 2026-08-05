@@ -65,6 +65,20 @@ class LiveFactoryTests(unittest.TestCase):
         with patch.dict(os.environ, {}, clear=True), self.assertRaisesRegex(PermanentPublishError, "not configured safely"):
             factory("instagram")
 
+    def test_instagram_doctor_cli_reports_safe_error_without_traceback(self):
+        stderr = tempfile.SpooledTemporaryFile(mode="w+")
+        try:
+            with patch.dict(os.environ, {}, clear=True), redirect_stderr(stderr):
+                result = publish.main(["doctor", "instagram", "--state-dir", str(self.state)])
+            stderr.seek(0)
+            error = stderr.read()
+        finally:
+            stderr.close()
+        self.assertEqual(result, 2)
+        self.assertIn("error: Instagram live adapter is not configured safely", error)
+        self.assertNotIn("Traceback", error)
+        self.assertNotIn("TOKEN", error)
+
 
 class ReconcileCleanupCliTests(unittest.TestCase):
     def setUp(self):

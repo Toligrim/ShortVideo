@@ -15,6 +15,7 @@ import re
 import sys
 from typing import Any
 
+from publishing.adapters.base import PublishError
 from publishing.adapters.live import CombinedLiveAdapterFactory, instagram_doctor
 from publishing.adapters.r2 import R2AssetError, R2Config, R2ConfigurationError, R2OperationError, R2TemporaryMedia
 from publishing.adapters.instagram import InstagramConfigurationError
@@ -384,6 +385,7 @@ def main(argv: list[str] | None = None) -> int:
         TelegramApprovalError,
         TelegramError,
         PublishWorkerError,
+        PublishError,
         YouTubeConfigurationError,
         YouTubeOAuthError,
         InstagramConfigurationError,
