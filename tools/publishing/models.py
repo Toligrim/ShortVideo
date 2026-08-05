@@ -1,7 +1,7 @@
 """Shared value objects and state constants for the publishing subsystem."""
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any
 
@@ -80,7 +80,14 @@ class PublicationTarget:
     state: TargetState
     attempts: int
     next_attempt_at: str | None
-    external_session_id: str | None
+    external_session_id: str | None = field(repr=False)
+    resumable_session_verified: bool
+    resumable_asset_sha256: str | None
+    resumable_approval_fingerprint: str | None
+    resumable_total_bytes: int | None
+    resumable_mime_type: str | None
+    resumable_offset: int | None
+    resumable_phase: str | None
     external_media_id: str | None
     external_url: str | None
     last_error_code: str | None

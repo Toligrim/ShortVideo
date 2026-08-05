@@ -5,8 +5,14 @@ from dataclasses import dataclass
 import os
 from pathlib import Path
 
+from .security import PrivatePathError, absolute_path, ensure_private_directory
+
 
 ROOT = Path(__file__).resolve().parents[2]
+
+
+class PublishingConfigError(OSError):
+    """A publisher state path is unsafe or cannot be prepared."""
 
 
 def _state_dir_from_environment(root: Path) -> Path:
@@ -14,7 +20,7 @@ def _state_dir_from_environment(root: Path) -> Path:
     candidate = Path(raw).expanduser() if raw else root / "var" / "publisher"
     if not candidate.is_absolute():
         candidate = root / candidate
-    return candidate.resolve()
+    return absolute_path(candidate)
 
 
 @dataclass(frozen=True)
@@ -39,7 +45,7 @@ class PublishingConfig:
     ) -> "PublishingConfig":
         resolved_root = Path(root).resolve()
         resolved_state = (
-            Path(state_dir).expanduser().resolve()
+            absolute_path(state_dir)
             if state_dir is not None
             else _state_dir_from_environment(resolved_root)
         )
@@ -55,5 +61,13 @@ class PublishingConfig:
         )
 
     def ensure_directories(self) -> None:
-        for directory in (self.state_dir, self.asset_dir, self.metadata_dir, self.temporary_dir):
-            directory.mkdir(parents=True, exist_ok=True)
+        try:
+            for directory, label in (
+                (self.state_dir, "publisher state directory"),
+                (self.asset_dir, "publisher asset directory"),
+                (self.metadata_dir, "publisher metadata directory"),
+                (self.temporary_dir, "publisher temporary directory"),
+            ):
+                ensure_private_directory(directory, label=label)
+        except PrivatePathError as exc:
+            raise PublishingConfigError(f"unsafe publisher state path: {exc}") from exc

@@ -4,6 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+import re
 import time
 from typing import Any, Callable, Mapping
 import uuid
@@ -14,12 +15,13 @@ from .adapters.base import (
     PermanentPublishError,
     PublishRequest,
     PublishResult,
+    ResumableSessionCheckpoint,
     RetryablePublishError,
 )
 from .adapters.dry_run import DryRunAdapter
 from .db import PublishingStore, StoreError, approval_fingerprint
 from .metadata import MetadataError, verify_metadata_snapshot
-from .models import ExecutionMode, OutboxItem, Publication, PublicationTarget
+from .models import ExecutionMode, OutboxItem, Publication, PublicationTarget, TargetState
 from .preflight import PreflightError, verify_asset_snapshot
 
 
@@ -51,8 +53,24 @@ def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="microseconds").replace("+00:00", "Z")
 
 
-def _safe_detail(exc: BaseException) -> str:
+_URL_RE = re.compile(r"https?://[^\s'\"<>]+", re.IGNORECASE)
+_BEARER_RE = re.compile(r"(?i)\bbearer\s+[^\s]+")
+_SECRET_ASSIGNMENT_RE = re.compile(
+    r"(?i)([\"']?(?:access[_-]?token|refresh[_-]?token|client[_-]?secret|"
+    r"code[_-]?verifier|authorization[_-]?code|upload_id)[\"']?\s*(?:=|:)\s*)"
+    r"(?:[\"'][^\"']*[\"']|[^\s,;}\]]+)"
+)
+
+
+def _safe_detail(exc: BaseException, *, sensitive_values: tuple[str | None, ...] = ()) -> str:
+    """Render a bounded diagnostic without upload URLs or OAuth material."""
     text = " ".join(str(exc).split())
+    for value in sensitive_values:
+        if isinstance(value, str) and value:
+            text = text.replace(value, "[redacted]")
+    text = _BEARER_RE.sub("Bearer [redacted]", text)
+    text = _SECRET_ASSIGNMENT_RE.sub(r"\1[redacted]", text)
+    text = _URL_RE.sub("[redacted-url]", text)
     return text[:500] or exc.__class__.__name__
 
 
@@ -150,7 +168,24 @@ class PublishWorker:
             return WorkerRunResult(item.id, item.target_id, "ignored_missing_lease")
         token = item.lease_token
 
-        target = self.store.start_target_publish(item.id, token, now=self.clock())
+        claimed_target = self.store.get_target(item.target_id)
+        # Capability probing is itself untrusted factory code.  Preserve the
+        # dry-run invariant that no caller-supplied live-factory method is
+        # touched before the deterministic adapter path.
+        claimed_publication = self.store.get_publication(item.publication_id)
+        resumable_session_supported = (
+            claimed_target is not None
+            and claimed_publication is not None
+            and claimed_publication.execution_mode is not ExecutionMode.DRY_RUN
+            and claimed_target.platform == "youtube"
+            and self._factory_supports_resumable_session(claimed_target.platform)
+        )
+        target = self.store.start_target_publish(
+            item.id,
+            token,
+            resumable_session_supported=resumable_session_supported,
+            now=self.clock(),
+        )
         if target is None:
             return WorkerRunResult(item.id, item.target_id, "skipped_stale_or_invalid")
         publication = self.store.get_publication(item.publication_id)
@@ -200,6 +235,7 @@ class PublishWorker:
             # immediately before its external call.
             verified = verify_publish_inputs(publication)
             self._validate_target_metadata(target, verified.metadata)
+            checkpoint = self._checkpoint_for_target(publication, target)
             # The rehash above can itself block on storage.  Renew once more
             # after it and immediately before the provider side effect.
             if not self.store.renew_outbox_lease(
@@ -219,6 +255,38 @@ class PublishWorker:
                     metadata=verified.metadata,
                     approval_fingerprint=publication.approval_fingerprint,
                     idempotency_key=item.dedupe_key,
+                    existing_external_session_id=checkpoint.session_uri if checkpoint is not None else None,
+                    resumable_checkpoint=checkpoint,
+                    record_target_processing=lambda value: self.store.record_target_processing(
+                        item.id,
+                        token,
+                        external_session_id=value.session_uri,
+                        asset_sha256=value.asset_sha256,
+                        approval_fingerprint=value.approval_fingerprint,
+                        total_bytes=value.total_bytes,
+                        mime_type=value.mime_type,
+                        offset=value.offset,
+                        phase=value.phase,
+                        now=self.clock(),
+                    ),
+                    record_target_progress=lambda offset, phase: self.store.record_target_progress(
+                        item.id,
+                        token,
+                        offset=offset,
+                        phase=phase,
+                        now=self.clock(),
+                    ),
+                    heartbeat=lambda: self.store.renew_outbox_lease(
+                        item.id,
+                        token,
+                        lease_seconds=self.lease_seconds,
+                        now=self.clock(),
+                    ),
+                    cancellation_requested=lambda: (
+                        (current := self.store.get_target(target.id)) is None
+                        or current.state is TargetState.CANCELLED
+                    ),
+                    lease_seconds=self.lease_seconds,
                 )
             )
             self._validate_result(result)
@@ -235,24 +303,34 @@ class PublishWorker:
         except RetryablePublishError as exc:
             return self._handle_retryable(item, target, token, exc)
         except PermanentPublishError as exc:
+            detail = _safe_detail(
+                exc,
+                sensitive_values=(target.external_session_id, exc.external_session_id),
+            )
             failed = self.store.fail_target_publish(
                 item.id,
                 token,
                 error_code=exc.code,
-                error_detail=_safe_detail(exc),
+                error_detail=detail,
                 external_session_id=exc.external_session_id,
                 now=self.clock(),
             )
             outcome = "permanent_failure" if failed else "lost_lease_before_outcome"
             return WorkerRunResult(item.id, target.id, outcome, exc.code)
         except AmbiguousPublishError as exc:
+            detail = _safe_detail(
+                exc,
+                sensitive_values=(target.external_session_id, exc.external_session_id),
+            )
             failed = self.store.fail_target_publish(
                 item.id,
                 token,
                 error_code=exc.code,
-                error_detail=_safe_detail(exc),
+                error_detail=detail,
                 ambiguous=True,
                 external_session_id=exc.external_session_id,
+                external_media_id=exc.external_media_id,
+                external_url=exc.external_url,
                 now=self.clock(),
             )
             outcome = "reconciliation_required" if failed else "lost_lease_after_adapter"
@@ -292,24 +370,41 @@ class PublishWorker:
         token: str,
         exc: RetryablePublishError,
     ) -> WorkerRunResult:
+        detail = _safe_detail(
+            exc,
+            sensitive_values=(target.external_session_id, exc.external_session_id),
+        )
         if item.attempts >= self.max_attempts:
+            # A retryable response from a fenced resumable session still
+            # leaves the provider-side outcome unresolved.  Exhausting local
+            # retries must not erase that capability and initiate a second
+            # upload; hand it to explicit reconciliation instead.
+            requires_reconciliation = (
+                target.resumable_session_verified or exc.external_session_id is not None
+            )
             failed = self.store.fail_target_publish(
                 item.id,
                 token,
                 error_code="retry_attempts_exhausted",
-                error_detail=f"{exc.code}: {_safe_detail(exc)}",
+                error_detail=f"{exc.code}: {detail}",
+                ambiguous=requires_reconciliation,
+                external_session_id=exc.external_session_id,
                 now=self.clock(),
             )
-            outcome = "permanent_failure" if failed else "lost_lease_before_outcome"
+            if failed and requires_reconciliation:
+                outcome = "reconciliation_required"
+            else:
+                outcome = "permanent_failure" if failed else "lost_lease_before_outcome"
             return WorkerRunResult(item.id, target.id, outcome, "retry_attempts_exhausted")
         now = self.clock()
-        available_at = _future_timestamp(now, self.backoff_seconds(item.attempts))
+        delay = max(self.backoff_seconds(item.attempts), exc.retry_after_seconds or 0)
+        available_at = _future_timestamp(now, delay)
         rescheduled = self.store.reschedule_target_publish(
             item.id,
             token,
             available_at=available_at,
             error_code=exc.code,
-            error_detail=_safe_detail(exc),
+            error_detail=detail,
             now=now,
         )
         outcome = "retry_wait" if rescheduled else "lost_lease_before_outcome"
@@ -327,6 +422,69 @@ class PublishWorker:
                 f"no live adapter is configured for {target.platform}",
             )
         return self.adapter_factory(target.platform)
+
+    def _factory_supports_resumable_session(self, platform: str) -> bool:
+        """Ask an optional factory capability without weakening other targets."""
+        if self.adapter_factory is None:
+            return False
+        capability = getattr(self.adapter_factory, "supports_resumable_session", None)
+        if not callable(capability):
+            return False
+        try:
+            return capability(platform) is True
+        except Exception:
+            # Capability discovery must fail closed and must never build an
+            # adapter or start a network effect.
+            return False
+
+    @staticmethod
+    def _checkpoint_for_target(
+        publication: Publication,
+        target: PublicationTarget,
+    ) -> ResumableSessionCheckpoint | None:
+        if not target.resumable_session_verified:
+            return None
+        if target.platform != "youtube":
+            raise AmbiguousPublishError(
+                "invalid_resumable_checkpoint",
+                "resumable upload checkpoints are supported only for YouTube targets",
+                external_session_id=target.external_session_id,
+            )
+        valid = (
+            isinstance(target.external_session_id, str)
+            and bool(target.external_session_id)
+            and target.resumable_asset_sha256 == publication.asset_sha256
+            and target.resumable_approval_fingerprint == publication.approval_fingerprint
+            and isinstance(target.resumable_total_bytes, int)
+            and not isinstance(target.resumable_total_bytes, bool)
+            and target.resumable_total_bytes > 0
+            and isinstance(target.resumable_mime_type, str)
+            and bool(target.resumable_mime_type)
+            and isinstance(target.resumable_offset, int)
+            and not isinstance(target.resumable_offset, bool)
+            and 0 <= target.resumable_offset <= target.resumable_total_bytes
+            and target.resumable_phase in {
+                "session_recorded",
+                "uploading",
+                "resuming",
+                "final_chunk_inflight",
+            }
+        )
+        if not valid:
+            raise AmbiguousPublishError(
+                "invalid_resumable_checkpoint",
+                "stored resumable upload checkpoint is incomplete or does not match approved inputs",
+                external_session_id=target.external_session_id,
+            )
+        return ResumableSessionCheckpoint(
+            session_uri=target.external_session_id,
+            asset_sha256=target.resumable_asset_sha256,
+            approval_fingerprint=target.resumable_approval_fingerprint,
+            total_bytes=target.resumable_total_bytes,
+            mime_type=target.resumable_mime_type,
+            offset=target.resumable_offset,
+            phase=target.resumable_phase,
+        )
 
     @staticmethod
     def _validate_target_metadata(target: PublicationTarget, metadata: Mapping[str, Any]) -> None:

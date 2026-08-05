@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import socket
+import stat
 import subprocess
 import tempfile
 import unittest
@@ -143,6 +144,13 @@ class ReviewTests(unittest.TestCase):
             self.assertEqual(publish.main(["init-db", "--state-dir", str(self.config.state_dir)]), 0)
         self.assertIn("SQLite store ready", stdout.getvalue())
         self.prepare()
+        for directory in (
+            self.config.state_dir,
+            self.config.asset_dir,
+            self.config.metadata_dir,
+            self.config.temporary_dir,
+        ):
+            self.assertEqual(stat.S_IMODE(directory.stat().st_mode), 0o700)
         stdout = io.StringIO()
         with redirect_stdout(stdout):
             self.assertEqual(publish.main(["status", "--state-dir", str(self.config.state_dir), "--json"]), 0)

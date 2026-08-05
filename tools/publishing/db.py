@@ -30,6 +30,7 @@ from .models import (
     TelegramAction,
     TelegramActionKind,
 )
+from .security import PrivatePathError, absolute_path, ensure_private_regular_file
 
 
 class StoreError(RuntimeError):
@@ -42,6 +43,9 @@ class InvalidTransition(StoreError):
 
 HEX_SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 APPROVAL_FINGERPRINT_DOMAIN = b"shortvideo-publication-approval-v1\0"
+RESUMABLE_PHASES = frozenset(
+    {"session_recorded", "uploading", "resuming", "final_chunk_inflight"}
+)
 
 
 MIGRATIONS: tuple[tuple[int, tuple[str, ...]], ...] = (
@@ -177,6 +181,21 @@ MIGRATIONS: tuple[tuple[int, tuple[str, ...]], ...] = (
             # Telegram status delivery independently durable.
             "ALTER TABLE publications ADD COLUMN status_revision INTEGER NOT NULL DEFAULT 0 CHECK (status_revision >= 0)",
             "ALTER TABLE publication_targets ADD COLUMN dispatch_generation INTEGER NOT NULL DEFAULT 0 CHECK (dispatch_generation >= 0)",
+        ),
+    ),
+    (
+        3,
+        (
+            # A resumable upload URL is a sensitive capability. It is kept
+            # only on the target row together with immutable proof of the
+            # approved bytes it belongs to. Events never contain these fields.
+            "ALTER TABLE publication_targets ADD COLUMN resumable_session_verified INTEGER NOT NULL DEFAULT 0 CHECK (resumable_session_verified IN (0, 1))",
+            "ALTER TABLE publication_targets ADD COLUMN resumable_asset_sha256 TEXT",
+            "ALTER TABLE publication_targets ADD COLUMN resumable_approval_fingerprint TEXT",
+            "ALTER TABLE publication_targets ADD COLUMN resumable_total_bytes INTEGER",
+            "ALTER TABLE publication_targets ADD COLUMN resumable_mime_type TEXT",
+            "ALTER TABLE publication_targets ADD COLUMN resumable_offset INTEGER",
+            "ALTER TABLE publication_targets ADD COLUMN resumable_phase TEXT",
         ),
     ),
 )
@@ -322,6 +341,13 @@ def _target_from_row(row: sqlite3.Row) -> PublicationTarget:
         attempts=row["attempts"],
         next_attempt_at=row["next_attempt_at"],
         external_session_id=row["external_session_id"],
+        resumable_session_verified=bool(row["resumable_session_verified"]),
+        resumable_asset_sha256=row["resumable_asset_sha256"],
+        resumable_approval_fingerprint=row["resumable_approval_fingerprint"],
+        resumable_total_bytes=row["resumable_total_bytes"],
+        resumable_mime_type=row["resumable_mime_type"],
+        resumable_offset=row["resumable_offset"],
+        resumable_phase=row["resumable_phase"],
         external_media_id=row["external_media_id"],
         external_url=row["external_url"],
         last_error_code=row["last_error_code"],
@@ -357,16 +383,52 @@ class PublishingStore:
     """SQLite-backed publication state machine and durable outbox."""
 
     def __init__(self, path: Path | str):
-        self.path = Path(path)
-        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.path = absolute_path(path)
+        try:
+            self._secure_database_files()
+        except PrivatePathError as exc:
+            raise StoreError(f"unsafe publisher database path: {exc}") from exc
         self.migrate()
 
+    def _secure_database_files(self) -> None:
+        """Pre-create SQLite state with private, non-symlink files.
+
+        ``external_session_id`` can be a resumable-upload capability.  SQLite
+        writes it to the main database and may spill it into WAL/SHM files, so
+        all three must be private before a connection can touch them.
+        """
+        for path, label in (
+            (self.path, "publisher SQLite database"),
+            (self.path.with_name(f"{self.path.name}-wal"), "publisher SQLite WAL"),
+            (self.path.with_name(f"{self.path.name}-shm"), "publisher SQLite SHM"),
+            # A legacy/hot rollback journal can exist before WAL is enabled.
+            # Keep it private too, then fail closed if WAL cannot be used.
+            (self.path.with_name(f"{self.path.name}-journal"), "publisher SQLite rollback journal"),
+        ):
+            ensure_private_regular_file(path, label=label, create=True)
+
     def _connect(self) -> sqlite3.Connection:
+        try:
+            self._secure_database_files()
+        except PrivatePathError as exc:
+            raise StoreError(f"unsafe publisher database path: {exc}") from exc
         conn = sqlite3.connect(self.path, isolation_level=None, timeout=5.0)
-        conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA foreign_keys = ON")
-        conn.execute("PRAGMA busy_timeout = 5000")
-        conn.execute("PRAGMA journal_mode = WAL")
+        try:
+            conn.row_factory = sqlite3.Row
+            conn.execute("PRAGMA foreign_keys = ON")
+            conn.execute("PRAGMA busy_timeout = 5000")
+            row = conn.execute("PRAGMA journal_mode = WAL").fetchone()
+            effective_mode = str(row[0]).lower() if row is not None else ""
+            if effective_mode != "wal":
+                raise StoreError("publisher SQLite must support WAL mode for private resumable state")
+            # SQLite may recreate support files while switching journal mode.
+            self._secure_database_files()
+        except PrivatePathError as exc:
+            conn.close()
+            raise StoreError(f"unsafe publisher database path: {exc}") from exc
+        except BaseException:
+            conn.close()
+            raise
         return conn
 
     @contextmanager
@@ -1327,6 +1389,7 @@ class PublishingStore:
         outbox_id: int,
         lease_token: str,
         *,
+        resumable_session_supported: bool = False,
         now: str | None = None,
     ) -> PublicationTarget | None:
         """Fence and start a target publish attempt before an adapter call.
@@ -1335,7 +1398,7 @@ class PublishingStore:
         publication are checked together inside the write transaction.  A
         malformed or stale job therefore cannot reach an adapter.
         """
-        if not lease_token:
+        if not lease_token or not isinstance(resumable_session_supported, bool):
             return None
         current_time = _normalize_timestamp(now or _utc_now(), label="current time")
         with self._write_transaction() as conn:
@@ -1374,51 +1437,76 @@ class PublishingStore:
                     f"target is terminal: {target.state.value}",
                 )
                 return None
-            if target.state in {TargetState.UPLOADING, TargetState.PROCESSING} and (
+            in_flight = target.state in {TargetState.UPLOADING, TargetState.PROCESSING}
+            requires_resume_proof = (
                 publication.execution_mode is not ExecutionMode.DRY_RUN
-            ):
+                and (
+                    in_flight
+                    or target.resumable_session_verified
+                    or target.external_session_id is not None
+                )
+            )
+            if requires_resume_proof:
                 # A process can disappear after starting an external call but
-                # before saving its response.  Live adapters are not assumed
-                # idempotent/resumable until they prove that contract, so a
-                # reclaimed in-flight lease goes to operator reconciliation.
-                conn.execute(
-                    """
-                    UPDATE publication_targets
-                    SET state = ?, next_attempt_at = NULL, last_error_code = ?, last_error_detail = ?,
-                        updated_at = ?
-                    WHERE id = ?
-                    """,
-                    (
-                        TargetState.RECONCILIATION_REQUIRED.value,
-                        "lease_expired_after_publish_started",
-                        "lease expired after a live publish attempt started; external outcome is unknown",
+                # before saving its response. Retry-wait rows can also carry
+                # a prior provider session. A live target can proceed only
+                # when its adapter explicitly supports resume *and* the
+                # persisted checkpoint proves the same immutable approval.
+                if resumable_session_supported and self._has_valid_resumable_checkpoint(target, publication):
+                    pass
+                else:
+                    # Live adapters are not assumed idempotent/resumable until
+                    # they prove that contract. In particular, a legacy
+                    # external_session_id is insufficient evidence for a new
+                    # adapter to create another upload.
+                    error_code = (
+                        "lease_expired_after_publish_started"
+                        if in_flight
+                        else "resumable_session_resume_unavailable"
+                    )
+                    error_detail = (
+                        "lease expired after a live publish attempt started; external outcome is unknown"
+                        if in_flight
+                        else "a prior live provider session cannot be safely resumed; reconciliation is required"
+                    )
+                    conn.execute(
+                        """
+                        UPDATE publication_targets
+                        SET state = ?, next_attempt_at = NULL, last_error_code = ?, last_error_detail = ?,
+                            updated_at = ?
+                        WHERE id = ?
+                        """,
+                        (
+                            TargetState.RECONCILIATION_REQUIRED.value,
+                            error_code,
+                            error_detail,
+                            current_time,
+                            target.id,
+                        ),
+                    )
+                    self._dead_outbox_txn(
+                        conn,
+                        outbox.id,
+                        lease_token,
                         current_time,
-                        target.id,
-                    ),
-                )
-                self._dead_outbox_txn(
-                    conn,
-                    outbox.id,
-                    lease_token,
-                    current_time,
-                    "lease expired after live publish started; reconciliation required",
-                )
-                event_id = self._append_event_txn(
-                    conn,
-                    publication.id,
-                    "target.state_changed",
-                    actor_type="worker",
-                    data={
-                        "platform": target.platform,
-                        "from": target.state.value,
-                        "to": TargetState.RECONCILIATION_REQUIRED.value,
-                        "error_code": "lease_expired_after_publish_started",
-                    },
-                    now=current_time,
-                )
-                self._refresh_publication_state_txn(conn, publication.id, current_time)
-                self._enqueue_status_update_txn(conn, publication.id, event_id, current_time)
-                return None
+                        error_detail,
+                    )
+                    event_id = self._append_event_txn(
+                        conn,
+                        publication.id,
+                        "target.state_changed",
+                        actor_type="worker",
+                        data={
+                            "platform": target.platform,
+                            "from": target.state.value,
+                            "to": TargetState.RECONCILIATION_REQUIRED.value,
+                            "error_code": error_code,
+                        },
+                        now=current_time,
+                    )
+                    self._refresh_publication_state_txn(conn, publication.id, current_time)
+                    self._enqueue_status_update_txn(conn, publication.id, event_id, current_time)
+                    return None
             if target.state not in {
                 TargetState.QUEUED,
                 TargetState.RETRY_WAIT,
@@ -1465,6 +1553,150 @@ class PublishingStore:
             assert updated is not None
             return _target_from_row(updated)
 
+    def record_target_processing(
+        self,
+        outbox_id: int,
+        lease_token: str,
+        *,
+        external_session_id: str,
+        asset_sha256: str,
+        approval_fingerprint: str,
+        total_bytes: int,
+        mime_type: str,
+        offset: int = 0,
+        phase: str = "session_recorded",
+        now: str | None = None,
+    ) -> bool:
+        """Durably checkpoint a resumable session before sending media bytes.
+
+        This is deliberately fenced by the claimed outbox lease.  The session
+        URI is stored only on ``publication_targets``; event payloads contain
+        no URI, token, or other capability material.
+        """
+        if not lease_token:
+            return False
+        self._validate_resumable_checkpoint_values(
+            external_session_id=external_session_id,
+            asset_sha256=asset_sha256,
+            approval_fingerprint=approval_fingerprint,
+            total_bytes=total_bytes,
+            mime_type=mime_type,
+            offset=offset,
+            phase=phase,
+        )
+        current_time = _normalize_timestamp(now or _utc_now(), label="current time")
+        with self._write_transaction() as conn:
+            context, reason = self._leased_target_publish_context_txn(
+                conn, outbox_id, lease_token, current_time
+            )
+            if context is None or reason is not None:
+                return False
+            outbox, publication, target = context
+            assert publication is not None and target is not None
+            if target.platform != "youtube":
+                return False
+            if target.state not in {TargetState.UPLOADING, TargetState.PROCESSING}:
+                return False
+            if asset_sha256 != publication.asset_sha256 or approval_fingerprint != publication.approval_fingerprint:
+                return False
+            if target.resumable_session_verified:
+                # A session URL is immutable for this dispatch. A different
+                # value would turn a lease race into a blind new upload.
+                if not self._has_valid_resumable_checkpoint(target, publication):
+                    return False
+                return (
+                    target.external_session_id == external_session_id
+                    and target.resumable_asset_sha256 == asset_sha256
+                    and target.resumable_approval_fingerprint == approval_fingerprint
+                    and target.resumable_total_bytes == total_bytes
+                    and target.resumable_mime_type == mime_type
+                )
+            if target.external_session_id is not None:
+                # A legacy/generic external session is not enough evidence to
+                # overwrite it as a resumable YouTube capability.
+                return False
+            conn.execute(
+                """
+                UPDATE publication_targets
+                SET state = ?, next_attempt_at = NULL, external_session_id = ?,
+                    resumable_session_verified = 1, resumable_asset_sha256 = ?,
+                    resumable_approval_fingerprint = ?, resumable_total_bytes = ?,
+                    resumable_mime_type = ?, resumable_offset = ?, resumable_phase = ?,
+                    last_error_code = NULL, last_error_detail = NULL, updated_at = ?
+                WHERE id = ?
+                """,
+                (
+                    TargetState.PROCESSING.value,
+                    external_session_id,
+                    asset_sha256,
+                    approval_fingerprint,
+                    total_bytes,
+                    mime_type,
+                    offset,
+                    phase,
+                    current_time,
+                    target.id,
+                ),
+            )
+            event_id = self._append_event_txn(
+                conn,
+                publication.id,
+                "target.state_changed",
+                actor_type="worker",
+                data={
+                    "platform": target.platform,
+                    "from": target.state.value,
+                    "to": TargetState.PROCESSING.value,
+                    "resumable_checkpoint_recorded": True,
+                },
+                now=current_time,
+            )
+            self._refresh_publication_state_txn(conn, publication.id, current_time)
+            self._enqueue_status_update_txn(conn, publication.id, event_id, current_time)
+            return True
+
+    def record_target_progress(
+        self,
+        outbox_id: int,
+        lease_token: str,
+        *,
+        offset: int,
+        phase: str,
+        now: str | None = None,
+    ) -> bool:
+        """Persist provider-confirmed resumable progress under the same fence."""
+        if not lease_token or isinstance(offset, bool) or not isinstance(offset, int):
+            return False
+        if phase not in RESUMABLE_PHASES:
+            return False
+        current_time = _normalize_timestamp(now or _utc_now(), label="current time")
+        with self._write_transaction() as conn:
+            context, reason = self._leased_target_publish_context_txn(
+                conn, outbox_id, lease_token, current_time
+            )
+            if context is None or reason is not None:
+                return False
+            _outbox, publication, target = context
+            assert publication is not None and target is not None
+            if target.platform != "youtube":
+                return False
+            if target.state not in {TargetState.UPLOADING, TargetState.PROCESSING}:
+                return False
+            if not self._has_valid_resumable_checkpoint(target, publication):
+                return False
+            assert target.resumable_total_bytes is not None
+            if not 0 <= offset <= target.resumable_total_bytes:
+                return False
+            conn.execute(
+                """
+                UPDATE publication_targets
+                SET state = ?, resumable_offset = ?, resumable_phase = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                (TargetState.PROCESSING.value, offset, phase, current_time, target.id),
+            )
+            return True
+
     def complete_target_publish(
         self,
         outbox_id: int,
@@ -1496,17 +1728,41 @@ class PublishingStore:
             outbox, publication, target = context
             if reason is not None or target.state not in {TargetState.UPLOADING, TargetState.PROCESSING}:
                 return False
+            if (
+                target.resumable_session_verified
+                and external_session_id is not None
+                and external_session_id.strip() != target.external_session_id
+            ):
+                return False
+            clear_resumable = target.resumable_session_verified
             changed = conn.execute(
                 """
                 UPDATE publication_targets
-                SET state = ?, next_attempt_at = NULL, external_session_id = ?, external_media_id = ?,
+                SET state = ?, next_attempt_at = NULL,
+                    external_session_id = CASE WHEN ? THEN NULL ELSE COALESCE(?, external_session_id) END,
+                    resumable_session_verified = CASE WHEN ? THEN 0 ELSE resumable_session_verified END,
+                    resumable_asset_sha256 = CASE WHEN ? THEN NULL ELSE resumable_asset_sha256 END,
+                    resumable_approval_fingerprint = CASE WHEN ? THEN NULL ELSE resumable_approval_fingerprint END,
+                    resumable_total_bytes = CASE WHEN ? THEN NULL ELSE resumable_total_bytes END,
+                    resumable_mime_type = CASE WHEN ? THEN NULL ELSE resumable_mime_type END,
+                    resumable_offset = CASE WHEN ? THEN NULL ELSE resumable_offset END,
+                    resumable_phase = CASE WHEN ? THEN NULL ELSE resumable_phase END,
+                    external_media_id = ?,
                     external_url = ?, last_error_code = NULL, last_error_detail = NULL,
                     updated_at = ?, published_at = ?
                 WHERE id = ?
                 """,
                 (
                     TargetState.PUBLISHED.value,
+                    int(clear_resumable),
                     external_session_id,
+                    int(clear_resumable),
+                    int(clear_resumable),
+                    int(clear_resumable),
+                    int(clear_resumable),
+                    int(clear_resumable),
+                    int(clear_resumable),
+                    int(clear_resumable),
                     external_media_id.strip(),
                     external_url.strip(),
                     current_time,
@@ -1609,6 +1865,8 @@ class PublishingStore:
         error_detail: str,
         ambiguous: bool = False,
         external_session_id: str | None = None,
+        external_media_id: str | None = None,
+        external_url: str | None = None,
         now: str | None = None,
     ) -> bool:
         """Terminally fail a target or require reconciliation, atomically with outbox death."""
@@ -1620,6 +1878,16 @@ class PublishingStore:
             not isinstance(external_session_id, str) or not external_session_id.strip()
         ):
             raise StoreError("external_session_id must be a non-empty string when provided")
+        if (external_media_id is None) != (external_url is None):
+            raise StoreError("external_media_id and external_url must be provided together")
+        if external_media_id is not None and (
+            not isinstance(external_media_id, str) or not external_media_id.strip()
+        ):
+            raise StoreError("external_media_id must be a non-empty string when provided")
+        if external_url is not None and (
+            not isinstance(external_url, str) or not external_url.strip()
+        ):
+            raise StoreError("external_url must be a non-empty string when provided")
         current_time = _normalize_timestamp(now or _utc_now(), label="current time")
         final_state = TargetState.RECONCILIATION_REQUIRED if ambiguous else TargetState.FAILED
         with self._write_transaction() as conn:
@@ -1631,16 +1899,48 @@ class PublishingStore:
             outbox, publication, target = context
             if reason is not None or target.state not in {TargetState.UPLOADING, TargetState.PROCESSING}:
                 return False
+            if (
+                target.resumable_session_verified
+                and external_session_id is not None
+                and external_session_id.strip() != target.external_session_id
+            ):
+                return False
+            # A definitive terminal failure (for example a 404 expired
+            # session or a rejected request) is not resumable.  Clear the
+            # bearer capability now so a later explicit retry starts a fresh
+            # session.  Ambiguous outcomes deliberately retain it for
+            # reconciliation/status probing.
+            clear_resumable = target.resumable_session_verified and not ambiguous
             conn.execute(
                 """
                 UPDATE publication_targets
-                SET state = ?, next_attempt_at = NULL, external_session_id = COALESCE(?, external_session_id),
+                SET state = ?, next_attempt_at = NULL,
+                    external_session_id = CASE WHEN ? THEN NULL ELSE COALESCE(?, external_session_id) END,
+                    resumable_session_verified = CASE WHEN ? THEN 0 ELSE resumable_session_verified END,
+                    resumable_asset_sha256 = CASE WHEN ? THEN NULL ELSE resumable_asset_sha256 END,
+                    resumable_approval_fingerprint = CASE WHEN ? THEN NULL ELSE resumable_approval_fingerprint END,
+                    resumable_total_bytes = CASE WHEN ? THEN NULL ELSE resumable_total_bytes END,
+                    resumable_mime_type = CASE WHEN ? THEN NULL ELSE resumable_mime_type END,
+                    resumable_offset = CASE WHEN ? THEN NULL ELSE resumable_offset END,
+                    resumable_phase = CASE WHEN ? THEN NULL ELSE resumable_phase END,
+                    external_media_id = COALESCE(?, external_media_id),
+                    external_url = COALESCE(?, external_url),
                     last_error_code = ?, last_error_detail = ?, updated_at = ?
                 WHERE id = ?
                 """,
                 (
                     final_state.value,
+                    int(clear_resumable),
                     external_session_id.strip() if external_session_id is not None else None,
+                    int(clear_resumable),
+                    int(clear_resumable),
+                    int(clear_resumable),
+                    int(clear_resumable),
+                    int(clear_resumable),
+                    int(clear_resumable),
+                    int(clear_resumable),
+                    external_media_id.strip() if external_media_id is not None else None,
+                    external_url.strip() if external_url is not None else None,
                     error_code,
                     error_detail,
                     current_time,
@@ -1685,16 +1985,42 @@ class PublishingStore:
             if publication.approved_at is None:
                 raise StoreError("cannot retry a target whose publication was never approved")
             next_generation = target.dispatch_generation + 1
+            # A target reaches FAILED only after a definitive terminal
+            # outcome.  It must start a new provider session if an operator
+            # requeues it; only retry_wait and reconciliation retain a fenced
+            # resumable capability.
+            retain_checkpoint = False
             conn.execute(
                 """
                 UPDATE publication_targets
-                SET state = ?, next_attempt_at = NULL, external_session_id = NULL,
+                SET state = ?, next_attempt_at = NULL,
+                    external_session_id = CASE WHEN ? THEN external_session_id ELSE NULL END,
+                    resumable_session_verified = CASE WHEN ? THEN resumable_session_verified ELSE 0 END,
+                    resumable_asset_sha256 = CASE WHEN ? THEN resumable_asset_sha256 ELSE NULL END,
+                    resumable_approval_fingerprint = CASE WHEN ? THEN resumable_approval_fingerprint ELSE NULL END,
+                    resumable_total_bytes = CASE WHEN ? THEN resumable_total_bytes ELSE NULL END,
+                    resumable_mime_type = CASE WHEN ? THEN resumable_mime_type ELSE NULL END,
+                    resumable_offset = CASE WHEN ? THEN resumable_offset ELSE NULL END,
+                    resumable_phase = CASE WHEN ? THEN resumable_phase ELSE NULL END,
                     external_media_id = NULL, external_url = NULL, published_at = NULL,
                     last_error_code = NULL, last_error_detail = NULL,
                     dispatch_generation = ?, updated_at = ?
                 WHERE id = ?
                 """,
-                (TargetState.QUEUED.value, next_generation, current_time, target.id),
+                (
+                    TargetState.QUEUED.value,
+                    int(retain_checkpoint),
+                    int(retain_checkpoint),
+                    int(retain_checkpoint),
+                    int(retain_checkpoint),
+                    int(retain_checkpoint),
+                    int(retain_checkpoint),
+                    int(retain_checkpoint),
+                    int(retain_checkpoint),
+                    next_generation,
+                    current_time,
+                    target.id,
+                ),
             )
             self._requeue_target_outbox_txn(conn, publication, target, next_generation, current_time)
             self._set_publication_publishing_txn(conn, publication, current_time, reason="explicit_retry")
@@ -1760,17 +2086,34 @@ class PublishingStore:
             publication = _publication_from_row(publication_row)
             if outcome == "mark-published":
                 desired = TargetState.PUBLISHED
+                clear_resumable = target.resumable_session_verified
                 conn.execute(
                     """
                     UPDATE publication_targets
-                    SET state = ?, next_attempt_at = NULL, external_session_id = COALESCE(?, external_session_id),
+                    SET state = ?, next_attempt_at = NULL,
+                        external_session_id = CASE WHEN ? THEN NULL ELSE COALESCE(?, external_session_id) END,
+                        resumable_session_verified = CASE WHEN ? THEN 0 ELSE resumable_session_verified END,
+                        resumable_asset_sha256 = CASE WHEN ? THEN NULL ELSE resumable_asset_sha256 END,
+                        resumable_approval_fingerprint = CASE WHEN ? THEN NULL ELSE resumable_approval_fingerprint END,
+                        resumable_total_bytes = CASE WHEN ? THEN NULL ELSE resumable_total_bytes END,
+                        resumable_mime_type = CASE WHEN ? THEN NULL ELSE resumable_mime_type END,
+                        resumable_offset = CASE WHEN ? THEN NULL ELSE resumable_offset END,
+                        resumable_phase = CASE WHEN ? THEN NULL ELSE resumable_phase END,
                         external_media_id = ?, external_url = ?,
                         last_error_code = NULL, last_error_detail = NULL, updated_at = ?, published_at = ?
                     WHERE id = ?
                     """,
                     (
                         desired.value,
+                        int(clear_resumable),
                         external_session_id.strip() if external_session_id is not None else None,
+                        int(clear_resumable),
+                        int(clear_resumable),
+                        int(clear_resumable),
+                        int(clear_resumable),
+                        int(clear_resumable),
+                        int(clear_resumable),
+                        int(clear_resumable),
                         external_media_id.strip(),
                         external_url.strip(),
                         current_time,
@@ -1786,6 +2129,9 @@ class PublishingStore:
                     """
                     UPDATE publication_targets
                     SET state = ?, next_attempt_at = NULL, external_session_id = NULL,
+                        resumable_session_verified = 0, resumable_asset_sha256 = NULL,
+                        resumable_approval_fingerprint = NULL, resumable_total_bytes = NULL,
+                        resumable_mime_type = NULL, resumable_offset = NULL, resumable_phase = NULL,
                         external_media_id = NULL, external_url = NULL, published_at = NULL,
                         last_error_code = NULL, last_error_detail = NULL,
                         dispatch_generation = ?, updated_at = ?
@@ -1985,6 +2331,59 @@ class PublishingStore:
         }:
             return (outbox, publication, target), "publication was not approved for target publishing"
         return (outbox, publication, target), None
+
+    @staticmethod
+    def _validate_resumable_checkpoint_values(
+        *,
+        external_session_id: str,
+        asset_sha256: str,
+        approval_fingerprint: str,
+        total_bytes: int,
+        mime_type: str,
+        offset: int,
+        phase: str,
+    ) -> None:
+        if not isinstance(external_session_id, str) or not external_session_id.strip():
+            raise StoreError("resumable session ID must be a non-empty string")
+        _require_sha256(asset_sha256, "resumable asset_sha256")
+        _require_sha256(approval_fingerprint, "resumable approval_fingerprint")
+        if isinstance(total_bytes, bool) or not isinstance(total_bytes, int) or total_bytes < 1:
+            raise StoreError("resumable total_bytes must be a positive integer")
+        if isinstance(offset, bool) or not isinstance(offset, int) or not 0 <= offset <= total_bytes:
+            raise StoreError("resumable offset must be within total_bytes")
+        if (
+            not isinstance(mime_type, str)
+            or not mime_type
+            or (not mime_type.startswith("video/") and mime_type != "application/octet-stream")
+        ):
+            raise StoreError("resumable mime_type must be video/* or application/octet-stream")
+        if phase not in RESUMABLE_PHASES:
+            raise StoreError("invalid resumable upload phase")
+
+    @classmethod
+    def _has_valid_resumable_checkpoint(
+        cls,
+        target: PublicationTarget,
+        publication: Publication,
+    ) -> bool:
+        if target.platform != "youtube" or not target.resumable_session_verified:
+            return False
+        try:
+            cls._validate_resumable_checkpoint_values(
+                external_session_id=target.external_session_id or "",
+                asset_sha256=target.resumable_asset_sha256 or "",
+                approval_fingerprint=target.resumable_approval_fingerprint or "",
+                total_bytes=target.resumable_total_bytes,
+                mime_type=target.resumable_mime_type or "",
+                offset=target.resumable_offset,
+                phase=target.resumable_phase or "",
+            )
+        except StoreError:
+            return False
+        return (
+            target.resumable_asset_sha256 == publication.asset_sha256
+            and target.resumable_approval_fingerprint == publication.approval_fingerprint
+        )
 
     @staticmethod
     def _complete_outbox_txn(

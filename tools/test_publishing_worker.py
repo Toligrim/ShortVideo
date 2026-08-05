@@ -87,6 +87,16 @@ class ExplodingFactory:
         raise AssertionError("network-like adapter factory must not be used")
 
 
+class CapabilityProbeFactory(ExplodingFactory):
+    def __init__(self):
+        super().__init__()
+        self.capability_calls = 0
+
+    def supports_resumable_session(self, _platform: str) -> bool:
+        self.capability_calls += 1
+        raise AssertionError("network-like capability probe must not be used")
+
+
 class ExpiringFactory:
     def __init__(self, clock: Clock, seconds: int):
         self.clock = clock
@@ -473,13 +483,14 @@ class PublishWorkerTests(unittest.TestCase):
     def test_dry_run_never_uses_network_like_factory_and_finishes_targets_independently(self):
         publication = self.create_publication(mode=ExecutionMode.DRY_RUN)
         self.approve(publication)
-        factory = ExplodingFactory()
+        factory = CapabilityProbeFactory()
         worker = self.worker(factory)
         with patch("socket.create_connection", side_effect=AssertionError("network is forbidden")):
             first = worker.run_once()
             second = worker.run_once()
         self.assertEqual([first.outcome, second.outcome], ["published", "published"])
         self.assertEqual(factory.calls, 0)
+        self.assertEqual(factory.capability_calls, 0)
         targets = self.store.list_targets(publication.id)
         self.assertTrue(all(target.state is TargetState.PUBLISHED for target in targets))
         self.assertEqual(len({target.external_media_id for target in targets}), 2)
@@ -558,7 +569,7 @@ class PublishWorkerTests(unittest.TestCase):
         self.assertEqual(factory.calls, 0)
         self.assertEqual(self.store.get_outbox_by_dedupe_key(job_key).state, OutboxState.DEAD)
 
-    def test_v1_database_upgrades_append_only_to_v2(self):
+    def test_v1_database_upgrades_append_only_to_v3(self):
         legacy_path = self.root / "legacy.sqlite3"
         conn = sqlite3.connect(legacy_path)
         try:
@@ -606,7 +617,7 @@ class PublishWorkerTests(unittest.TestCase):
         finally:
             conn.close()
         upgraded = PublishingStore(legacy_path)
-        self.assertEqual(upgraded.schema_version(), 2)
+        self.assertEqual(upgraded.schema_version(), 3)
         conn = upgraded._connect()
         try:
             publication_columns = {row["name"] for row in conn.execute("PRAGMA table_info(publications)")}
@@ -615,6 +626,7 @@ class PublishWorkerTests(unittest.TestCase):
             conn.close()
         self.assertIn("status_revision", publication_columns)
         self.assertIn("dispatch_generation", target_columns)
+        self.assertIn("resumable_session_verified", target_columns)
         legacy_publication = upgraded.get_publication("legacy-publication")
         legacy_target = upgraded.list_targets("legacy-publication")[0]
         self.assertEqual(legacy_publication.status_revision, 0)

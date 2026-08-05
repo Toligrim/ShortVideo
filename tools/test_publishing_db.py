@@ -1,4 +1,6 @@
 from pathlib import Path
+import os
+import stat
 import tempfile
 import unittest
 
@@ -34,7 +36,7 @@ class PublishingStoreTests(unittest.TestCase):
         return self.store.create_publication(**params)
 
     def test_migrates_with_required_pragmas_and_restart_is_safe(self):
-        self.assertEqual(self.store.schema_version(), 2)
+        self.assertEqual(self.store.schema_version(), 3)
         conn = self.store._connect()
         try:
             self.assertEqual(conn.execute("PRAGMA foreign_keys").fetchone()[0], 1)
@@ -43,7 +45,36 @@ class PublishingStoreTests(unittest.TestCase):
         finally:
             conn.close()
         restarted = PublishingStore(self.store.path)
-        self.assertEqual(restarted.schema_version(), 2)
+        self.assertEqual(restarted.schema_version(), 3)
+
+    def test_sqlite_state_files_and_parent_are_private_and_symlink_free(self):
+        connection = self.store._connect()
+        try:
+            self.assertEqual(stat.S_IMODE(self.store.path.parent.stat().st_mode), 0o700)
+            for path in (
+                self.store.path,
+                self.store.path.with_name(f"{self.store.path.name}-wal"),
+                self.store.path.with_name(f"{self.store.path.name}-shm"),
+            ):
+                info = path.lstat()
+                self.assertTrue(stat.S_ISREG(info.st_mode))
+                self.assertEqual(info.st_uid, os.geteuid())
+                self.assertEqual(stat.S_IMODE(info.st_mode), 0o600)
+        finally:
+            connection.close()
+
+        # An owned legacy directory is tightened rather than leaving a
+        # resumable-session database group/world-readable.
+        os.chmod(self.store.path.parent, 0o755)
+        PublishingStore(self.store.path)
+        self.assertEqual(stat.S_IMODE(self.store.path.parent.stat().st_mode), 0o700)
+
+        real_parent = Path(self.tmp.name) / "real-state"
+        real_parent.mkdir(mode=0o700)
+        symlink_parent = Path(self.tmp.name) / "symlink-state"
+        os.symlink(real_parent, symlink_parent)
+        with self.assertRaisesRegex(StoreError, "symlink"):
+            PublishingStore(symlink_parent / "publisher.sqlite3")
 
     def test_create_is_idempotent_by_immutable_approval_fingerprint(self):
         first = self.create_publication()

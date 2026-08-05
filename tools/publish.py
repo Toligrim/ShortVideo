@@ -1,18 +1,28 @@
 #!/usr/bin/env python3
 """Prepare and inspect approval-gated social publication requests.
 
-The ``bot`` command is the only Telegram network entry point.  It delivers
+The ``bot`` command is the only Telegram approval entry point.  It delivers
 immutable review cards and records human approvals; it never publishes a
-YouTube or Instagram target itself.
+YouTube or Instagram target itself.  The worker and explicit
+``youtube-authorize`` command are separate network entry points.
 """
 from __future__ import annotations
 
 import argparse
 import json
 from pathlib import Path
+import re
 import sys
 from typing import Any
 
+from publishing.adapters.youtube import (
+    YouTubeConfigurationError,
+    YouTubeLiveAdapterFactory,
+    YouTubeOAuthError,
+    YouTubeOAuthSettings,
+    authorize_with_loopback,
+    youtube_doctor,
+)
 from publishing.config import PublishingConfig
 from publishing.db import PublishingStore, StoreError
 from publishing.metadata import MetadataError, load_metadata, metadata_sha256
@@ -26,6 +36,26 @@ from telegram_bot import TelegramError
 
 def _config(args: argparse.Namespace) -> PublishingConfig:
     return PublishingConfig.from_environment(state_dir=getattr(args, "state_dir", None))
+
+
+_STATUS_URL_RE = re.compile(r"https?://[^\s'\"<>]+", re.IGNORECASE)
+_STATUS_BEARER_RE = re.compile(r"(?i)\bbearer\s+[^\s]+")
+_STATUS_SECRET_ASSIGNMENT_RE = re.compile(
+    r"(?i)([\"']?(?:access[_-]?token|refresh[_-]?token|client[_-]?secret|"
+    r"code[_-]?verifier|authorization[_-]?code|upload_id)[\"']?\s*(?:=|:)\s*)"
+    r"(?:[\"'][^\"']*[\"']|[^\s,;}\]]+)"
+)
+
+
+def _safe_status_error_detail(value: str | None, session_id: str | None) -> str | None:
+    if value is None:
+        return None
+    safe = value
+    if isinstance(session_id, str) and session_id:
+        safe = safe.replace(session_id, "[redacted]")
+    safe = _STATUS_BEARER_RE.sub("Bearer [redacted]", safe)
+    safe = _STATUS_SECRET_ASSIGNMENT_RE.sub(r"\1[redacted]", safe)
+    return _STATUS_URL_RE.sub("[redacted-url]", safe)
 
 
 def _publication_json(publication: Publication, targets: list[PublicationTarget]) -> dict[str, Any]:
@@ -48,11 +78,18 @@ def _publication_json(publication: Publication, targets: list[PublicationTarget]
                 "attempts": target.attempts,
                 "next_attempt_at": target.next_attempt_at,
                 "dispatch_generation": target.dispatch_generation,
-                "external_session_id": target.external_session_id,
+                # A provider resumable-session URI is a bearer-like upload
+                # capability.  Keep it in the fenced target row only; status
+                # output is routinely copied into terminals and logs.
+                "has_resumable_session": target.resumable_session_verified,
+                "resumable_phase": target.resumable_phase if target.resumable_session_verified else None,
                 "external_media_id": target.external_media_id,
                 "external_url": target.external_url,
                 "last_error_code": target.last_error_code,
-                "last_error_detail": target.last_error_detail,
+                "last_error_detail": _safe_status_error_detail(
+                    target.last_error_detail,
+                    target.external_session_id,
+                ),
             }
             for target in targets
         ],
@@ -105,6 +142,21 @@ def build_parser() -> argparse.ArgumentParser:
     worker.add_argument("--max-attempts", type=int, default=3, help="maximum automatic attempts per dispatch")
     worker.add_argument("--lease-seconds", type=int, default=120, help="lease duration for each target job")
     worker.add_argument("--idle-seconds", type=float, default=1.0, help="idle delay in forever mode")
+
+    doctor = sub.add_parser("doctor", parents=[common], help="validate local live-provider configuration")
+    doctor.add_argument("provider", choices=["youtube"])
+
+    authorize = sub.add_parser(
+        "youtube-authorize",
+        parents=[common],
+        help="explicitly run installed-app YouTube OAuth with a loopback callback",
+    )
+    authorize.add_argument(
+        "--timeout-seconds",
+        type=int,
+        default=300,
+        help="how long to wait for the browser callback; browser is never opened automatically",
+    )
 
     retry = sub.add_parser("retry", parents=[common], help="explicitly requeue one failed target")
     retry_selector = retry.add_mutually_exclusive_group(required=True)
@@ -226,6 +278,7 @@ def main(argv: list[str] | None = None) -> int:
             worker = PublishWorker(
                 store=PublishingStore(config.database_path),
                 worker_id=args.worker_id,
+                adapter_factory=YouTubeLiveAdapterFactory(config.state_dir),
                 max_attempts=args.max_attempts,
                 lease_seconds=args.lease_seconds,
             )
@@ -246,6 +299,22 @@ def main(argv: list[str] | None = None) -> int:
                 _print_json(results)
             else:
                 worker.run_forever(idle_seconds=args.idle_seconds)
+        elif args.command == "doctor":
+            if args.provider == "youtube":
+                settings = YouTubeOAuthSettings.from_environment(
+                    state_dir=config.state_dir,
+                    require_token_file=True,
+                )
+                _print_json(youtube_doctor(settings))
+            else:  # argparse keeps this unreachable.
+                raise StoreError(f"unsupported doctor provider: {args.provider}")
+        elif args.command == "youtube-authorize":
+            settings = YouTubeOAuthSettings.from_environment(
+                state_dir=config.state_dir,
+                require_token_file=False,
+            )
+            authorize_with_loopback(settings, timeout_seconds=args.timeout_seconds)
+            _print_json({"provider": "youtube", "authorized": True})
         elif args.command == "retry":
             store = PublishingStore(config.database_path)
             publication, target = _selected_target(store, args)
@@ -299,6 +368,8 @@ def main(argv: list[str] | None = None) -> int:
         TelegramApprovalError,
         TelegramError,
         PublishWorkerError,
+        YouTubeConfigurationError,
+        YouTubeOAuthError,
         OSError,
     ) as exc:
         print(f"error: {exc}", file=sys.stderr)
