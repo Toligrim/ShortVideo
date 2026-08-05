@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "slug": "example-short",
+  "targets": {
+    "youtube": {
+      "title": "Пример короткого видео",
+      "description": "Пример одобренного описания для публикации.",
+      "tags": ["пример", "shortvideo"],
+      "category_id": "28",
+      "privacy_status": "private",
+      "made_for_kids": false,
+      "contains_synthetic_media": true,
+      "notify_subscribers": false
+    },
+    "instagram": {
+      "caption": "Пример подписи к ролику. #shortvideo",
+      "share_to_feed": true
+    }
+  }
+}

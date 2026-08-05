@@ -42,3 +42,24 @@ description: Произвести ролик по теме от начала д�
 - Slug сквозной: draft → episode → public → mp4.
 - Без апрува пользователя ничего никуда не публикуется — только отправка ему.
 - Каждый этап, меняющий файлы, заканчивается коммитом.
+
+## Approval-gated social publishing
+
+Для каждого нового рендера этот раздел заменяет старый пункт 6 с
+`telegram_bot.py send-video`: после render вместо direct send агент создаёт
+review, а bot service сам доставляет видео и карточку в Telegram. Обе команды
+выполнять нельзя — это отправит пользователю дубликат.
+
+1. Создать отдельный metadata JSON по образцу
+   `examples/publish-metadata.example.json`.
+2. Сначала проверить metadata:
+   `python3 tools/publish.py validate-metadata <path>`.
+3. Создать immutable review для живой публикации:
+   `python3 tools/publish.py review --slug <slug> --video video/out/<slug>.mp4 --metadata <path> --mode live`.
+4. Bot service доставит видео и review-карточку в Telegram. YouTube и Instagram
+   не публикуются, пока пользователь не нажмёт `Approve`.
+
+Для первичной проверки пайплайна используй тот же `review` с `--mode dry-run`.
+Старую прямую команду `telegram_bot.py send-video` не используй для social
+approval flow: она не создаёт immutable review и не является разрешением на
+публикацию в соцсети.

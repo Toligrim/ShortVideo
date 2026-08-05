@@ -1,0 +1,16 @@
+[Unit]
+Description=ShortVideo Telegram approval bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=@PROJECT_DIR@
+EnvironmentFile=%h/.config/shortvideo/publisher.env
+UMask=0077
+ExecStart=@PYTHON@ @PROJECT_DIR@/tools/publish.py bot
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target
