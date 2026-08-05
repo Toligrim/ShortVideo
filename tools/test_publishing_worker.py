@@ -13,6 +13,7 @@ from unittest.mock import patch
 import publish
 from publishing.adapters.base import (
     AmbiguousPublishError,
+    InstagramPublishCheckpoint,
     PermanentPublishError,
     PublishResult,
     RetryablePublishError,
@@ -324,6 +325,85 @@ class PublishWorkerTests(unittest.TestCase):
         self.assertEqual(self.store.get_outbox_by_dedupe_key(outbox.dedupe_key).state, OutboxState.DEAD)
         self.assertEqual(self.store.get_publication(publication.id).state, PublicationState.FAILED)
 
+    def test_exhausted_retry_with_instagram_checkpoint_requires_reconciliation(self):
+        publication = self.create_publication(platforms=("instagram",))
+        self.approve(publication)
+
+        class Factory:
+            def __call__(_self, _platform):
+                class Adapter:
+                    def publish(_adapter, request):
+                        checkpoint = InstagramPublishCheckpoint(
+                            object_key="review/asset.mp4", container_id=None,
+                            asset_sha256=request.asset_sha256,
+                            approval_fingerprint=request.approval_fingerprint,
+                            total_bytes=request.asset_path.stat().st_size, mime_type="video/mp4",
+                            phase="object_uploaded",
+                            signed_url_expires_at="2099-01-01T01:00:00Z",
+                        )
+                        self.assertTrue(request.record_instagram_checkpoint(checkpoint))
+                        self.assertTrue(request.record_instagram_checkpoint(
+                            InstagramPublishCheckpoint(**{**checkpoint.__dict__, "phase": "container_create_inflight"})
+                        ))
+                        raise RetryablePublishError("provider_unavailable", "temporary outage")
+                return Adapter()
+
+        result = self.worker(Factory(), max_attempts=1).run_once()
+        self.assertEqual(result.outcome, "reconciliation_required")
+        target = self.target(publication, "instagram")
+        self.assertEqual(target.state, TargetState.RECONCILIATION_REQUIRED)
+        self.assertTrue(target.instagram_checkpoint_verified)
+        self.assertEqual(target.instagram_phase, "container_create_inflight")
+        reconciled = self.store.reconcile_target(
+            target.id, outcome="mark-published", external_media_id="ig-1",
+            external_url="https://example.invalid/ig-1", now=self.clock(),
+        )
+        self.assertFalse(reconciled.instagram_checkpoint_verified)
+        self.assertIsNone(reconciled.instagram_object_key)
+        self.assertIsNone(reconciled.instagram_container_id)
+        self.assertIsNone(reconciled.instagram_phase)
+
+    def test_reconcile_instagram_absent_requeues_without_old_checkpoint(self):
+        publication = self.create_publication(platforms=("instagram",))
+        self.approve(publication)
+
+        class CheckpointFactory:
+            def __call__(_self, _platform):
+                class Adapter:
+                    def publish(_adapter, request):
+                        first = InstagramPublishCheckpoint(
+                            object_key="review/asset.mp4", container_id=None,
+                            asset_sha256=request.asset_sha256,
+                            approval_fingerprint=request.approval_fingerprint,
+                            total_bytes=request.asset_path.stat().st_size, mime_type="video/mp4",
+                            phase="object_uploaded", signed_url_expires_at="2099-01-01T01:00:00Z",
+                        )
+                        self.assertTrue(request.record_instagram_checkpoint(first))
+                        self.assertTrue(request.record_instagram_checkpoint(
+                            InstagramPublishCheckpoint(**{**first.__dict__, "phase": "container_create_inflight"})
+                        ))
+                        raise RetryablePublishError("provider_unavailable", "temporary outage")
+                return Adapter()
+
+        self.assertEqual(
+            self.worker(CheckpointFactory(), max_attempts=1).run_once().outcome,
+            "reconciliation_required",
+        )
+        ambiguous = self.target(publication, "instagram")
+        requeued = self.store.reconcile_target(
+            ambiguous.id, outcome="requeue", confirmed_absent=True, now=self.clock(),
+        )
+        self.assertFalse(requeued.instagram_checkpoint_verified)
+        self.assertIsNone(requeued.instagram_object_key)
+        self.assertIsNone(requeued.instagram_container_id)
+        self.assertIsNone(requeued.instagram_phase)
+
+        fresh_factory = RecordingFactory(
+            {"instagram": PublishResult("ig-fresh", "https://example.invalid/ig-fresh")}
+        )
+        self.assertEqual(self.worker(fresh_factory).run_once().outcome, "published")
+        self.assertIsNone(fresh_factory.calls[0].instagram_checkpoint)
+
     def test_permanent_and_ambiguous_errors_have_different_terminal_states(self):
         permanent_publication = self.create_publication(platforms=("youtube",))
         self.approve(permanent_publication)
@@ -617,7 +697,7 @@ class PublishWorkerTests(unittest.TestCase):
         finally:
             conn.close()
         upgraded = PublishingStore(legacy_path)
-        self.assertEqual(upgraded.schema_version(), 3)
+        self.assertEqual(upgraded.schema_version(), 4)
         conn = upgraded._connect()
         try:
             publication_columns = {row["name"] for row in conn.execute("PRAGMA table_info(publications)")}
@@ -627,6 +707,7 @@ class PublishWorkerTests(unittest.TestCase):
         self.assertIn("status_revision", publication_columns)
         self.assertIn("dispatch_generation", target_columns)
         self.assertIn("resumable_session_verified", target_columns)
+        self.assertIn("instagram_checkpoint_verified", target_columns)
         legacy_publication = upgraded.get_publication("legacy-publication")
         legacy_target = upgraded.list_targets("legacy-publication")[0]
         self.assertEqual(legacy_publication.status_revision, 0)

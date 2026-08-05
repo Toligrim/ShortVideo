@@ -30,6 +30,20 @@ class ResumableSessionCheckpoint:
 
 
 CheckpointRecorder = Callable[[ResumableSessionCheckpoint], bool]
+@dataclass(frozen=True)
+class InstagramPublishCheckpoint:
+    """Opaque, non-secret proof of an Instagram container attempt."""
+    object_key: str
+    container_id: str | None
+    asset_sha256: str
+    approval_fingerprint: str
+    total_bytes: int
+    mime_type: str
+    phase: str
+    signed_url_expires_at: str
+
+
+InstagramCheckpointRecorder = Callable[[InstagramPublishCheckpoint], bool]
 ProgressRecorder = Callable[[int, str], bool]
 LeaseHeartbeat = Callable[[], bool]
 CancellationProbe = Callable[[], bool]
@@ -50,8 +64,10 @@ class PublishRequest:
     # below before it may trust this value for continuation.
     existing_external_session_id: str | None = field(default=None, repr=False)
     resumable_checkpoint: ResumableSessionCheckpoint | None = None
+    instagram_checkpoint: InstagramPublishCheckpoint | None = None
     record_target_processing: CheckpointRecorder | None = field(default=None, repr=False, compare=False)
     record_target_progress: ProgressRecorder | None = field(default=None, repr=False, compare=False)
+    record_instagram_checkpoint: InstagramCheckpointRecorder | None = field(default=None, repr=False, compare=False)
     heartbeat: LeaseHeartbeat | None = field(default=None, repr=False, compare=False)
     cancellation_requested: CancellationProbe | None = field(default=None, repr=False, compare=False)
     # Live adapters with bounded blocking I/O use this to reject an unsafe
@@ -88,6 +104,9 @@ class ResumableSessionCapableFactory(Protocol):
 
     def supports_resumable_session(self, platform: str) -> bool:
         """Return whether a platform can safely resume a fenced checkpoint."""
+
+    def supports_instagram_checkpoint(self, platform: str) -> bool:
+        """Return whether Instagram container checkpoints can be reclaimed."""
 
 
 class PublishError(RuntimeError):

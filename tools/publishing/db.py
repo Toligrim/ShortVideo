@@ -198,6 +198,20 @@ MIGRATIONS: tuple[tuple[int, tuple[str, ...]], ...] = (
             "ALTER TABLE publication_targets ADD COLUMN resumable_phase TEXT",
         ),
     ),
+    (
+        4,
+        (
+            "ALTER TABLE publication_targets ADD COLUMN instagram_checkpoint_verified INTEGER NOT NULL DEFAULT 0 CHECK (instagram_checkpoint_verified IN (0, 1))",
+            "ALTER TABLE publication_targets ADD COLUMN instagram_object_key TEXT",
+            "ALTER TABLE publication_targets ADD COLUMN instagram_container_id TEXT",
+            "ALTER TABLE publication_targets ADD COLUMN instagram_asset_sha256 TEXT",
+            "ALTER TABLE publication_targets ADD COLUMN instagram_approval_fingerprint TEXT",
+            "ALTER TABLE publication_targets ADD COLUMN instagram_total_bytes INTEGER",
+            "ALTER TABLE publication_targets ADD COLUMN instagram_mime_type TEXT",
+            "ALTER TABLE publication_targets ADD COLUMN instagram_phase TEXT",
+            "ALTER TABLE publication_targets ADD COLUMN instagram_signed_url_expires_at TEXT",
+        ),
+    ),
 )
 
 
@@ -348,6 +362,15 @@ def _target_from_row(row: sqlite3.Row) -> PublicationTarget:
         resumable_mime_type=row["resumable_mime_type"],
         resumable_offset=row["resumable_offset"],
         resumable_phase=row["resumable_phase"],
+        instagram_checkpoint_verified=bool(row["instagram_checkpoint_verified"]),
+        instagram_object_key=row["instagram_object_key"],
+        instagram_container_id=row["instagram_container_id"],
+        instagram_asset_sha256=row["instagram_asset_sha256"],
+        instagram_approval_fingerprint=row["instagram_approval_fingerprint"],
+        instagram_total_bytes=row["instagram_total_bytes"],
+        instagram_mime_type=row["instagram_mime_type"],
+        instagram_phase=row["instagram_phase"],
+        instagram_signed_url_expires_at=row["instagram_signed_url_expires_at"],
         external_media_id=row["external_media_id"],
         external_url=row["external_url"],
         last_error_code=row["last_error_code"],
@@ -1390,6 +1413,7 @@ class PublishingStore:
         lease_token: str,
         *,
         resumable_session_supported: bool = False,
+        instagram_checkpoint_supported: bool = False,
         now: str | None = None,
     ) -> PublicationTarget | None:
         """Fence and start a target publish attempt before an adapter call.
@@ -1398,7 +1422,7 @@ class PublishingStore:
         publication are checked together inside the write transaction.  A
         malformed or stale job therefore cannot reach an adapter.
         """
-        if not lease_token or not isinstance(resumable_session_supported, bool):
+        if not lease_token or not isinstance(resumable_session_supported, bool) or not isinstance(instagram_checkpoint_supported, bool):
             return None
         current_time = _normalize_timestamp(now or _utc_now(), label="current time")
         with self._write_transaction() as conn:
@@ -1443,6 +1467,7 @@ class PublishingStore:
                 and (
                     in_flight
                     or target.resumable_session_verified
+                    or target.instagram_checkpoint_verified
                     or target.external_session_id is not None
                 )
             )
@@ -1452,7 +1477,11 @@ class PublishingStore:
                 # a prior provider session. A live target can proceed only
                 # when its adapter explicitly supports resume *and* the
                 # persisted checkpoint proves the same immutable approval.
-                if resumable_session_supported and self._has_valid_resumable_checkpoint(target, publication):
+                if (
+                    resumable_session_supported and self._has_valid_resumable_checkpoint(target, publication)
+                ) or (
+                    instagram_checkpoint_supported and self._has_valid_instagram_checkpoint(target, publication)
+                ):
                     pass
                 else:
                     # Live adapters are not assumed idempotent/resumable until
@@ -1552,6 +1581,95 @@ class PublishingStore:
             updated = conn.execute("SELECT * FROM publication_targets WHERE id = ?", (target.id,)).fetchone()
             assert updated is not None
             return _target_from_row(updated)
+
+    def record_instagram_checkpoint(
+        self, outbox_id: int, lease_token: str, *, object_key: str, container_id: str | None,
+        asset_sha256: str, approval_fingerprint: str, total_bytes: int, mime_type: str,
+        phase: str, signed_url_expires_at: str, now: str | None = None,
+    ) -> bool:
+        """Fence an opaque Instagram container checkpoint; never stores its URL/token."""
+        if not lease_token:
+            return False
+        self._validate_instagram_checkpoint_values(
+            object_key=object_key, container_id=container_id, asset_sha256=asset_sha256,
+            approval_fingerprint=approval_fingerprint, total_bytes=total_bytes, mime_type=mime_type,
+            phase=phase, signed_url_expires_at=signed_url_expires_at,
+        )
+        current_time = _normalize_timestamp(now or _utc_now(), label="current time")
+        with self._write_transaction() as conn:
+            context, reason = self._leased_target_publish_context_txn(conn, outbox_id, lease_token, current_time)
+            if context is None or reason is not None:
+                return False
+            _outbox, publication, target = context
+            assert publication is not None and target is not None
+            if target.platform != "instagram" or target.state not in {TargetState.UPLOADING, TargetState.PROCESSING}:
+                return False
+            if asset_sha256 != publication.asset_sha256 or approval_fingerprint != publication.approval_fingerprint:
+                return False
+            if target.instagram_checkpoint_verified:
+                if not self._has_valid_instagram_checkpoint(target, publication):
+                    return False
+                immutable_matches = (
+                    target.instagram_object_key == object_key
+                    and target.instagram_asset_sha256 == asset_sha256
+                    and target.instagram_approval_fingerprint == approval_fingerprint
+                    and target.instagram_total_bytes == total_bytes
+                    and target.instagram_mime_type == mime_type
+                )
+                if not immutable_matches:
+                    return False
+                phases = (
+                    "object_uploaded", "container_create_inflight", "container_created",
+                    "processing", "publish_inflight",
+                )
+                prior = phases.index(target.instagram_phase)
+                proposed = phases.index(phase)
+                # The object may acquire its first container exactly once;
+                # after that both the container and progress are monotonic.
+                if proposed < prior or proposed > prior + 1:
+                    return False
+                if target.instagram_phase == "object_uploaded" and phase == "object_uploaded":
+                    if container_id is not None:
+                        return False
+                    conn.execute(
+                        """UPDATE publication_targets SET instagram_signed_url_expires_at = ?,
+                            updated_at = ? WHERE id = ?""",
+                        (signed_url_expires_at, current_time, target.id),
+                    )
+                    return True
+                if target.instagram_signed_url_expires_at != signed_url_expires_at:
+                    return False
+                if target.instagram_container_id is None:
+                    if target.instagram_phase == "object_uploaded":
+                        if phase != "container_create_inflight" or container_id is not None:
+                            return False
+                    elif target.instagram_phase == "container_create_inflight":
+                        if phase == "container_create_inflight":
+                            return container_id is None
+                        if phase != "container_created" or container_id is None:
+                            return False
+                    else:
+                        return False
+                elif container_id != target.instagram_container_id:
+                    return False
+                conn.execute(
+                    """UPDATE publication_targets SET state = ?, instagram_container_id = ?,
+                        instagram_phase = ?, updated_at = ? WHERE id = ?""",
+                    (TargetState.PROCESSING.value, container_id, phase, current_time, target.id),
+                )
+                return True
+            if phase != "object_uploaded" or container_id is not None:
+                return False
+            conn.execute("""
+                UPDATE publication_targets SET state = ?, next_attempt_at = NULL,
+                    instagram_checkpoint_verified = 1, instagram_object_key = ?, instagram_container_id = ?,
+                    instagram_asset_sha256 = ?, instagram_approval_fingerprint = ?, instagram_total_bytes = ?,
+                    instagram_mime_type = ?, instagram_phase = ?, instagram_signed_url_expires_at = ?,
+                    last_error_code = NULL, last_error_detail = NULL, updated_at = ? WHERE id = ?
+                """, (TargetState.PROCESSING.value, object_key, container_id, asset_sha256,
+                      approval_fingerprint, total_bytes, mime_type, phase, signed_url_expires_at,
+                      current_time, target.id))
+            return True
 
     def record_target_processing(
         self,
@@ -1771,6 +1889,7 @@ class PublishingStore:
                 ),
             ).rowcount
             assert changed == 1
+            self._clear_instagram_checkpoint_txn(conn, target.id)
             completed = self._complete_outbox_txn(conn, outbox.id, lease_token, current_time)
             if not completed:
                 raise StoreError("lost current lease while completing target publish")
@@ -1947,6 +2066,8 @@ class PublishingStore:
                     target.id,
                 ),
             )
+            if not ambiguous:
+                self._clear_instagram_checkpoint_txn(conn, target.id)
             dead = self._dead_outbox_txn(conn, outbox.id, lease_token, current_time, error_detail)
             if not dead:
                 raise StoreError("lost current lease while terminally failing target publish")
@@ -2022,6 +2143,7 @@ class PublishingStore:
                     target.id,
                 ),
             )
+            self._clear_instagram_checkpoint_txn(conn, target.id)
             self._requeue_target_outbox_txn(conn, publication, target, next_generation, current_time)
             self._set_publication_publishing_txn(conn, publication, current_time, reason="explicit_retry")
             event_id = self._append_event_txn(
@@ -2121,6 +2243,7 @@ class PublishingStore:
                         target.id,
                     ),
                 )
+                self._clear_instagram_checkpoint_txn(conn, target.id)
                 self._refresh_publication_state_txn(conn, publication.id, current_time)
             else:
                 desired = TargetState.QUEUED
@@ -2139,6 +2262,7 @@ class PublishingStore:
                     """,
                     (desired.value, next_generation, current_time, target.id),
                 )
+                self._clear_instagram_checkpoint_txn(conn, target.id)
                 self._requeue_target_outbox_txn(
                     conn, publication, target, next_generation, current_time
                 )
@@ -2384,6 +2508,53 @@ class PublishingStore:
             target.resumable_asset_sha256 == publication.asset_sha256
             and target.resumable_approval_fingerprint == publication.approval_fingerprint
         )
+
+    @staticmethod
+    def _validate_instagram_checkpoint_values(
+        *, object_key: str, container_id: str | None, asset_sha256: str,
+        approval_fingerprint: str, total_bytes: int, mime_type: str, phase: str,
+        signed_url_expires_at: str,
+    ) -> None:
+        if not isinstance(object_key, str) or not object_key.strip() or "://" in object_key:
+            raise StoreError("Instagram object_key must be a non-empty opaque key")
+        if container_id is not None and (not isinstance(container_id, str) or not container_id.strip()):
+            raise StoreError("Instagram container_id must be a non-empty string when provided")
+        _require_sha256(asset_sha256, "Instagram asset_sha256")
+        _require_sha256(approval_fingerprint, "Instagram approval_fingerprint")
+        if isinstance(total_bytes, bool) or not isinstance(total_bytes, int) or total_bytes < 1:
+            raise StoreError("Instagram total_bytes must be a positive integer")
+        if not isinstance(mime_type, str) or not mime_type.startswith("video/"):
+            raise StoreError("Instagram mime_type must be video/*")
+        if phase not in {"object_uploaded", "container_create_inflight", "container_created", "processing", "publish_inflight"}:
+            raise StoreError("invalid Instagram checkpoint phase")
+        if phase in {"object_uploaded", "container_create_inflight"} and container_id is not None:
+            raise StoreError("Instagram pre-container checkpoint cannot have a container_id")
+        if phase not in {"object_uploaded", "container_create_inflight"} and container_id is None:
+            raise StoreError("Instagram container checkpoint requires container_id")
+        _normalize_timestamp(signed_url_expires_at, label="Instagram signed URL expiry")
+
+    @staticmethod
+    def _clear_instagram_checkpoint_txn(conn: sqlite3.Connection, target_id: int) -> None:
+        conn.execute("""UPDATE publication_targets SET instagram_checkpoint_verified = 0,
+            instagram_object_key = NULL, instagram_container_id = NULL, instagram_asset_sha256 = NULL,
+            instagram_approval_fingerprint = NULL, instagram_total_bytes = NULL,
+            instagram_mime_type = NULL, instagram_phase = NULL,
+            instagram_signed_url_expires_at = NULL WHERE id = ?""", (target_id,))
+
+    @classmethod
+    def _has_valid_instagram_checkpoint(cls, target: PublicationTarget, publication: Publication) -> bool:
+        if target.platform != "instagram" or not target.instagram_checkpoint_verified:
+            return False
+        try:
+            cls._validate_instagram_checkpoint_values(
+                object_key=target.instagram_object_key or "", container_id=target.instagram_container_id,
+                asset_sha256=target.instagram_asset_sha256 or "", approval_fingerprint=target.instagram_approval_fingerprint or "",
+                total_bytes=target.instagram_total_bytes, mime_type=target.instagram_mime_type or "",
+                phase=target.instagram_phase or "", signed_url_expires_at=target.instagram_signed_url_expires_at or "",
+            )
+        except StoreError:
+            return False
+        return target.instagram_asset_sha256 == publication.asset_sha256 and target.instagram_approval_fingerprint == publication.approval_fingerprint
 
     @staticmethod
     def _complete_outbox_txn(

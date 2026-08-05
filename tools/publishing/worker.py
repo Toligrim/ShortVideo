@@ -15,6 +15,7 @@ from .adapters.base import (
     PermanentPublishError,
     PublishRequest,
     PublishResult,
+    InstagramPublishCheckpoint,
     ResumableSessionCheckpoint,
     RetryablePublishError,
 )
@@ -180,10 +181,17 @@ class PublishWorker:
             and claimed_target.platform == "youtube"
             and self._factory_supports_resumable_session(claimed_target.platform)
         )
+        instagram_checkpoint_supported = (
+            claimed_target is not None and claimed_publication is not None
+            and claimed_publication.execution_mode is not ExecutionMode.DRY_RUN
+            and claimed_target.platform == "instagram"
+            and self._factory_supports_instagram_checkpoint(claimed_target.platform)
+        )
         target = self.store.start_target_publish(
             item.id,
             token,
             resumable_session_supported=resumable_session_supported,
+            instagram_checkpoint_supported=instagram_checkpoint_supported,
             now=self.clock(),
         )
         if target is None:
@@ -236,6 +244,7 @@ class PublishWorker:
             verified = verify_publish_inputs(publication)
             self._validate_target_metadata(target, verified.metadata)
             checkpoint = self._checkpoint_for_target(publication, target)
+            instagram_checkpoint = self._instagram_checkpoint_for_target(publication, target)
             # The rehash above can itself block on storage.  Renew once more
             # after it and immediately before the provider side effect.
             if not self.store.renew_outbox_lease(
@@ -257,6 +266,7 @@ class PublishWorker:
                     idempotency_key=item.dedupe_key,
                     existing_external_session_id=checkpoint.session_uri if checkpoint is not None else None,
                     resumable_checkpoint=checkpoint,
+                    instagram_checkpoint=instagram_checkpoint,
                     record_target_processing=lambda value: self.store.record_target_processing(
                         item.id,
                         token,
@@ -276,6 +286,12 @@ class PublishWorker:
                         phase=phase,
                         now=self.clock(),
                     ),
+                    record_instagram_checkpoint=lambda value: self.store.record_instagram_checkpoint(
+                        item.id, token, object_key=value.object_key, container_id=value.container_id,
+                        asset_sha256=value.asset_sha256, approval_fingerprint=value.approval_fingerprint,
+                        total_bytes=value.total_bytes, mime_type=value.mime_type, phase=value.phase,
+                        signed_url_expires_at=value.signed_url_expires_at, now=self.clock(),
+                    ) if target.platform == "instagram" and publication.execution_mode is not ExecutionMode.DRY_RUN else False,
                     heartbeat=lambda: self.store.renew_outbox_lease(
                         item.id,
                         token,
@@ -379,8 +395,11 @@ class PublishWorker:
             # leaves the provider-side outcome unresolved.  Exhausting local
             # retries must not erase that capability and initiate a second
             # upload; hand it to explicit reconciliation instead.
+            current_target = self.store.get_target(target.id)
             requires_reconciliation = (
-                target.resumable_session_verified or exc.external_session_id is not None
+                target.resumable_session_verified
+                or (current_target is not None and current_target.instagram_checkpoint_verified)
+                or exc.external_session_id is not None
             )
             failed = self.store.fail_target_publish(
                 item.id,
@@ -437,6 +456,17 @@ class PublishWorker:
             # adapter or start a network effect.
             return False
 
+    def _factory_supports_instagram_checkpoint(self, platform: str) -> bool:
+        if self.adapter_factory is None:
+            return False
+        capability = getattr(self.adapter_factory, "supports_instagram_checkpoint", None)
+        if not callable(capability):
+            return False
+        try:
+            return capability(platform) is True
+        except Exception:
+            return False
+
     @staticmethod
     def _checkpoint_for_target(
         publication: Publication,
@@ -484,6 +514,31 @@ class PublishWorker:
             mime_type=target.resumable_mime_type,
             offset=target.resumable_offset,
             phase=target.resumable_phase,
+        )
+
+    @staticmethod
+    def _instagram_checkpoint_for_target(publication: Publication, target: PublicationTarget) -> InstagramPublishCheckpoint | None:
+        if not target.instagram_checkpoint_verified:
+            return None
+        if target.platform != "instagram":
+            raise AmbiguousPublishError("invalid_instagram_checkpoint", "Instagram checkpoint belongs to a non-Instagram target")
+        valid = (
+            bool(target.instagram_object_key)
+            and target.instagram_asset_sha256 == publication.asset_sha256
+            and target.instagram_approval_fingerprint == publication.approval_fingerprint
+            and isinstance(target.instagram_total_bytes, int) and not isinstance(target.instagram_total_bytes, bool)
+            and target.instagram_total_bytes > 0 and isinstance(target.instagram_mime_type, str)
+            and target.instagram_mime_type.startswith("video/")
+            and target.instagram_phase in {"object_uploaded", "container_create_inflight", "container_created", "processing", "publish_inflight"}
+            and isinstance(target.instagram_signed_url_expires_at, str)
+        )
+        if not valid:
+            raise AmbiguousPublishError("invalid_instagram_checkpoint", "stored Instagram checkpoint is incomplete or does not match approved inputs")
+        return InstagramPublishCheckpoint(
+            object_key=target.instagram_object_key, container_id=target.instagram_container_id,
+            asset_sha256=target.instagram_asset_sha256, approval_fingerprint=target.instagram_approval_fingerprint,
+            total_bytes=target.instagram_total_bytes, mime_type=target.instagram_mime_type,
+            phase=target.instagram_phase, signed_url_expires_at=target.instagram_signed_url_expires_at,
         )
 
     @staticmethod

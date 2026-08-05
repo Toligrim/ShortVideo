@@ -88,6 +88,15 @@ class PublicationTarget:
     resumable_mime_type: str | None
     resumable_offset: int | None
     resumable_phase: str | None
+    instagram_checkpoint_verified: bool
+    instagram_object_key: str | None = field(repr=False)
+    instagram_container_id: str | None = field(repr=False)
+    instagram_asset_sha256: str | None
+    instagram_approval_fingerprint: str | None
+    instagram_total_bytes: int | None
+    instagram_mime_type: str | None
+    instagram_phase: str | None
+    instagram_signed_url_expires_at: str | None
     external_media_id: str | None
     external_url: str | None
     last_error_code: str | None

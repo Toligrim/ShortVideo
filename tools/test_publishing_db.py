@@ -36,7 +36,7 @@ class PublishingStoreTests(unittest.TestCase):
         return self.store.create_publication(**params)
 
     def test_migrates_with_required_pragmas_and_restart_is_safe(self):
-        self.assertEqual(self.store.schema_version(), 3)
+        self.assertEqual(self.store.schema_version(), 4)
         conn = self.store._connect()
         try:
             self.assertEqual(conn.execute("PRAGMA foreign_keys").fetchone()[0], 1)
@@ -45,7 +45,79 @@ class PublishingStoreTests(unittest.TestCase):
         finally:
             conn.close()
         restarted = PublishingStore(self.store.path)
-        self.assertEqual(restarted.schema_version(), 3)
+        self.assertEqual(restarted.schema_version(), 4)
+
+    def test_instagram_checkpoint_is_fenced_and_opaque(self):
+        publication = self.create_publication(execution_mode=ExecutionMode.LIVE)
+        action = self.store.issue_telegram_action(publication.id, "approve")
+        self.assertTrue(self.store.apply_telegram_action(
+            update_id=1, action_token=action.token, actor_user_id="operator"
+        ).accepted)
+        target = next(t for t in self.store.list_targets(publication.id) if t.platform == "instagram")
+        item = self.store.claim_target_publish("worker")
+        # YouTube may sort first; claim Instagram's remaining target explicitly.
+        if item.target_id != target.id:
+            self.store.fail_target_publish(item.id, item.lease_token, error_code="skip", error_detail="skip")
+            item = self.store.claim_target_publish("worker")
+        started = self.store.start_target_publish(item.id, item.lease_token)
+        self.assertEqual(started.platform, "instagram")
+        self.assertTrue(self.store.record_instagram_checkpoint(
+            item.id, item.lease_token, object_key="review/asset.mp4", container_id=None,
+            asset_sha256=ASSET_SHA, approval_fingerprint=publication.approval_fingerprint,
+            total_bytes=42, mime_type="video/mp4", phase="object_uploaded",
+            signed_url_expires_at="2027-01-01T01:00:00Z",
+        ))
+        saved = self.store.get_target(target.id)
+        self.assertTrue(saved.instagram_checkpoint_verified)
+        self.assertEqual(saved.instagram_object_key, "review/asset.mp4")
+        self.assertIsNone(saved.instagram_container_id)
+        checkpoint = dict(
+            object_key="review/asset.mp4", asset_sha256=ASSET_SHA,
+            approval_fingerprint=publication.approval_fingerprint, total_bytes=42,
+            mime_type="video/mp4", signed_url_expires_at="2027-01-01T01:00:00Z",
+        )
+        # Idempotent first checkpoint, then each allowed one-step transition.
+        self.assertTrue(self.store.record_instagram_checkpoint(
+            item.id, item.lease_token, container_id=None, phase="object_uploaded",
+            **{**checkpoint, "signed_url_expires_at": "2027-01-01T02:00:00Z"}
+        ))
+        self.assertFalse(self.store.record_instagram_checkpoint(
+            item.id, item.lease_token, container_id="container-1", phase="container_created",
+            **{**checkpoint, "signed_url_expires_at": "2027-01-01T02:00:00Z"}
+        ))
+        self.assertTrue(self.store.record_instagram_checkpoint(
+            item.id, item.lease_token, container_id=None, phase="container_create_inflight",
+            **{**checkpoint, "signed_url_expires_at": "2027-01-01T02:00:00Z"}
+        ))
+        self.assertTrue(self.store.record_instagram_checkpoint(
+            item.id, item.lease_token, container_id="container-1", phase="container_created",
+            **{**checkpoint, "signed_url_expires_at": "2027-01-01T02:00:00Z"}
+        ))
+        self.assertTrue(self.store.record_instagram_checkpoint(
+            item.id, item.lease_token, container_id="container-1", phase="processing",
+            **{**checkpoint, "signed_url_expires_at": "2027-01-01T02:00:00Z"}
+        ))
+        self.assertTrue(self.store.record_instagram_checkpoint(
+            item.id, item.lease_token, container_id="container-1", phase="publish_inflight",
+            **{**checkpoint, "signed_url_expires_at": "2027-01-01T02:00:00Z"}
+        ))
+        # No backwards progress, skipped phases, or mutation of opaque/immutable identity.
+        self.assertFalse(self.store.record_instagram_checkpoint(
+            item.id, item.lease_token, container_id="container-1", phase="processing",
+            **{**checkpoint, "signed_url_expires_at": "2027-01-01T02:00:00Z"}
+        ))
+        self.assertFalse(self.store.record_instagram_checkpoint(
+            item.id, item.lease_token, container_id="container-2", phase="publish_inflight",
+            **{**checkpoint, "signed_url_expires_at": "2027-01-01T02:00:00Z"}
+        ))
+        self.assertFalse(self.store.record_instagram_checkpoint(
+            item.id, item.lease_token, container_id="container-1", phase="publish_inflight",
+            **{**checkpoint, "object_key": "other/asset.mp4", "signed_url_expires_at": "2027-01-01T02:00:00Z"}
+        ))
+        self.assertFalse(self.store.record_instagram_checkpoint(
+            item.id, item.lease_token, container_id="container-1", phase="publish_inflight",
+            **{**checkpoint, "signed_url_expires_at": "2027-01-01T03:00:00Z"}
+        ))
 
     def test_sqlite_state_files_and_parent_are_private_and_symlink_free(self):
         connection = self.store._connect()

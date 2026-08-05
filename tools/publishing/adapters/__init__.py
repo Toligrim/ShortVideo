@@ -17,6 +17,9 @@ from .base import (
     RetryablePublishError,
 )
 from .dry_run import DryRunAdapter
+from .live import CombinedLiveAdapterFactory, instagram_doctor
+from .instagram import InstagramConfigurationError, InstagramReelsAdapter, InstagramSettings
+from .r2 import R2Config, R2TemporaryMedia
 from .youtube import (
     YouTubeConfigurationError,
     YouTubeLiveAdapterFactory,
@@ -29,6 +32,11 @@ __all__ = [
     "AdapterFactory",
     "AmbiguousPublishError",
     "DryRunAdapter",
+    "CombinedLiveAdapterFactory",
+    "instagram_doctor",
+    "InstagramConfigurationError",
+    "InstagramReelsAdapter",
+    "InstagramSettings",
     "PermanentPublishError",
     "PublishAdapter",
     "PublishRequest",
@@ -36,6 +44,8 @@ __all__ = [
     "ResumableSessionCheckpoint",
     "ResumableSessionCapableFactory",
     "RetryablePublishError",
+    "R2Config",
+    "R2TemporaryMedia",
     "YouTubeConfigurationError",
     "YouTubeLiveAdapterFactory",
     "YouTubeOAuthError",

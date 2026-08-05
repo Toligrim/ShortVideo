@@ -15,9 +15,11 @@ import re
 import sys
 from typing import Any
 
+from publishing.adapters.live import CombinedLiveAdapterFactory, instagram_doctor
+from publishing.adapters.r2 import R2AssetError, R2Config, R2ConfigurationError, R2OperationError, R2TemporaryMedia
+from publishing.adapters.instagram import InstagramConfigurationError
 from publishing.adapters.youtube import (
     YouTubeConfigurationError,
-    YouTubeLiveAdapterFactory,
     YouTubeOAuthError,
     YouTubeOAuthSettings,
     authorize_with_loopback,
@@ -47,12 +49,13 @@ _STATUS_SECRET_ASSIGNMENT_RE = re.compile(
 )
 
 
-def _safe_status_error_detail(value: str | None, session_id: str | None) -> str | None:
+def _safe_status_error_detail(value: str | None, *opaque_ids: str | None) -> str | None:
     if value is None:
         return None
     safe = value
-    if isinstance(session_id, str) and session_id:
-        safe = safe.replace(session_id, "[redacted]")
+    for opaque_id in opaque_ids:
+        if isinstance(opaque_id, str) and opaque_id:
+            safe = safe.replace(opaque_id, "[redacted]")
     safe = _STATUS_BEARER_RE.sub("Bearer [redacted]", safe)
     safe = _STATUS_SECRET_ASSIGNMENT_RE.sub(r"\1[redacted]", safe)
     return _STATUS_URL_RE.sub("[redacted-url]", safe)
@@ -83,12 +86,15 @@ def _publication_json(publication: Publication, targets: list[PublicationTarget]
                 # output is routinely copied into terminals and logs.
                 "has_resumable_session": target.resumable_session_verified,
                 "resumable_phase": target.resumable_phase if target.resumable_session_verified else None,
+                "has_instagram_checkpoint": target.instagram_checkpoint_verified,
+                "instagram_phase": target.instagram_phase if target.instagram_checkpoint_verified else None,
                 "external_media_id": target.external_media_id,
                 "external_url": target.external_url,
                 "last_error_code": target.last_error_code,
                 "last_error_detail": _safe_status_error_detail(
                     target.last_error_detail,
                     target.external_session_id,
+                    target.instagram_container_id,
                 ),
             }
             for target in targets
@@ -144,7 +150,7 @@ def build_parser() -> argparse.ArgumentParser:
     worker.add_argument("--idle-seconds", type=float, default=1.0, help="idle delay in forever mode")
 
     doctor = sub.add_parser("doctor", parents=[common], help="validate local live-provider configuration")
-    doctor.add_argument("provider", choices=["youtube"])
+    doctor.add_argument("provider", choices=["youtube", "instagram"])
 
     authorize = sub.add_parser(
         "youtube-authorize",
@@ -278,7 +284,7 @@ def main(argv: list[str] | None = None) -> int:
             worker = PublishWorker(
                 store=PublishingStore(config.database_path),
                 worker_id=args.worker_id,
-                adapter_factory=YouTubeLiveAdapterFactory(config.state_dir),
+                adapter_factory=CombinedLiveAdapterFactory(config.state_dir),
                 max_attempts=args.max_attempts,
                 lease_seconds=args.lease_seconds,
             )
@@ -306,6 +312,8 @@ def main(argv: list[str] | None = None) -> int:
                     require_token_file=True,
                 )
                 _print_json(youtube_doctor(settings))
+            elif args.provider == "instagram":
+                _print_json(instagram_doctor(state_dir=config.state_dir))
             else:  # argparse keeps this unreachable.
                 raise StoreError(f"unsupported doctor provider: {args.provider}")
         elif args.command == "youtube-authorize":
@@ -340,6 +348,14 @@ def main(argv: list[str] | None = None) -> int:
                 raise StoreError("requeue must not include external publication identifiers")
             store = PublishingStore(config.database_path)
             publication, target = _selected_target(store, args)
+            # Keep the opaque object key durable until its R2 delete succeeds.
+            # This happens before either terminal DB transition and is safe to
+            # repeat when a prior process stopped between delete and transition.
+            if target.platform == "instagram" and target.instagram_checkpoint_verified and target.instagram_object_key:
+                try:
+                    R2TemporaryMedia(R2Config.from_environment()).cleanup(target.instagram_object_key)
+                except (R2ConfigurationError, R2OperationError, R2AssetError):
+                    raise StoreError("Instagram temporary media cleanup failed; reconciliation was not changed") from None
             updated = store.reconcile_target(
                 target.id,
                 outcome=args.outcome,
@@ -370,6 +386,8 @@ def main(argv: list[str] | None = None) -> int:
         PublishWorkerError,
         YouTubeConfigurationError,
         YouTubeOAuthError,
+        InstagramConfigurationError,
+        R2ConfigurationError,
         OSError,
     ) as exc:
         print(f"error: {exc}", file=sys.stderr)
