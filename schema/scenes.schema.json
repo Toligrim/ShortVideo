@@ -66,7 +66,7 @@
             "required": ["visual"],
             "additionalProperties": false,
             "properties": {
-              "visual": { "enum": ["browser-click", "devices-meet", "handshake", "title-slam", "password-leak", "hash-table", "collision-compare"] },
+              "visual": { "enum": ["browser-click", "devices-meet", "handshake", "title-slam", "password-leak", "hash-table", "collision-compare", "heap-graph", "gc-sweep"] },
               "onWord": { "type": "string" },
               "params": { "type": "object" }
             }

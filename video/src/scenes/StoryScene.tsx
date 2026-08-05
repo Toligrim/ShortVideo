@@ -1,5 +1,5 @@
 import React from "react";
-import { interpolate, random, spring, useCurrentFrame, useVideoConfig } from "remotion";
+import { interpolate, interpolateColors, random, spring, useCurrentFrame, useVideoConfig } from "remotion";
 import { fitText } from "@remotion/layout-utils";
 import { layout, theme, toneColor } from "../lib/theme";
 import { wordFrame } from "../lib/timeline";
@@ -41,6 +41,8 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
     if (beat.visual === "password-leak") impact = start + Math.round(dur * 0.4);
     if (beat.visual === "hash-table") impact = start + Math.round(dur * 0.62);
     if (beat.visual === "collision-compare") impact = start + 18;
+    if (beat.visual === "heap-graph") impact = start + 18;
+    if (beat.visual === "gc-sweep") impact = start + Math.round(dur * 0.56);
     return { beat, start, end, impact };
   });
 };
@@ -63,6 +65,8 @@ export const storySfx = (
     if (s.beat.visual === "password-leak") events.push({ frame: s.impact, sound: "click" });
     if (s.beat.visual === "hash-table") events.push({ frame: s.impact, sound: "click" });
     if (s.beat.visual === "collision-compare") events.push({ frame: s.impact, sound: "pop" });
+    if (s.beat.visual === "heap-graph") events.push({ frame: s.impact, sound: "pop" });
+    if (s.beat.visual === "gc-sweep") events.push({ frame: s.impact, sound: "click" });
   }
   return events;
 };
@@ -689,6 +693,413 @@ const HashTableVisual: React.FC<{
   );
 };
 
+/** Граф достижимости: корни ведут к живым объектам, отдельный цикл остаётся мусором. */
+const HeapGraphVisual: React.FC<{
+  local: number;
+  fps: number;
+  impactLocal: number;
+  mode?: "roots" | "unreachable";
+}> = ({ local, fps, impactLocal, mode = "unreachable" }) => {
+  const enter = spring({ frame: local, fps, config: { damping: 15, mass: 0.8 } });
+  const scan = smooth(clamp01(local / Math.max(impactLocal - 10, 1)));
+  const sweep = smooth(clamp01((local - impactLocal) / 22));
+  const liveColor = interpolateColors(scan, [0, 1], [theme.accent, theme.success]);
+  const garbageColor = interpolateColors(sweep, [0, 1], [theme.danger, theme.panelBorder]);
+  const garbageOpacity = mode === "roots" ? 0 : 1 - 0.78 * sweep;
+  const root = { x: W / 2, y: 400 };
+  const liveA = { x: 250, y: 760 };
+  const liveB = { x: 540, y: 980 };
+  const liveC = { x: 830, y: 760 };
+  const garbageA = { x: 290, y: 1260 };
+  const garbageB = { x: 560, y: 1370 };
+
+  const edge = (
+    key: string,
+    from: { x: number; y: number },
+    to: { x: number; y: number },
+    color: string,
+    opacity: number,
+    dashed = false,
+  ) => {
+    const dx = to.x - from.x;
+    const dy = to.y - from.y;
+    const length = Math.sqrt(dx * dx + dy * dy);
+    const angle = (Math.atan2(dy, dx) * 180) / Math.PI;
+    return (
+      <div
+        key={key}
+        style={{
+          position: "absolute",
+          left: from.x,
+          top: from.y,
+          width: length,
+          height: 4,
+          transformOrigin: "0 50%",
+          transform: `translateY(-50%) rotate(${angle}deg)`,
+          background: dashed ? "transparent" : color,
+          borderTop: dashed ? `4px dashed ${color}` : undefined,
+          opacity: enter * opacity,
+          zIndex: 1,
+        }}
+      >
+        <span
+          style={{
+            position: "absolute",
+            right: -4,
+            top: "50%",
+            transform: "translateY(-50%)",
+            color,
+            fontFamily: theme.font,
+            fontSize: 34,
+            lineHeight: 1,
+          }}
+        >
+          ›
+        </span>
+      </div>
+    );
+  };
+
+  const node = (
+    key: string,
+    point: { x: number; y: number },
+    label: string,
+    icon: string,
+    color: string,
+    opacity = 1,
+    sub?: string,
+    scale = 1,
+  ) => (
+    <div
+      key={key}
+      style={{
+        position: "absolute",
+        left: point.x - 112,
+        top: point.y - 66,
+        width: 224,
+        height: 132,
+        borderRadius: 24,
+        background: theme.panel,
+        border: `3px solid ${color}`,
+        boxShadow: `0 0 38px ${color}2E`,
+        opacity: enter * opacity,
+        transform: `translateY(${(1 - enter) * 70}px) scale(${scale})`,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 7,
+        zIndex: 2,
+      }}
+    >
+      <IconGlyph name={icon} size={42} color={color} strokeWidth={1.7} />
+      <div style={{ fontFamily: theme.font, fontWeight: 800, fontSize: 30, color: theme.text }}>{label}</div>
+      {sub ? <div style={{ fontFamily: theme.mono, fontSize: 21, color }}>{sub}</div> : null}
+    </div>
+  );
+
+  return (
+    <>
+      <div
+        style={{
+          position: "absolute",
+          left: W / 2,
+          top: 260,
+          transform: "translateX(-50%)",
+          fontFamily: theme.mono,
+          fontSize: 28,
+          letterSpacing: 4,
+          color: theme.subtext,
+          opacity: enter,
+        }}
+      >
+        КУЧА ПАМЯТИ
+      </div>
+      {edge("root-a", root, liveA, liveColor, scan)}
+      {edge("root-c", root, liveC, liveColor, scan)}
+      {edge("a-b", liveA, liveB, liveColor, scan)}
+      {edge("b-a", liveB, liveA, liveColor, scan, true)}
+      {mode !== "roots" ? edge("garbage-a-b", garbageA, garbageB, garbageColor, garbageOpacity, true) : null}
+      {mode !== "roots" ? edge("garbage-b-a", garbageB, garbageA, garbageColor, garbageOpacity, true) : null}
+      {node("root", root, "Корни", "scan-search", theme.warning, 1, "старт обхода")}
+      {node("live-a", liveA, "объект A", "boxes", liveColor, 1, scan > 0.45 ? "MARK" : "ожидает", 1 + 0.025 * Math.sin(local / 7))}
+      {node("live-b", liveB, "объект B", "link", liveColor, 1, scan > 0.58 ? "MARK" : "ожидает", 1 + 0.02 * Math.sin(local / 8 + 1))}
+      {node("live-c", liveC, "объект C", "database", liveColor, 1, scan > 0.72 ? "MARK" : "ожидает", 1 + 0.025 * Math.sin(local / 9 + 2))}
+      {mode !== "roots"
+        ? node("garbage-a", garbageA, "цикл X", "git-branch", garbageColor, garbageOpacity, sweep > 0.55 ? "SWEEP" : "нет корня", 1 - 0.12 * sweep)
+        : null}
+      {mode !== "roots"
+        ? node("garbage-b", garbageB, "цикл Y", "git-branch", garbageColor, garbageOpacity, sweep > 0.55 ? "SWEEP" : "нет корня", 1 - 0.12 * sweep)
+        : null}
+      {mode !== "roots" && local >= impactLocal ? (
+        <PulseRing x={garbageA.x} y={garbageA.y} triggerFrame={impactLocal} tone="danger" size={180} />
+      ) : null}
+      <div
+        style={{
+          position: "absolute",
+          left: W / 2,
+          top: 1510,
+          transform: "translateX(-50%)",
+          padding: "14px 28px",
+          borderRadius: 999,
+          border: `2px solid ${mode === "roots" ? theme.success : garbageColor}`,
+          background: `${mode === "roots" ? theme.success : garbageColor}18`,
+          color: mode === "roots" ? theme.success : garbageColor,
+          fontFamily: theme.mono,
+          fontWeight: 800,
+          fontSize: 25,
+          letterSpacing: 1,
+          opacity: enter,
+        }}
+      >
+        {mode === "roots" ? "ДОСТИЖИМО ОТ КОРНЯ" : "НЕДОСТИЖИМО → МУСОР"}
+      </div>
+    </>
+  );
+};
+
+/** Пошаговый проход сборщика: сначала mark, затем sweep; отдельный режим показывает поколения. */
+const GcSweepVisual: React.FC<{
+  local: number;
+  fps: number;
+  impactLocal: number;
+  mode?: "mark-sweep" | "generations";
+}> = ({ local, fps, impactLocal, mode = "mark-sweep" }) => {
+  const enter = spring({ frame: local, fps, config: { damping: 15, mass: 0.8 } });
+  const mark = smooth(clamp01((local - 8) / Math.max(impactLocal - 8, 1)));
+  const sweep = smooth(clamp01((local - impactLocal) / 24));
+  const youngSweep = smooth(clamp01((local - impactLocal) / 28));
+  const liveColor = interpolateColors(mark, [0, 1], [theme.accent, theme.success]);
+  const garbageColor = interpolateColors(sweep, [0, 1], [theme.danger, theme.panelBorder]);
+
+  const labelStyle: React.CSSProperties = {
+    fontFamily: theme.mono,
+    fontWeight: 800,
+    letterSpacing: 2,
+  };
+
+  if (mode === "generations") {
+    const generationPanel = (x: number, title: string, color: string, old: boolean) => (
+      <div
+        style={{
+          position: "absolute",
+          left: x,
+          top: 460,
+          width: 390,
+          height: 760,
+          borderRadius: 28,
+          background: theme.panel,
+          border: `3px solid ${color}88`,
+          boxShadow: `0 0 55px ${color}1F`,
+          opacity: enter,
+          transform: `translateY(${(1 - enter) * 80}px)`,
+        }}
+      >
+        <div style={{ textAlign: "center", paddingTop: 30, ...labelStyle, fontSize: 25, color }}>{title}</div>
+        <div style={{ textAlign: "center", marginTop: 12, fontFamily: theme.font, fontSize: 27, color: theme.subtext }}>
+          {old ? "живёт дольше" : "умирает чаще"}
+        </div>
+        {Array.from({ length: old ? 4 : 6 }).map((_, i) => {
+          const row = Math.floor(i / 2);
+          const col = i % 2;
+          const fade = old ? 1 : 1 - 0.86 * youngSweep;
+          const dotColor = old ? theme.accent2 : interpolateColors(youngSweep, [0, 1], [theme.accent, theme.panelBorder]);
+          return (
+            <div
+              key={i}
+              style={{
+                position: "absolute",
+                left: 82 + col * 130,
+                top: 185 + row * 125,
+                width: 92,
+                height: 92,
+                borderRadius: 24,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                background: `${dotColor}18`,
+                border: `3px solid ${dotColor}`,
+                color: dotColor,
+                opacity: enter * fade,
+                transform: `scale(${1 + 0.035 * Math.sin((local + i * 8) / 8)})`,
+              }}
+            >
+              <IconGlyph name={old ? "boxes" : "sprout"} size={40} color={dotColor} strokeWidth={1.7} />
+            </div>
+          );
+        })}
+        <div
+          style={{
+            position: "absolute",
+            left: 34,
+            right: 34,
+            bottom: 36,
+            padding: "15px 8px",
+            borderRadius: 16,
+            textAlign: "center",
+            background: `${color}14`,
+            color,
+            fontFamily: theme.font,
+            fontWeight: 700,
+            fontSize: 26,
+          }}
+        >
+          {old ? "сканируем реже" : "собираем часто"}
+        </div>
+      </div>
+    );
+
+    return (
+      <>
+        <div
+          style={{
+            position: "absolute",
+            left: W / 2,
+            top: 270,
+            transform: "translateX(-50%)",
+            ...labelStyle,
+            fontSize: 29,
+            color: theme.subtext,
+            opacity: enter,
+          }}
+        >
+          ПОКОЛЕНИЯ КУЧИ
+        </div>
+        {generationPanel(105, "МОЛОДАЯ", theme.accent, false)}
+        {generationPanel(585, "СТАРАЯ", theme.accent2, true)}
+        <div
+          style={{
+            position: "absolute",
+            left: W / 2,
+            top: 1320,
+            transform: "translateX(-50%)",
+            padding: "15px 26px",
+            borderRadius: 999,
+            background: `${theme.success}18`,
+            border: `2px solid ${theme.success}`,
+            color: theme.success,
+            fontFamily: theme.font,
+            fontWeight: 800,
+            fontSize: 28,
+            opacity: enter,
+          }}
+        >
+          МЕНЬШЕ ПАУЗ ДЛЯ ПРОГРАММЫ
+        </div>
+      </>
+    );
+  }
+
+  const card = (x: number, label: string, icon: string, color: string, opacity: number, sub: string) => (
+    <div
+      style={{
+        position: "absolute",
+        left: x - 120,
+        top: 730,
+        width: 240,
+        height: 190,
+        borderRadius: 26,
+        background: theme.panel,
+        border: `3px solid ${color}`,
+        boxShadow: `0 0 45px ${color}2E`,
+        opacity: enter * opacity,
+        transform: `translateY(${(1 - enter) * 70}px) scale(${1 + 0.025 * Math.sin(local / 8 + x)})`,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 8,
+        zIndex: 2,
+      }}
+    >
+      <IconGlyph name={icon} size={48} color={color} strokeWidth={1.7} />
+      <div style={{ fontFamily: theme.font, fontWeight: 800, fontSize: 31, color: theme.text }}>{label}</div>
+      <div style={{ ...labelStyle, fontSize: 20, color }}>{sub}</div>
+    </div>
+  );
+
+  return (
+    <>
+      <div
+        style={{
+          position: "absolute",
+          left: W / 2,
+          top: 270,
+          transform: "translateX(-50%)",
+          ...labelStyle,
+          fontSize: 29,
+          color: theme.subtext,
+          opacity: enter,
+        }}
+      >
+        MARK → SWEEP
+      </div>
+      <div
+        style={{
+          position: "absolute",
+          left: W / 2,
+          top: 390,
+          transform: "translateX(-50%)",
+          padding: "12px 30px",
+          borderRadius: 999,
+          background: `${(local < impactLocal ? theme.accent : theme.warning)}18`,
+          border: `2px solid ${local < impactLocal ? theme.accent : theme.warning}`,
+          color: local < impactLocal ? theme.accent : theme.warning,
+          ...labelStyle,
+          fontSize: 28,
+          opacity: enter,
+        }}
+      >
+        {local < impactLocal ? "MARK: ставим метки" : "SWEEP: убираем мусор"}
+      </div>
+      <div
+        style={{
+          position: "absolute",
+          left: 130,
+          top: 1040,
+          width: 820,
+          height: 12,
+          borderRadius: 999,
+          background: theme.panelBorder,
+          opacity: enter,
+        }}
+      >
+        <div style={{ width: `${mark * 56 + sweep * 44}%`, height: "100%", borderRadius: 999, background: sweep > 0 ? theme.warning : theme.success }} />
+      </div>
+      {card(220, "объект A", "check", liveColor, 1, mark > 0.25 ? "MARK" : "живой")}
+      {card(540, "объект B", "check", liveColor, 1, mark > 0.48 ? "MARK" : "живой")}
+      {card(860, "мусор", "trash-2", garbageColor, 1 - 0.86 * sweep, sweep > 0.45 ? "SWEEP" : "не помечен")}
+      <div
+        style={{
+          position: "absolute",
+          left: 220,
+          top: 660,
+          width: 640,
+          height: 4,
+          background: `${theme.panelBorder}CC`,
+          opacity: enter,
+        }}
+      />
+      {local >= impactLocal ? <PulseRing x={860} y={825} triggerFrame={impactLocal} tone="warning" size={190} /> : null}
+      <div
+        style={{
+          position: "absolute",
+          left: W / 2,
+          top: 1240,
+          transform: "translateX(-50%)",
+          color: sweep > 0.5 ? theme.success : theme.subtext,
+          fontFamily: theme.font,
+          fontWeight: 800,
+          fontSize: 31,
+          opacity: enter,
+        }}
+      >
+        {sweep > 0.5 ? "непомеченное освобождено" : "живое остаётся в куче"}
+      </div>
+    </>
+  );
+};
+
 /** Одна коллизия, показанная сразу двумя стратегиями: цепочка и probing. */
 const CollisionCompare: React.FC<{
   local: number;
@@ -840,6 +1251,8 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     "password-leak": { scale: 1.05, y: -30 },
     "hash-table": { scale: 0.98, y: -20 },
     "collision-compare": { scale: 0.9, y: -20 },
+    "heap-graph": { scale: 0.86, y: -20 },
+    "gc-sweep": { scale: 0.9, y: -30 },
   };
   const cur = cams[slot.beat.visual] ?? { scale: 1, y: 0 };
   const prev = idx > 0 ? cams[slots[idx - 1].beat.visual] ?? cur : cur;
@@ -904,6 +1317,24 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             keyA={slot.beat.params?.keyA as string | undefined}
             keyB={slot.beat.params?.keyB as string | undefined}
             bucket={slot.beat.params?.bucket as number | undefined}
+          />
+        );
+      case "heap-graph":
+        return (
+          <HeapGraphVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            mode={(slot.beat.params?.mode as "roots" | "unreachable" | undefined) ?? "unreachable"}
+          />
+        );
+      case "gc-sweep":
+        return (
+          <GcSweepVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            mode={(slot.beat.params?.mode as "mark-sweep" | "generations" | undefined) ?? "mark-sweep"}
           />
         );
       default:

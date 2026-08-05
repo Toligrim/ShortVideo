@@ -72,7 +72,9 @@ export interface StoryBeat {
     | "title-slam"
     | "password-leak"
     | "hash-table"
-    | "collision-compare";
+    | "collision-compare"
+    | "heap-graph"
+    | "gc-sweep";
   onWord?: string; // бит начинается на этом слове реплики
   params?: Record<string, unknown>;
 }
