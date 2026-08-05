@@ -487,6 +487,19 @@ class PublishingStore:
         finally:
             conn.close()
 
+    def list_publications(self, *, slug: str | None = None) -> list[Publication]:
+        conn = self._connect()
+        try:
+            if slug is None:
+                rows = conn.execute("SELECT * FROM publications ORDER BY created_at DESC, id DESC").fetchall()
+            else:
+                rows = conn.execute(
+                    "SELECT * FROM publications WHERE slug = ? ORDER BY created_at DESC, id DESC", (slug,)
+                ).fetchall()
+            return [_publication_from_row(row) for row in rows]
+        finally:
+            conn.close()
+
     def list_targets(self, publication_id: str) -> list[PublicationTarget]:
         conn = self._connect()
         try:
