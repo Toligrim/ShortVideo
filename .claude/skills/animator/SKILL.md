@@ -23,8 +23,9 @@ episodes/<slug>.json                     # slug: kebab-case, латиница
 # 2. Валидация схемой (обязательно до озвучки)
 python3 tools/validate.py episodes/<slug>.json
 
-# 3. Озвучка + тайминги слов (Edge TTS, ru-RU-DmitryNeural)
-/home/toligrim/projects/TTS/venv/bin/python tools/tts_scenes.py \
+# 3. Озвучка + тайминги слов (только Gemini TTS; нет квоты/сети → падает,
+#    без фолбэка на другой TTS)
+venv/bin/python tools/tts_scenes.py \
   episodes/<slug>.json --out video/public/episodes/<slug>
 cp episodes/<slug>.json video/public/episodes/<slug>/script.json
 
@@ -35,7 +36,14 @@ cd video && npx remotion still Episode /tmp/check.png --frame=<N> \
 
 # 5. Полный рендер (долгий — в фоне)
 cd video && npx remotion render Episode out/<slug>.mp4 --props='{"episodeId":"<slug>"}'
+
+# 6. Отправка в Telegram — ОБЯЗАТЕЛЬНЫЙ финальный шаг, не опция
+cd .. && python3 tools/telegram_bot.py send-video video/out/<slug>.mp4 --caption "<тема>"
 ```
+
+Токен и chat_id бота лежат в `.env` (`TELEGRAM_BOT_TOKEN`, `TELEGRAM_ALLOWED_CHAT_ID`) —
+скрипт подхватывает их сам, ничего передавать вручную не нужно. Любой готовый
+рендер эпизода должен закончиться отправкой в бот.
 
 ## Ключевые факты о движке
 

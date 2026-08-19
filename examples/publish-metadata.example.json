@@ -7,7 +7,7 @@
       "description": "Пример одобренного описания для публикации.",
       "tags": ["пример", "shortvideo"],
       "category_id": "28",
-      "privacy_status": "private",
+      "privacy_status": "public",
       "made_for_kids": false,
       "contains_synthetic_media": true,
       "notify_subscribers": false

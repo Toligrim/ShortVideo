@@ -1,19 +1,20 @@
 #!/usr/bin/env python3
 """Озвучка сценария посценно + тайминги слов для караоке.
 
-Провайдеры:
-  edge   — Edge TTS (ru-RU-DmitryNeural): тайминги из WordBoundary-событий.
-  gemini — Gemini TTS (gemini-3.1-flash-tts-preview, голос Fenrir): живой стиль
-           промптом; таймингов не отдаёт → forced alignment через faster-whisper.
+Единственный провайдер — Gemini TTS (gemini-3.1-flash-tts-preview, голос
+Fenrir): живой стиль промптом; таймингов не отдаёт → forced alignment через
+faster-whisper. Нет фолбэка на другой TTS: если Gemini недоступен (квота,
+сеть), скрипт останавливается с ошибкой — озвучка либо идёт через Gemini,
+либо не идёт совсем.
 
 Narration — устная форма с разметкой {SHOW|скажи}: на экране SHOW, голос
-произносит «скажи». Оба провайдера произносят «скажи»-форму (транслитерацию),
-поэтому выравнивание надёжно для любых терминов.
+произносит «скажи» (транслитерацию) — так forced alignment надёжен для любых
+терминов.
 
 Выход в --out: audio/scene-<i>.mp3, meta.json [{index, duration, words[]}].
 
 Запуск: venv/bin/python tools/tts_scenes.py episodes/<slug>.json \
-        --out video/public/episodes/<slug> [--provider gemini|edge]
+        --out video/public/episodes/<slug>
 """
 import argparse
 import asyncio
@@ -31,8 +32,6 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 
-EDGE_VOICE = "ru-RU-DmitryNeural"
-EDGE_RATE = "+8%"
 # Порядок = приоритет; при 429 переходим к следующей (квоты у моделей раздельные).
 # GEMINI_TTS_MODEL в env ставит выбранную модель первой — для консистентности тембра.
 GEMINI_MODELS = [
@@ -81,23 +80,6 @@ def mp3_duration(path: Path) -> float:
 
 def norm(w: str) -> str:
     return re.sub(r"[^\p{L}\p{N}]" if False else r"[^\w\d]", "", w.lower().replace("ё", "е"))
-
-
-# ---------- Edge TTS ----------
-
-async def synth_edge(spoken: str, mp3_path: Path):
-    import edge_tts
-    comm = edge_tts.Communicate(spoken, EDGE_VOICE, rate=EDGE_RATE, boundary="WordBoundary")
-    events = []
-    with open(mp3_path, "wb") as f:
-        async for chunk in comm.stream():
-            if chunk["type"] == "audio":
-                f.write(chunk["data"])
-            elif chunk["type"] == "WordBoundary":
-                start = chunk["offset"] / 1e7
-                events.append({"text": chunk["text"], "start": round(start, 3),
-                               "end": round(start + chunk["duration"] / 1e7, 3)})
-    return events
 
 
 # ---------- Gemini TTS ----------
@@ -222,13 +204,12 @@ async def main():
     ap.add_argument("episode")
     ap.add_argument("--out", required=True)
     ap.add_argument("--lang", default="ru")
-    ap.add_argument("--provider", default="gemini", choices=["gemini", "edge"])
     args = ap.parse_args()
 
     episode = json.loads(Path(args.episode).read_text())
     out = Path(args.out)
     (out / "audio").mkdir(parents=True, exist_ok=True)
-    key = gemini_key() if args.provider == "gemini" else None
+    key = gemini_key()
 
     meta = []
     for i, scene in enumerate(episode["scenes"]):
@@ -239,23 +220,12 @@ async def main():
         say_words = [w for w in spoken.split() if ALNUM_RE.search(w)]
         mp3 = out / "audio" / f"scene-{i}.mp3"
 
-        if args.provider == "edge":
-            for attempt in range(3):
-                events = await synth_edge(spoken, mp3)
-                if mp3.stat().st_size > 1000 and events:
-                    break
-                print(f"scene {i}: пустой синтез, ретрай", file=sys.stderr)
-            else:
-                sys.exit(f"scene {i}: edge synth failed")
-            timings = [{"start": e["start"], "end": e["end"]} for e in events]
-        else:
-            synth_gemini(spoken, mp3, key)
-            time.sleep(2)  # не долбить preview-квоту
-            heard = whisper_words(mp3)
-            timings = align(say_words, heard, mp3_duration(mp3))
-            matched = sum(1 for i2, w in enumerate(heard) if i2 < len(say_words))
-            print(f"scene {i}: whisper услышал {len(heard)} слов, ожидалось {len(say_words)}",
-                  file=sys.stderr)
+        synth_gemini(spoken, mp3, key)
+        time.sleep(2)  # не долбить preview-квоту
+        heard = whisper_words(mp3)
+        timings = align(say_words, heard, mp3_duration(mp3))
+        print(f"scene {i}: whisper услышал {len(heard)} слов, ожидалось {len(say_words)}",
+              file=sys.stderr)
 
         meta.append({"index": i, "duration": round(mp3_duration(mp3), 3),
                      "words": tokens_to_words(tokens, timings)})
@@ -263,7 +233,7 @@ async def main():
 
     (out / "meta.json").write_text(json.dumps(meta, ensure_ascii=False, indent=1))
     total = sum(m["duration"] for m in meta)
-    print(f"OK: {len(meta)} сцен, {total:.1f}s аудио ({args.provider}) → {out}/meta.json")
+    print(f"OK: {len(meta)} сцен, {total:.1f}s аудио (gemini) → {out}/meta.json")
 
 
 if __name__ == "__main__":
