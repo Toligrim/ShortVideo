@@ -74,7 +74,12 @@ export interface StoryBeat {
     | "hash-table"
     | "collision-compare"
     | "heap-graph"
-    | "gc-sweep";
+    | "gc-sweep"
+    | "recursion-call"
+    | "stack-grow"
+    | "stack-compare"
+    | "medal-mint"
+    | "ancient-code";
   onWord?: string; // бит начинается на этом слове реплики
   params?: Record<string, unknown>;
 }

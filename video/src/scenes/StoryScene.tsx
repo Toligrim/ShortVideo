@@ -43,6 +43,8 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
     if (beat.visual === "collision-compare") impact = start + 18;
     if (beat.visual === "heap-graph") impact = start + 18;
     if (beat.visual === "gc-sweep") impact = start + Math.round(dur * 0.56);
+    if (beat.visual === "medal-mint") impact = start + Math.round(dur * 0.5);
+    if (beat.visual === "ancient-code") impact = start + Math.round(dur * 0.6);
     return { beat, start, end, impact };
   });
 };
@@ -67,6 +69,9 @@ export const storySfx = (
     if (s.beat.visual === "collision-compare") events.push({ frame: s.impact, sound: "pop" });
     if (s.beat.visual === "heap-graph") events.push({ frame: s.impact, sound: "pop" });
     if (s.beat.visual === "gc-sweep") events.push({ frame: s.impact, sound: "click" });
+    if (s.beat.visual === "medal-mint")
+      events.push({ frame: s.impact, sound: "slam" }, { frame: s.impact + 2, sound: "ding" });
+    if (s.beat.visual === "ancient-code") events.push({ frame: s.impact, sound: "pop" });
   }
   return events;
 };
@@ -1225,6 +1230,351 @@ const CollisionCompare: React.FC<{
   );
 };
 
+/** Медаль Лейбница: девиз гравируется по ободу, затем чеканкой выбивает 1 и 0 в центре. */
+const MedalMint: React.FC<{
+  local: number;
+  fps: number;
+  impactLocal: number;
+  motto?: string;
+  caption?: string;
+}> = ({ local, fps, impactLocal, motto = "EX NIHILO OMNIA", caption = "медаль Лейбница" }) => {
+  const enter = spring({ frame: local, fps, config: { damping: 15, mass: 0.9 } });
+  const cx = W / 2;
+  const cy = 860;
+  const R = 340;
+  const stamped = local >= impactLocal;
+  const press = stamped ? Math.min(1, 0.9 + Math.min(1, (local - impactLocal) / 10) * 0.1) : 1;
+  const engrave = smooth(clamp01(local / Math.max(impactLocal - 4, 1)));
+  const chars = motto.split("");
+  const shown = Math.floor(engrave * chars.length);
+  const digitPop = stamped ? spring({ frame: local - impactLocal, fps, config: { damping: 11, mass: 0.8 } }) : 0;
+  const rimFade = stamped
+    ? interpolate(local - impactLocal, [0, 20], [1, 0.32], { extrapolateLeft: "clamp", extrapolateRight: "clamp" })
+    : 1;
+  const startDeg = 200;
+  const endDeg = 340;
+
+  return (
+    <>
+      <div
+        style={{
+          position: "absolute",
+          left: cx - R,
+          top: cy - R,
+          width: R * 2,
+          height: R * 2,
+          borderRadius: "50%",
+          opacity: enter,
+          transform: `scale(${(0.86 + 0.14 * enter) * press})`,
+          background: "radial-gradient(circle at 34% 28%, #EEF2F7, #9AA4B2 55%, #55606E 100%)",
+          border: "6px solid rgba(255,255,255,0.35)",
+          boxShadow: "0 0 90px rgba(0,0,0,0.55), inset 0 0 60px rgba(0,0,0,0.35)",
+        }}
+      />
+      <div
+        style={{
+          position: "absolute",
+          left: cx - (R - 60),
+          top: cy - (R - 60),
+          width: (R - 60) * 2,
+          height: (R - 60) * 2,
+          borderRadius: "50%",
+          opacity: enter * 0.9,
+          transform: `scale(${press})`,
+          border: "3px solid rgba(11,14,20,0.4)",
+        }}
+      />
+      {chars.map((ch, i) => {
+        if (i > shown) return null;
+        const deg = interpolate(i, [0, Math.max(chars.length - 1, 1)], [startDeg, endDeg]);
+        const rad = (deg * Math.PI) / 180;
+        const rr = R - 46;
+        const x = cx + rr * Math.cos(rad);
+        const y = cy + rr * Math.sin(rad);
+        const rot = deg + 90;
+        return (
+          <div
+            key={i}
+            style={{
+              position: "absolute",
+              left: x,
+              top: y,
+              transform: `translate(-50%, -50%) rotate(${rot}deg)`,
+              fontFamily: theme.mono,
+              fontWeight: 800,
+              fontSize: 30,
+              color: "#1B2230",
+              opacity: rimFade * enter,
+              letterSpacing: 1,
+            }}
+          >
+            {ch === " " ? " " : ch}
+          </div>
+        );
+      })}
+      {stamped ? <PulseRing x={cx} y={cy} triggerFrame={impactLocal} size={520} tone="warning" /> : null}
+      <div
+        style={{
+          position: "absolute",
+          left: cx - 210,
+          top: cy - 90,
+          width: 160,
+          textAlign: "center",
+          transform: `scale(${digitPop})`,
+          fontFamily: theme.font,
+          fontWeight: 800,
+          fontSize: 150,
+          color: theme.accent,
+          textShadow: `0 0 40px ${theme.accent}77`,
+        }}
+      >
+        1
+      </div>
+      <div
+        style={{
+          position: "absolute",
+          left: cx + 50,
+          top: cy - 90,
+          width: 160,
+          textAlign: "center",
+          transform: `scale(${digitPop})`,
+          fontFamily: theme.font,
+          fontWeight: 800,
+          fontSize: 150,
+          color: theme.accent2,
+          textShadow: `0 0 40px ${theme.accent2}77`,
+        }}
+      >
+        0
+      </div>
+      <div
+        style={{
+          position: "absolute",
+          left: cx,
+          top: cy + R + 60,
+          transform: "translateX(-50%)",
+          fontFamily: theme.mono,
+          fontSize: 28,
+          letterSpacing: 3,
+          color: theme.subtext,
+          opacity: enter,
+        }}
+      >
+        {caption.toUpperCase()}
+      </div>
+    </>
+  );
+};
+
+/** Древний код: линии гексаграммы И-цзин или долгие/короткие слоги стиха превращаются в биты. */
+const AncientCode: React.FC<{
+  local: number;
+  fps: number;
+  impactLocal: number;
+  mode?: "hexagram" | "syllable";
+  label?: string;
+}> = ({ local, fps, impactLocal, mode = "hexagram", label }) => {
+  const enter = spring({ frame: local, fps, config: { damping: 15, mass: 0.8 } });
+  const hexBits = [1, 0, 1, 1, 0, 1];
+  const sylBits = [1, 1, 0, 1, 0, 0, 1];
+  const bits = mode === "hexagram" ? hexBits : sylBits;
+  const value = parseInt(bits.join(""), 2);
+  const caption = label ?? (mode === "hexagram" ? "И-цзин" : "Чхандах-шастра");
+  const cx = W / 2;
+
+  const buildP = (i: number) => smooth(clamp01((local - i * 7) / 18));
+  const stampP = (i: number) => {
+    const off = local - impactLocal - i * 5;
+    if (off < 0) return 0;
+    return clamp01(spring({ frame: off, fps, config: { damping: 12, mass: 0.6 } }));
+  };
+
+  if (mode === "hexagram") {
+    const barW = 380;
+    const barH = 30;
+    const gap = 30;
+    const top = 470;
+    return (
+      <>
+        <div
+          style={{
+            position: "absolute",
+            left: cx,
+            top: top - 90,
+            transform: "translateX(-50%)",
+            opacity: enter,
+            display: "flex",
+            alignItems: "center",
+            gap: 14,
+          }}
+        >
+          <IconGlyph name="scroll-text" size={40} color={theme.subtext} strokeWidth={1.6} />
+          <div style={{ fontFamily: theme.mono, fontSize: 30, letterSpacing: 3, color: theme.subtext }}>
+            {caption.toUpperCase()}
+          </div>
+        </div>
+        {bits.map((bit, i) => {
+          const p = buildP(i);
+          const y = top + i * (barH + gap);
+          const color = bit ? theme.accent : theme.accent2;
+          const dp = stampP(i);
+          return (
+            <React.Fragment key={i}>
+              <div
+                style={{
+                  position: "absolute",
+                  left: cx - barW / 2,
+                  top: y,
+                  width: barW,
+                  height: barH,
+                  opacity: p,
+                  transform: `scaleX(${0.4 + 0.6 * p})`,
+                  display: "flex",
+                  justifyContent: "space-between",
+                }}
+              >
+                {bit ? (
+                  <div style={{ width: "100%", height: "100%", borderRadius: 8, background: `${theme.text}CC` }} />
+                ) : (
+                  <>
+                    <div style={{ width: "44%", height: "100%", borderRadius: 8, background: `${theme.text}CC` }} />
+                    <div style={{ width: "44%", height: "100%", borderRadius: 8, background: `${theme.text}CC` }} />
+                  </>
+                )}
+              </div>
+              <div
+                style={{
+                  position: "absolute",
+                  left: cx + barW / 2 + 50,
+                  top: y - 8,
+                  transform: `translateX(${(1 - dp) * -20}px) scale(${dp})`,
+                  fontFamily: theme.font,
+                  fontWeight: 800,
+                  fontSize: 46,
+                  color,
+                  opacity: dp,
+                  textShadow: `0 0 24px ${color}77`,
+                }}
+              >
+                {bit}
+              </div>
+            </React.Fragment>
+          );
+        })}
+        {local >= impactLocal ? (
+          <div
+            style={{
+              position: "absolute",
+              left: cx,
+              top: top + bits.length * (barH + gap) + 50,
+              transform: "translateX(-50%)",
+              padding: "12px 26px",
+              borderRadius: 999,
+              background: `${theme.success}18`,
+              border: `2px solid ${theme.success}`,
+              color: theme.success,
+              fontFamily: theme.mono,
+              fontWeight: 800,
+              fontSize: 30,
+              opacity: stampP(bits.length),
+            }}
+          >
+            = {value}
+          </div>
+        ) : null}
+      </>
+    );
+  }
+
+  const itemW = 118;
+  const totalW = bits.length * itemW;
+  const startX = cx - totalW / 2;
+  const rowY = 820;
+  return (
+    <>
+      <div
+        style={{
+          position: "absolute",
+          left: cx,
+          top: rowY - 160,
+          transform: "translateX(-50%)",
+          opacity: enter,
+          display: "flex",
+          alignItems: "center",
+          gap: 14,
+        }}
+      >
+        <IconGlyph name="feather" size={38} color={theme.subtext} strokeWidth={1.6} />
+        <div style={{ fontFamily: theme.mono, fontSize: 30, letterSpacing: 3, color: theme.subtext }}>
+          {caption.toUpperCase()}
+        </div>
+      </div>
+      {bits.map((bit, i) => {
+        const p = buildP(i);
+        const x = startX + i * itemW + itemW / 2;
+        const color = bit ? theme.accent : theme.accent2;
+        const dp = stampP(i);
+        return (
+          <React.Fragment key={i}>
+            <div
+              style={{
+                position: "absolute",
+                left: x,
+                top: rowY,
+                transform: `translate(-50%, -50%) scale(${p})`,
+                opacity: p,
+              }}
+            >
+              {bit ? (
+                <div style={{ width: 74, height: 26, borderRadius: 13, background: `${theme.text}CC` }} />
+              ) : (
+                <div style={{ width: 40, height: 40, borderRadius: "50%", border: `6px solid ${theme.text}CC` }} />
+              )}
+            </div>
+            <div
+              style={{
+                position: "absolute",
+                left: x,
+                top: rowY + 70,
+                transform: `translate(-50%, ${(1 - dp) * 16}px) scale(${dp})`,
+                fontFamily: theme.font,
+                fontWeight: 800,
+                fontSize: 44,
+                color,
+                opacity: dp,
+                textShadow: `0 0 20px ${color}77`,
+              }}
+            >
+              {bit}
+            </div>
+          </React.Fragment>
+        );
+      })}
+      {local >= impactLocal ? (
+        <div
+          style={{
+            position: "absolute",
+            left: cx,
+            top: rowY + 170,
+            transform: "translateX(-50%)",
+            padding: "12px 26px",
+            borderRadius: 999,
+            background: `${theme.success}18`,
+            border: `2px solid ${theme.success}`,
+            color: theme.success,
+            fontFamily: theme.mono,
+            fontWeight: 800,
+            fontSize: 30,
+            opacity: stampP(bits.length),
+          }}
+        >
+          = {value}
+        </div>
+      ) : null}
+    </>
+  );
+};
+
 /* ──────────────────────────── сцена-сториборд ──────────────────────────── */
 
 /** Каждая фраза диктора — свой бит с движением камеры между битами. */
@@ -1253,6 +1603,8 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     "collision-compare": { scale: 0.9, y: -20 },
     "heap-graph": { scale: 0.86, y: -20 },
     "gc-sweep": { scale: 0.9, y: -30 },
+    "medal-mint": { scale: 0.96, y: -10 },
+    "ancient-code": { scale: 0.92, y: -20 },
   };
   const cur = cams[slot.beat.visual] ?? { scale: 1, y: 0 };
   const prev = idx > 0 ? cams[slots[idx - 1].beat.visual] ?? cur : cur;
@@ -1335,6 +1687,26 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             fps={fps}
             impactLocal={impactLocal}
             mode={(slot.beat.params?.mode as "mark-sweep" | "generations" | undefined) ?? "mark-sweep"}
+          />
+        );
+      case "medal-mint":
+        return (
+          <MedalMint
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            motto={slot.beat.params?.motto as string | undefined}
+            caption={slot.beat.params?.caption as string | undefined}
+          />
+        );
+      case "ancient-code":
+        return (
+          <AncientCode
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            mode={(slot.beat.params?.mode as "hexagram" | "syllable" | undefined) ?? "hexagram"}
+            label={slot.beat.params?.label as string | undefined}
           />
         );
       default:
