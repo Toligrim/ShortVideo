@@ -79,7 +79,9 @@ export interface StoryBeat {
     | "stack-grow"
     | "stack-compare"
     | "medal-mint"
-    | "ancient-code";
+    | "ancient-code"
+    | "verdict-scan"
+    | "paradox-box";
   onWord?: string; // бит начинается на этом слове реплики
   params?: Record<string, unknown>;
 }

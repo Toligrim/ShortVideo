@@ -45,6 +45,8 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
     if (beat.visual === "gc-sweep") impact = start + Math.round(dur * 0.56);
     if (beat.visual === "medal-mint") impact = start + Math.round(dur * 0.5);
     if (beat.visual === "ancient-code") impact = start + Math.round(dur * 0.6);
+    if (beat.visual === "verdict-scan") impact = start + Math.round(dur * 0.62);
+    if (beat.visual === "paradox-box") impact = start + Math.round(dur * 0.55);
     return { beat, start, end, impact };
   });
 };
@@ -72,6 +74,8 @@ export const storySfx = (
     if (s.beat.visual === "medal-mint")
       events.push({ frame: s.impact, sound: "slam" }, { frame: s.impact + 2, sound: "ding" });
     if (s.beat.visual === "ancient-code") events.push({ frame: s.impact, sound: "pop" });
+    if (s.beat.visual === "verdict-scan") events.push({ frame: s.impact, sound: "click" });
+    if (s.beat.visual === "paradox-box") events.push({ frame: s.impact, sound: "slam" });
   }
   return events;
 };
@@ -1575,6 +1579,391 @@ const AncientCode: React.FC<{
   );
 };
 
+/** Антивирус сканирует код: луч бежит по строкам, спиннер крутится, вердикт мигает check/infinity и застывает на «?». */
+const VerdictScan: React.FC<{
+  local: number;
+  fps: number;
+  impactLocal: number;
+  label?: string;
+}> = ({ local, fps, impactLocal, label = "ЗАВИСНЕТ?" }) => {
+  const enter = spring({ frame: local, fps, config: { damping: 15, mass: 0.8 } });
+  const panelW = 760;
+  const panelX = W / 2 - panelW / 2;
+  const panelY = 420;
+  const panelH = 620;
+  const codeLines = [0.9, 0.55, 0.74, 0.4, 0.63, 0.32];
+  const cycle = 52;
+  const scanT = smooth(((local % cycle) + cycle) % cycle / cycle);
+  const beamY = panelY + 120 + scanT * (panelH - 220);
+  const spinDeg = local * 7;
+  const settled = local >= impactLocal;
+  const qPop = settled ? spring({ frame: local - impactLocal, fps, config: { damping: 11, mass: 0.7 } }) : 0;
+  const toggleOn = Math.floor(local / 7) % 2 === 0;
+  const chipY = panelY + panelH + 140;
+  return (
+    <>
+      <div
+        style={{
+          position: "absolute",
+          left: panelX,
+          top: panelY,
+          width: panelW,
+          height: panelH,
+          transform: `translateY(${(1 - enter) * 90}px) scale(${0.92 + 0.08 * enter})`,
+          opacity: enter,
+          background: "#0A0F18",
+          border: `2px solid ${theme.panelBorder}`,
+          borderRadius: 28,
+          overflow: "hidden",
+          boxShadow: "0 40px 100px rgba(0,0,0,0.6)",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 16, padding: "22px 26px", background: theme.panel }}>
+          <IconGlyph name="shield" size={40} color={theme.accent} strokeWidth={1.8} />
+          <div style={{ fontFamily: theme.font, fontWeight: 700, fontSize: 32, color: theme.text }}>Антивирус</div>
+          <div style={{ marginLeft: "auto", transform: `rotate(${spinDeg}deg)` }}>
+            <IconGlyph name="loader-circle" size={36} color={theme.accent2} strokeWidth={2} />
+          </div>
+        </div>
+        {codeLines.map((w, i) => (
+          <div
+            key={i}
+            style={{
+              position: "absolute",
+              left: 40,
+              top: 122 + i * 74,
+              width: (panelW - 80) * w,
+              height: 30,
+              borderRadius: 8,
+              background: "#1B2434",
+              opacity: enter,
+            }}
+          />
+        ))}
+        {!settled ? (
+          <div
+            style={{
+              position: "absolute",
+              left: 0,
+              right: 0,
+              top: beamY,
+              height: 6,
+              background: `linear-gradient(90deg, transparent, ${theme.accent}, transparent)`,
+              boxShadow: `0 0 30px ${theme.accent}AA`,
+              opacity: enter,
+            }}
+          />
+        ) : null}
+      </div>
+      {settled ? <PulseRing x={W / 2} y={chipY} triggerFrame={impactLocal} tone="warning" size={280} /> : null}
+      <div
+        style={{
+          position: "absolute",
+          left: W / 2,
+          top: chipY,
+          transform: `translate(-50%, -50%) scale(${settled ? qPop : 1})`,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          gap: 16,
+        }}
+      >
+        {settled ? (
+          <div
+            style={{
+              fontFamily: theme.font,
+              fontWeight: 800,
+              fontSize: 130,
+              lineHeight: 1,
+              color: theme.warning,
+              textShadow: `0 0 50px ${theme.warning}77`,
+            }}
+          >
+            ?
+          </div>
+        ) : (
+          <IconGlyph
+            name={toggleOn ? "shield-check" : "infinity"}
+            size={90}
+            color={toggleOn ? theme.success : theme.danger}
+            strokeWidth={1.7}
+          />
+        )}
+        <div style={{ fontFamily: theme.mono, fontWeight: 700, fontSize: 30, color: theme.subtext, letterSpacing: 2 }}>
+          {label.toUpperCase()}
+        </div>
+      </div>
+    </>
+  );
+};
+
+/** Программа-ловушка кормит собой чёрный ящик-оракул: setup — самоприменение и развилка да/нет,
+ * crack — оба предсказания перечёркиваются одновременно, оракул трескается и рассыпается. */
+const ParadoxBox: React.FC<{
+  local: number;
+  fps: number;
+  impactLocal: number;
+  trap?: string;
+  oracle?: string;
+  stage?: "setup" | "crack";
+}> = ({ local, fps, impactLocal, trap = "Ди", oracle = "Эйч", stage = "setup" }) => {
+  const enter = spring({ frame: local, fps, config: { damping: 15, mass: 0.8 } });
+  const trapX = 250;
+  const trapY = 900;
+  const oracleX = 800;
+  const oracleY = 740;
+
+  const box = (x: number, y: number, label: string, icon: string, color: string, size = 220, breathe = true) => (
+    <div
+      style={{
+        position: "absolute",
+        left: x - size / 2,
+        top: y - size / 2,
+        width: size,
+        height: size,
+        borderRadius: 30,
+        background: theme.panel,
+        border: `3px solid ${color}`,
+        boxShadow: `0 0 50px ${color}33`,
+        opacity: enter,
+        transform: `translateY(${(1 - enter) * 60}px) scale(${breathe ? 1 + 0.02 * Math.sin(local / 9) : 1})`,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 10,
+      }}
+    >
+      <IconGlyph name={icon} size={64} color={color} strokeWidth={1.6} />
+      <div style={{ fontFamily: theme.font, fontWeight: 800, fontSize: 34, color: theme.text }}>{label}</div>
+    </div>
+  );
+
+  if (stage === "crack") {
+    const cX = W / 2;
+    const cY = 800;
+    const cracked = local >= impactLocal;
+    const shake = cracked ? 10 * Math.exp(-(local - impactLocal) * 0.28) * Math.sin((local - impactLocal) * 3.4) : 0;
+    const crackFade = cracked
+      ? interpolate(local - impactLocal, [0, 24], [1, 0.28], { extrapolateLeft: "clamp", extrapolateRight: "clamp" })
+      : 1;
+    const chip = (x: number, label: string, icon: string) => (
+      <div
+        style={{
+          position: "absolute",
+          left: x - 145,
+          top: cY - 330,
+          width: 290,
+          height: 130,
+          borderRadius: 22,
+          background: theme.panel,
+          border: `3px solid ${theme.warning}77`,
+          opacity: enter,
+          transform: `translateY(${(1 - enter) * 50}px)`,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 14,
+        }}
+      >
+        <IconGlyph name={icon} size={44} color={theme.warning} strokeWidth={1.7} />
+        <div style={{ fontFamily: theme.font, fontWeight: 700, fontSize: 30, color: theme.text }}>{label}</div>
+        {cracked ? (
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontFamily: theme.font,
+              fontWeight: 800,
+              fontSize: 100,
+              color: theme.danger,
+              textShadow: `0 0 30px ${theme.danger}AA`,
+              opacity: interpolate(local - impactLocal, [0, 8], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" }),
+            }}
+          >
+            ✕
+          </div>
+        ) : null}
+      </div>
+    );
+    return (
+      <>
+        {chip(cX - 270, "«да»", "infinity")}
+        {chip(cX + 270, "«нет»", "octagon-x")}
+        <div
+          style={{
+            position: "absolute",
+            left: cX - 110 + shake,
+            top: cY - 110,
+            width: 220,
+            height: 220,
+            borderRadius: 30,
+            background: theme.panel,
+            border: `3px solid ${cracked ? theme.danger : theme.accent2}`,
+            boxShadow: `0 0 ${cracked ? 70 : 40}px ${cracked ? theme.danger : theme.accent2}44`,
+            opacity: enter * crackFade,
+            transform: `scale(${cracked ? 1 - 0.16 * clamp01((local - impactLocal) / 26) : 1})`,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 10,
+          }}
+        >
+          <IconGlyph name="box" size={64} color={cracked ? theme.danger : theme.accent2} strokeWidth={1.6} />
+          <div style={{ fontFamily: theme.font, fontWeight: 800, fontSize: 34, color: theme.text }}>{oracle}</div>
+        </div>
+        {cracked ? (
+          <>
+            {[[-70, -60], [50, -30], [-30, 70]].map(([dx, dy], i) => (
+              <div
+                key={i}
+                style={{
+                  position: "absolute",
+                  left: cX + dx,
+                  top: cY + dy,
+                  width: 220,
+                  height: 4,
+                  background: `${theme.danger}CC`,
+                  transform: `rotate(${30 + i * 55}deg)`,
+                  opacity: crackFade,
+                }}
+              />
+            ))}
+            <PulseRing x={cX} y={cY} triggerFrame={impactLocal} tone="danger" size={340} />
+            {Array.from({ length: 14 }).map((_, i) => {
+              const ang = random(`frag${i}`) * 6.28;
+              const p = smooth(clamp01((local - impactLocal) / 24));
+              const dist = (20 + random(`fd${i}`) * 220) * p;
+              const op = 1 - clamp01((local - impactLocal) / 26);
+              const rot = random(`fr${i}`) * 360;
+              const size = 14 + random(`fs${i}`) * 20;
+              return (
+                <div
+                  key={i}
+                  style={{
+                    position: "absolute",
+                    left: cX + Math.cos(ang) * dist,
+                    top: cY + Math.sin(ang) * dist * 0.85,
+                    width: size,
+                    height: size,
+                    background: theme.danger,
+                    opacity: op,
+                    transform: `rotate(${rot}deg)`,
+                    boxShadow: `0 0 14px ${theme.danger}`,
+                  }}
+                />
+              );
+            })}
+          </>
+        ) : null}
+        <div
+          style={{
+            position: "absolute",
+            left: W / 2,
+            top: cY + 340,
+            transform: "translateX(-50%)",
+            fontFamily: theme.mono,
+            fontWeight: 800,
+            fontSize: 27,
+            letterSpacing: 1,
+            color: cracked ? theme.danger : theme.subtext,
+            opacity: cracked
+              ? interpolate(local - impactLocal, [10, 26], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" })
+              : enter,
+            textAlign: "center",
+          }}
+        >
+          {cracked ? "НИ ОДИН ОТВЕТ НЕ РАБОТАЕТ" : "ЧТО БЫ ОРАКУЛ НИ ПРЕДСКАЗАЛ"}
+        </div>
+      </>
+    );
+  }
+
+  // stage === "setup"
+  const flightEnd = Math.max(impactLocal - 6, 1);
+  const p = smooth(clamp01(local / flightEnd));
+  const ghostX = interpolate(p, [0, 1], [trapX, oracleX - 10]);
+  const ghostY = interpolate(p, [0, 1], [trapY, oracleY + 10]);
+  const flying = p > 0 && p < 1;
+  const fed = local >= impactLocal;
+  const askPop = fed ? spring({ frame: local - impactLocal, fps, config: { damping: 12, mass: 0.7 } }) : 0;
+  const branchP = fed ? smooth(clamp01((local - impactLocal - 10) / 20)) : 0;
+  return (
+    <>
+      {box(trapX, trapY, trap, "repeat", theme.accent2)}
+      {box(oracleX, oracleY, oracle, "box", theme.accent, 220, !fed)}
+      {p > 0 && p < 1.02 ? (
+        <div
+          style={{
+            position: "absolute",
+            left: ghostX,
+            top: ghostY,
+            transform: `translate(-50%, -50%) scale(${flying ? 0.62 : 0})`,
+            opacity: flying ? 0.85 : 0,
+            filter: `drop-shadow(0 0 16px ${theme.accent2}AA)`,
+          }}
+        >
+          <IconGlyph name="repeat" size={64} color={theme.accent2} strokeWidth={1.6} />
+        </div>
+      ) : null}
+      {fed ? <PulseRing x={oracleX} y={oracleY} triggerFrame={impactLocal} tone="accent" size={260} /> : null}
+      {fed ? (
+        <div
+          style={{
+            position: "absolute",
+            left: oracleX,
+            top: oracleY - 190,
+            transform: `translateX(-50%) scale(${askPop})`,
+            fontFamily: theme.font,
+            fontWeight: 800,
+            fontSize: 44,
+            color: theme.accent,
+            textShadow: `0 0 24px ${theme.accent}77`,
+            whiteSpace: "nowrap",
+          }}
+        >
+          {trap}({trap})?
+        </div>
+      ) : null}
+      {fed
+        ? [
+            { y: trapY + 190, label: `«да» → ${trap} зациклится`, icon: "infinity", tone: theme.danger, d: 0 },
+            { y: trapY + 300, label: `«нет» → ${trap} остановится`, icon: "octagon-x", tone: theme.warning, d: 10 },
+          ].map((row, i) => {
+            const rp = clamp01(branchP - row.d / 20);
+            return (
+              <div
+                key={i}
+                style={{
+                  position: "absolute",
+                  left: W / 2,
+                  top: row.y,
+                  transform: `translate(-50%, 0) translateY(${(1 - rp) * 20}px)`,
+                  opacity: rp,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 14,
+                  background: theme.panel,
+                  border: `2px solid ${row.tone}88`,
+                  borderRadius: 999,
+                  padding: "12px 26px",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                <IconGlyph name={row.icon} size={32} color={row.tone} strokeWidth={1.8} />
+                <span style={{ fontFamily: theme.font, fontWeight: 700, fontSize: 27, color: theme.text }}>{row.label}</span>
+              </div>
+            );
+          })
+        : null}
+    </>
+  );
+};
+
 /* ──────────────────────────── сцена-сториборд ──────────────────────────── */
 
 /** Каждая фраза диктора — свой бит с движением камеры между битами. */
@@ -1605,6 +1994,8 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     "gc-sweep": { scale: 0.9, y: -30 },
     "medal-mint": { scale: 0.96, y: -10 },
     "ancient-code": { scale: 0.92, y: -20 },
+    "verdict-scan": { scale: 0.98, y: -10 },
+    "paradox-box": { scale: 0.9, y: -30 },
   };
   const cur = cams[slot.beat.visual] ?? { scale: 1, y: 0 };
   const prev = idx > 0 ? cams[slots[idx - 1].beat.visual] ?? cur : cur;
@@ -1707,6 +2098,26 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             impactLocal={impactLocal}
             mode={(slot.beat.params?.mode as "hexagram" | "syllable" | undefined) ?? "hexagram"}
             label={slot.beat.params?.label as string | undefined}
+          />
+        );
+      case "verdict-scan":
+        return (
+          <VerdictScan
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            label={slot.beat.params?.label as string | undefined}
+          />
+        );
+      case "paradox-box":
+        return (
+          <ParadoxBox
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            trap={slot.beat.params?.trap as string | undefined}
+            oracle={slot.beat.params?.oracle as string | undefined}
+            stage={(slot.beat.params?.stage as "setup" | "crack" | undefined) ?? "setup"}
           />
         );
       default:
