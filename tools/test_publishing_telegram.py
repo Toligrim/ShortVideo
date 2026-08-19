@@ -90,13 +90,14 @@ class FakeTelegramApi:
         self.calls.append(("send_video", None))
         return {"message_id": 101}
 
-    def send_message(self, chat_id, text, *, reply_markup=None, reply_to_message_id=None):
+    def send_message(self, chat_id, text, *, reply_markup=None, reply_to_message_id=None, parse_mode=None):
         self.message_calls.append(
             {
                 "chat_id": str(chat_id),
                 "text": text,
                 "reply_markup": reply_markup,
                 "reply_to_message_id": reply_to_message_id,
+                "parse_mode": parse_mode,
             }
         )
         self.calls.append(("send_message", None))
@@ -114,8 +115,8 @@ class FakeTelegramApi:
             self.event_log.append("answer")
         return True
 
-    def edit_message_text(self, chat_id, message_id, text, *, reply_markup=None):
-        self.calls.append(("edit_message_text", {"chat_id": str(chat_id), "message_id": message_id, "text": text, "reply_markup": reply_markup}))
+    def edit_message_text(self, chat_id, message_id, text, *, reply_markup=None, parse_mode=None):
+        self.calls.append(("edit_message_text", {"chat_id": str(chat_id), "message_id": message_id, "text": text, "reply_markup": reply_markup, "parse_mode": parse_mode}))
         return {"message_id": message_id}
 
     def edit_message_reply_markup(self, chat_id, message_id, *, reply_markup=None):

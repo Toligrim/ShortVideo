@@ -271,10 +271,22 @@ def main(argv: list[str] | None = None) -> int:
             from telegram_bot import get_api
 
             config.ensure_directories()
+
+            def _instagram_configured() -> bool:
+                # Local-only credential check (no network client); mirrors
+                # `doctor instagram` so the review card can warn before
+                # Approve if the target cannot actually be published.
+                try:
+                    instagram_doctor(state_dir=config.state_dir)
+                    return True
+                except PublishError:
+                    return False
+
             service = TelegramReviewService(
                 store=PublishingStore(config.database_path),
                 api=get_api(),
                 settings=TelegramApprovalSettings.from_environment(),
+                instagram_configured=_instagram_configured,
             )
             if args.once:
                 service.run_once(timeout=args.timeout)

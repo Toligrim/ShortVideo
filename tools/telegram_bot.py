@@ -174,12 +174,15 @@ class TelegramApi:
         *,
         reply_markup: dict[str, Any] | None = None,
         reply_to_message_id: int | None = None,
+        parse_mode: str | None = None,
     ) -> dict[str, Any]:
         payload: dict[str, Any] = {"chat_id": chat_id, "text": text}
         if reply_markup is not None:
             payload["reply_markup"] = reply_markup
         if reply_to_message_id is not None:
             payload["reply_to_message_id"] = reply_to_message_id
+        if parse_mode is not None:
+            payload["parse_mode"] = parse_mode
         result = self._json_call("sendMessage", payload)
         if not isinstance(result, dict):
             raise TelegramError("Telegram вернул неожиданный ответ на sendMessage")
@@ -207,6 +210,7 @@ class TelegramApi:
         text: str,
         *,
         reply_markup: dict[str, Any] | None = None,
+        parse_mode: str | None = None,
     ) -> dict[str, Any]:
         payload: dict[str, Any] = {
             "chat_id": chat_id,
@@ -215,6 +219,8 @@ class TelegramApi:
         }
         if reply_markup is not None:
             payload["reply_markup"] = reply_markup
+        if parse_mode is not None:
+            payload["parse_mode"] = parse_mode
         result = self._json_call("editMessageText", payload)
         if not isinstance(result, dict):
             raise TelegramError("Telegram вернул неожиданный ответ на editMessageText")

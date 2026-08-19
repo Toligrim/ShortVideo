@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+import html
 import json
 import os
 from pathlib import Path
@@ -35,6 +36,31 @@ UPDATE_CURSOR_KEY = "telegram_callback_update_cursor"
 EMPTY_INLINE_KEYBOARD = {"inline_keyboard": []}
 STATUS_LEASE_SECONDS = 60
 STATUS_RETRY_SECONDS = 30
+
+CARD_PARSE_MODE = "HTML"
+
+# Official YouTube video category IDs, display name only (cosmetic; an
+# unknown ID still renders fine with just its number).
+YOUTUBE_CATEGORY_NAMES = {
+    "1": "Film & Animation",
+    "2": "Autos & Vehicles",
+    "10": "Music",
+    "15": "Pets & Animals",
+    "17": "Sports",
+    "19": "Travel & Events",
+    "20": "Gaming",
+    "22": "People & Blogs",
+    "23": "Comedy",
+    "24": "Entertainment",
+    "25": "News & Politics",
+    "26": "Howto & Style",
+    "27": "Education",
+    "28": "Science & Technology",
+    "29": "Nonprofits & Activism",
+}
+
+YOUTUBE_PRIVACY_ICONS = {"private": "🔒", "unlisted": "🔗", "public": "🌍"}
+YOUTUBE_PRIVACY_LABELS_RU = {"private": "Приватное", "unlisted": "По ссылке", "public": "Публичное"}
 
 
 Clock = Callable[[], str]
@@ -138,17 +164,21 @@ def parse_callback_data(value: object) -> tuple[TelegramActionKind, str] | None:
     return kind, token
 
 
-def _bool(value: object) -> str:
+def _yes_no(value: object) -> str:
     if value is True:
-        return "true"
+        return "✅ Да"
     if value is False:
-        return "false"
+        return "🚫 Нет"
     raise TelegramApprovalError("verified metadata contains a non-boolean flag")
 
 
 def _duration(value: float) -> str:
     rendered = f"{value:.3f}".rstrip("0").rstrip(".")
     return f"{rendered}s"
+
+
+def _esc(value: object) -> str:
+    return html.escape(str(value))
 
 
 def _require_text_card(text: str) -> None:
@@ -158,40 +188,65 @@ def _require_text_card(text: str) -> None:
         )
 
 
-def format_review_card(publication: Publication, review: VerifiedReview) -> str:
-    """Render every approved target field; do not truncate or silently omit it."""
+def format_review_card(
+    publication: Publication,
+    review: VerifiedReview,
+    *,
+    instagram_configured: bool | None = None,
+) -> str:
+    """Render every approved target field as Telegram HTML; do not truncate or silently omit it.
+
+    ``instagram_configured`` — результат локальной проверки (без сети), что для
+    Instagram вообще есть рабочие credentials. ``None`` = проверка не
+    выполнялась (предупреждение не показываем, поведение как раньше).
+    """
     metadata = review.metadata
     targets = metadata.get("targets") if isinstance(metadata, Mapping) else None
     if not isinstance(targets, Mapping):
         raise TelegramApprovalError("verified metadata has no targets object")
-    mode = "LIVE" if publication.execution_mode.value == "live" else "DRY-RUN"
+    if publication.execution_mode.value == "live":
+        mode_line = "🔴 <b>LIVE</b> — по нажатию Approve уйдёт в реальную публикацию"
+    else:
+        mode_line = "🧪 <b>DRY-RUN</b> — тестовый прогон, наружу ничего не публикуется"
     lines = [
-        "Review pending",
-        f"Slug: {publication.slug}",
-        f"Mode: {mode}",
-        f"Video: {_duration(review.probe.duration_seconds)} · {review.probe.width}×{review.probe.height}",
-        f"Approval fingerprint: {publication.approval_fingerprint}",
+        f"🎬 <b>Заявка на публикацию</b> · <code>{_esc(publication.slug)}</code>",
+        mode_line,
+        f"📼 Видео: {_esc(_duration(review.probe.duration_seconds))} · "
+        f"{review.probe.width}×{review.probe.height}",
+        f"🔑 <code>{_esc(publication.approval_fingerprint)}</code>",
     ]
     youtube = targets.get("youtube")
     if youtube is not None:
         if not isinstance(youtube, Mapping):
             raise TelegramApprovalError("verified YouTube metadata is not an object")
         try:
-            tags = json.dumps(youtube["tags"], ensure_ascii=False, separators=(",", ":"), allow_nan=False)
+            tags = ", ".join(_esc(tag) for tag in youtube["tags"]) or "—"
+            category_id = str(youtube["category_id"])
+            category_name = YOUTUBE_CATEGORY_NAMES.get(category_id)
+            category_label = f"{_esc(category_id)} · {_esc(category_name)}" if category_name else _esc(category_id)
+            privacy = str(youtube["privacy_status"])
+            privacy_icon = YOUTUBE_PRIVACY_ICONS.get(privacy, "")
+            privacy_name = YOUTUBE_PRIVACY_LABELS_RU.get(privacy, privacy)
+            privacy_label = f"{privacy_icon} <b>Доступ</b>: {_esc(privacy_name)} ({_esc(privacy)})".strip()
             lines.extend(
                 [
                     "",
-                    "YouTube Shorts",
-                    "Title:",
-                    str(youtube["title"]),
-                    "Description:",
-                    str(youtube["description"]),
-                    f"Tags: {tags}",
-                    f"Category ID: {youtube['category_id']}",
-                    f"Privacy: {youtube['privacy_status']}",
-                    f"Made for kids: {_bool(youtube['made_for_kids'])}",
-                    f"Contains synthetic media: {_bool(youtube['contains_synthetic_media'])}",
-                    f"Notify subscribers: {_bool(youtube['notify_subscribers'])}",
+                    "━━━━━━━━━━━━━━━━━━━",
+                    "▶️ <b>YouTube Shorts</b>",
+                    "",
+                    "📝 <b>Заголовок</b>",
+                    f"<b>{_esc(youtube['title'])}</b>",
+                    "",
+                    "📄 <b>Описание</b>",
+                    f"<blockquote>{_esc(youtube['description'])}</blockquote>",
+                    "",
+                    f"🏷 <b>Теги</b>: {tags}",
+                    f"📁 <b>Категория</b>: {category_label}",
+                    privacy_label,
+                    "",
+                    f"🔞 Детская аудитория (COPPA): {_yes_no(youtube['made_for_kids'])}",
+                    f"🤖 Пометка «ИИ-контент»: {_yes_no(youtube['contains_synthetic_media'])}",
+                    f"🔔 Уведомить подписчиков: {_yes_no(youtube['notify_subscribers'])}",
                 ]
             )
         except KeyError as exc:
@@ -201,13 +256,16 @@ def format_review_card(publication: Publication, review: VerifiedReview) -> str:
         if not isinstance(instagram, Mapping):
             raise TelegramApprovalError("verified Instagram metadata is not an object")
         try:
+            lines.extend(["", "━━━━━━━━━━━━━━━━━━━", "📸 <b>Instagram Reels</b>"])
+            if instagram_configured is False:
+                lines.append("⚠️ <b>Не подключён — по Approve публикация НЕ выполнится</b>")
             lines.extend(
                 [
                     "",
-                    "Instagram Reels",
-                    "Caption:",
-                    str(instagram["caption"]),
-                    f"Share to feed: {_bool(instagram['share_to_feed'])}",
+                    "📝 <b>Подпись</b>",
+                    f"<blockquote>{_esc(instagram['caption'])}</blockquote>",
+                    "",
+                    f"📤 Опубликовать в ленту: {_yes_no(instagram['share_to_feed'])}",
                 ]
             )
         except KeyError as exc:
@@ -223,40 +281,40 @@ def format_status_card(
 ) -> str:
     state = publication.state
     if state is PublicationState.APPROVED:
-        headline = "✅ Approved — publish jobs queued"
+        headline = "✅ <b>Approved</b> — publish jobs queued"
     elif state is PublicationState.REJECTED:
-        headline = "❌ Rejected"
+        headline = "❌ <b>Rejected</b>"
     elif state is PublicationState.PUBLISHING:
-        headline = "⏳ Publishing"
+        headline = "⏳ <b>Publishing</b>"
     elif state is PublicationState.PUBLISHED:
-        headline = "✅ Published on all selected platforms"
+        headline = "✅ <b>Published</b> on all selected platforms"
     elif state is PublicationState.PARTIAL:
-        headline = "⚠ Partially published — operator attention needed"
+        headline = "⚠️ <b>Partially published</b> — operator attention needed"
     elif state is PublicationState.FAILED:
-        headline = "❌ Publishing stopped — operator attention needed"
+        headline = "❌ <b>Publishing stopped</b> — operator attention needed"
     else:
-        headline = f"Review status: {state.value}"
-    mode = "LIVE" if publication.execution_mode.value == "live" else "DRY-RUN"
-    text = "\n".join(
-        [
-            headline,
-            f"Slug: {publication.slug}",
-            f"Mode: {mode}",
-            f"Approval fingerprint: {publication.approval_fingerprint}",
-        ]
-    )
+        headline = f"<b>Review status:</b> {_esc(state.value)}"
+    mode_badge = "🔴 LIVE" if publication.execution_mode.value == "live" else "🧪 DRY-RUN"
+    lines = [
+        headline,
+        f"<code>{_esc(publication.slug)}</code>  ·  {mode_badge}",
+        f"🔑 <code>{_esc(publication.approval_fingerprint)}</code>",
+    ]
     if targets:
-        status_lines = []
+        lines.append("")
+        lines.append("━━━━━━━━━━━━━━━━━━━")
         for target in targets:
-            rendered = f"{target.platform}: {target.state.value}"
+            platform = _esc(target.platform)
+            rendered = f"• <b>{platform}</b>: {_esc(target.state.value)}"
             if target.state.value == "reconciliation_required":
-                rendered += " (manual reconciliation required)"
+                rendered += " ⚠️ (manual reconciliation required)"
             elif target.external_url:
-                rendered += f" — {target.external_url}"
+                url = _esc(target.external_url)
+                rendered += f" — <a href=\"{url}\">{url}</a>"
             elif target.last_error_code:
-                rendered += f" ({target.last_error_code})"
-            status_lines.append(rendered)
-        text += "\n\nTargets:\n" + "\n".join(status_lines)
+                rendered += f" (<code>{_esc(target.last_error_code)}</code>)"
+            lines.append(rendered)
+    text = "\n".join(lines)
     _require_text_card(text)
     return text
 
@@ -273,6 +331,7 @@ class TelegramReviewService:
         review_loader: ReviewLoader = verify_review_snapshots,
         status_lease_seconds: int = STATUS_LEASE_SECONDS,
         clock: Clock = _utc_now,
+        instagram_configured: Callable[[], bool] | None = None,
     ):
         if status_lease_seconds < 1:
             raise TelegramApprovalError("Telegram status lease must be positive")
@@ -282,6 +341,9 @@ class TelegramReviewService:
         self.review_loader = review_loader
         self._status_lease_seconds = status_lease_seconds
         self._clock = clock
+        # Local-only credential check injected by the caller; this module
+        # must not construct provider clients itself (see module docstring).
+        self._instagram_configured = instagram_configured
         self.last_delivery_failures: list[ReviewDeliveryFailure] = []
         self.last_status_failures: list[StatusDeliveryFailure] = []
         self._status_worker_id = f"telegram-status-{uuid.uuid4().hex}"
@@ -398,6 +460,7 @@ class TelegramReviewService:
                 publication.review_card_message_id,
                 card,
                 reply_markup=EMPTY_INLINE_KEYBOARD,
+                parse_mode=CARD_PARSE_MODE,
             )
         except (OSError, TelegramError) as exc:
             if not self._is_message_not_modified_error(exc):
@@ -480,7 +543,20 @@ class TelegramReviewService:
         self._validate_upload_size(review.asset_path)
         approve = self.store.issue_telegram_action(publication.id, TelegramActionKind.APPROVE)
         reject = self.store.issue_telegram_action(publication.id, TelegramActionKind.REJECT)
-        card = format_review_card(publication, review)
+        instagram_configured = None
+        instagram_target = (
+            review.metadata.get("targets", {}).get("instagram")
+            if isinstance(review.metadata, Mapping)
+            else None
+        )
+        if instagram_target is not None and self._instagram_configured is not None:
+            try:
+                instagram_configured = bool(self._instagram_configured())
+            except Exception:
+                # A broken local check must not block delivery of the review
+                # itself; show the warning as a precaution instead.
+                instagram_configured = False
+        card = format_review_card(publication, review, instagram_configured=instagram_configured)
         markup = {
             "inline_keyboard": [
                 [
@@ -508,6 +584,7 @@ class TelegramReviewService:
                 card,
                 reply_markup=markup,
                 reply_to_message_id=publication.review_video_message_id,
+                parse_mode=CARD_PARSE_MODE,
             )
             card_message_id = self._message_id(result, "sendMessage")
             self.store.record_review_card_message(publication.id, card_message_id)
