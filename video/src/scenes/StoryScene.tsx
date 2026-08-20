@@ -51,6 +51,7 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
     if (beat.visual === "fft-wave")
       impact = start + Math.round(dur * (beat.params?.phase === "square" ? 0.85 : 0.5));
     if (beat.visual === "qr-repair") impact = start + Math.round(dur * 0.6);
+    if (beat.visual === "hll-estimate") impact = start + Math.round(dur * 0.58);
     return { beat, start, end, impact };
   });
 };
@@ -88,6 +89,7 @@ export const storySfx = (
       const sound = ph === "restore" ? "ding" : ph === "encode" ? "click" : "pop";
       events.push({ frame: s.impact, sound });
     }
+    if (s.beat.visual === "hll-estimate") events.push({ frame: s.impact, sound: "pop" });
   }
   return events;
 };
@@ -2980,6 +2982,559 @@ const QrRepair: React.FC<{
   );
 };
 
+/** HyperLogLog буквально: 64-битный хэш, ведущие нули, 16384×6-битные регистры, гармоническое среднее, 12 КБ и 2^64. */
+const HllEstimate: React.FC<{
+  local: number;
+  fps: number;
+  impactLocal: number;
+  phase?: "hash" | "registers" | "harmonic" | "scale";
+  highlight?: number;
+}> = ({ local, fps, impactLocal, phase = "hash", highlight = 4 }) => {
+  const enter = spring({ frame: local, fps, config: { damping: 15, mass: 0.8 } });
+  const done = local >= impactLocal;
+  const cx = W / 2;
+  const mono: React.CSSProperties = { fontFamily: theme.mono, fontWeight: 800, letterSpacing: 2 };
+  if (phase === "hash") {
+    const bits = 64;
+    const lead = Math.max(1, Math.min(12, Math.round(highlight)));
+    const hashY = 560;
+    const ribbonW = 940;
+    const bitW = ribbonW / bits;
+    const ribbonX = cx - ribbonW / 2;
+    const ribbonH = 64;
+    const cellP = (i: number) => smooth(clamp01((local - 4 - i * 0.6) / 10));
+    const tailP = smooth(clamp01((local - impactLocal) / 14));
+    return (
+      <>
+        <div style={{ position: "absolute", left: cx, top: 300, transform: "translateX(-50%)", ...mono, fontSize: 26, color: theme.subtext, opacity: enter }}>
+          64 БИТА ХЭША
+        </div>
+        <div
+          style={{
+            position: "absolute",
+            left: 90,
+            top: hashY - 110,
+            width: 280,
+            borderRadius: 22,
+            background: theme.panel,
+            border: `3px solid ${theme.accent}88`,
+            padding: "18px 0",
+            textAlign: "center",
+            opacity: enter,
+            transform: `translateY(${(1 - enter) * 40}px)`,
+          }}
+        >
+          <div style={{ fontFamily: theme.mono, fontSize: 22, color: theme.subtext }}>ID</div>
+          <div style={{ fontFamily: theme.font, fontWeight: 800, fontSize: 30, color: theme.text, marginTop: 6 }}>user_90421</div>
+        </div>
+        <div
+          style={{
+            position: "absolute",
+            left: W / 2 - 22,
+            top: hashY - 74,
+            width: 44,
+            height: 44,
+            borderRadius: 12,
+            background: theme.accent,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            opacity: enter,
+          }}
+        >
+          <span style={{ fontFamily: theme.mono, fontWeight: 800, fontSize: 28, color: "#06121A" }}>→</span>
+        </div>
+        <div
+          style={{
+            position: "absolute",
+            left: W / 2 + 80,
+            top: hashY - 110,
+            width: 280,
+            borderRadius: 22,
+            background: `${theme.accent2}14`,
+            border: `3px solid ${theme.accent2}88`,
+            padding: "14px 0",
+            textAlign: "center",
+            opacity: enter,
+            transform: `translateY(${(1 - enter) * 40}px)`,
+          }}
+        >
+          <IconGlyph name="hash" size={30} color={theme.accent2} strokeWidth={1.8} />
+          <div style={{ fontFamily: theme.font, fontWeight: 800, fontSize: 28, color: theme.text, marginTop: 2 }}>h(ID)</div>
+          <div style={{ fontFamily: theme.mono, fontSize: 20, color: theme.accent2 }}>64 бита</div>
+        </div>
+        <div
+          style={{
+            position: "absolute",
+            left: ribbonX,
+            top: hashY + 70,
+            width: ribbonW,
+            height: ribbonH,
+            display: "flex",
+            gap: 2,
+            opacity: enter,
+          }}
+        >
+          {Array.from({ length: bits }).map((_, i) => {
+            const isLead = i < lead;
+            const bit = i < lead ? 0 : i % 3 === 0 ? 1 : 0;
+            const p = cellP(i);
+            const active = isLead && done;
+            return (
+              <div
+                key={i}
+                style={{
+                  flex: 1,
+                  height: ribbonH,
+                  borderRadius: 6,
+                  background: isLead ? (active ? theme.accent : `${theme.accent}44`) : bit ? theme.panelBorder : "#0D1420",
+                  border: `1px solid ${isLead ? (active ? theme.accent : `${theme.accent}66`) : theme.panelBorder}`,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontFamily: theme.mono,
+                  fontWeight: 800,
+                  fontSize: 16,
+                  color: isLead ? (active ? "#06121A" : theme.accent) : theme.subtext,
+                  transform: `scale(${0.4 + 0.6 * p})`,
+                  opacity: p,
+                  boxShadow: active ? `0 0 18px ${theme.accent}77` : "none",
+                }}
+              >
+                {bit}
+              </div>
+            );
+          })}
+        </div>
+        <div
+          style={{
+            position: "absolute",
+            left: ribbonX,
+            top: hashY + 150,
+            width: lead * (bitW + 2),
+            height: 4,
+            background: theme.accent,
+            opacity: done ? tailP : 0,
+            boxShadow: `0 0 14px ${theme.accent}`,
+          }}
+        />
+        <div
+          style={{
+            position: "absolute",
+            left: ribbonX + 6,
+            top: hashY + 164,
+            fontFamily: theme.mono,
+            fontSize: 22,
+            color: theme.accent,
+            opacity: done ? tailP : 0,
+            letterSpacing: 1,
+          }}
+        >
+          {"0".repeat(lead)} · хвост нулей = {lead}
+        </div>
+        <div
+          style={{
+            position: "absolute",
+            left: ribbonX,
+            top: hashY + 200,
+            width: ribbonW,
+            display: "flex",
+            justifyContent: "space-between",
+            opacity: enter,
+          }}
+        >
+          <span style={{ fontFamily: theme.mono, fontSize: 20, color: theme.accent, ...mono }}>14 бит → индекс</span>
+          <span style={{ fontFamily: theme.mono, fontSize: 20, color: theme.accent2, ...mono }}>50 бит → ранг нулей</span>
+        </div>
+        {done ? <PulseRing x={ribbonX + lead * bitW * 0.5 + 6} y={hashY + 102} triggerFrame={impactLocal} tone="accent" size={220} /> : null}
+        <div
+          style={{
+            position: "absolute",
+            left: cx,
+            top: 1140,
+            transform: "translateX(-50%)",
+            padding: "14px 28px",
+            borderRadius: 999,
+            background: done ? `${theme.success}18` : `${theme.panel}DD`,
+            border: `2px solid ${done ? theme.success : theme.panelBorder}`,
+            color: done ? theme.success : theme.subtext,
+            fontFamily: theme.font,
+            fontWeight: 800,
+            fontSize: 30,
+            opacity: enter,
+            boxShadow: done ? `0 0 40px ${theme.success}33` : "none",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {done ? "~ 2^хвост — оценка кардинальности" : "чем длиннее хвост → тем больше разных видел"}
+        </div>
+      </>
+    );
+  }
+  if (phase === "registers") {
+    const gridW = 520;
+    const cols = 64;
+    const rows = 256; // 64*256=16384 but too many divs heavy — render 64*32=2048 thumbnail + label
+    // For literal count we show 16384 tiny dots as 128×128 grid (16k) but use lightweight technique:
+    const displayCols = 128;
+    const displayRows = 128;
+    const cell = 3.2;
+    const gap = 0.8;
+    const totalW = displayCols * (cell + gap);
+    const totalH = displayRows * (cell + gap);
+    const gridX = cx - totalW / 2;
+    const gridY = 520;
+    const streamP = smooth(clamp01(local / Math.max(impactLocal, 1)));
+    const hit = Math.floor(random("hllhit") * 16384);
+    const hitCol = hit % displayCols;
+    const hitRow = Math.floor(hit / displayCols);
+    const badgeP = done ? spring({ frame: local - impactLocal, fps, config: { damping: 11, mass: 0.7 } }) : 0;
+    return (
+      <>
+        <div style={{ position: "absolute", left: cx, top: 300, transform: "translateX(-50%)", ...mono, fontSize: 26, color: theme.subtext, opacity: enter }}>
+          16384 РЕГИСТРОВ × 6 БИТ = 12 КБ
+        </div>
+        <div
+          style={{
+            position: "absolute",
+            left: cx,
+            top: 370,
+            transform: "translateX(-50%)",
+            background: `${theme.accent}14`,
+            border: `2px solid ${theme.accent}66`,
+            borderRadius: 999,
+            padding: "10px 22px",
+            fontFamily: theme.mono,
+            fontSize: 24,
+            color: theme.accent,
+            opacity: enter,
+          }}
+        >
+          16384 × 6 бит = 12288 байт
+        </div>
+        <div
+          style={{
+            position: "absolute",
+            left: gridX,
+            top: gridY,
+            width: totalW,
+            height: totalH,
+            background: "#0D1420",
+            border: `2px solid ${theme.panelBorder}`,
+            borderRadius: 16,
+            overflow: "hidden",
+            padding: 6,
+            opacity: enter,
+            transform: `translateY(${(1 - enter) * 40}px)`,
+          }}
+        >
+          <div style={{ display: "flex", flexWrap: "wrap", gap, width: totalW - 12, height: totalH - 12 }}>
+            {Array.from({ length: displayCols * displayRows }).map((_, i) => {
+              const v = Math.floor(random(`reg${i}`) * 6);
+              const isHit = i === hitRow * displayCols + hitCol;
+              const col = isHit ? theme.success : v > 3 ? theme.accent : v > 1 ? theme.accent2 : theme.panelBorder;
+              const bg = isHit ? theme.success : v > 3 ? `${theme.accent}CC` : v > 1 ? `${theme.accent2}99` : "#1B2434";
+              return <div key={i} style={{ width: cell, height: cell, borderRadius: 1, background: bg, opacity: isHit ? 1 : 0.9, boxShadow: isHit ? `0 0 10px ${theme.success}` : "none" }} />;
+            })}
+          </div>
+        </div>
+        {/* influx arrow */}
+        <div
+          style={{
+            position: "absolute",
+            left: cx,
+            top: gridY - 58,
+            transform: "translateX(-50%)",
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+            opacity: enter * streamP,
+          }}
+        >
+          <span style={{ fontFamily: theme.mono, fontSize: 22, color: theme.subtext }}>поток хэшей</span>
+          <span style={{ width: 90, height: 4, background: theme.accent, borderRadius: 999 }} />
+          <span style={{ color: theme.accent, fontSize: 22 }}>›</span>
+          <span style={{ fontFamily: theme.mono, fontSize: 22, color: theme.accent }}>14 бит → регистр</span>
+        </div>
+        {done ? <PulseRing x={gridX + hitCol * (cell + gap) + cell * 0.5 + 6} y={gridY + hitRow * (cell + gap) + cell * 0.5 + 6} triggerFrame={impactLocal} tone="success" size={120} /> : null}
+        <div
+          style={{
+            position: "absolute",
+            left: cx,
+            top: gridY + totalH + 34,
+            transform: `translateX(-50%) scale(${badgeP || 0.8})`,
+            opacity: done ? badgeP : 0.6,
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+            padding: "14px 26px",
+            borderRadius: 999,
+            background: done ? `${theme.success}18` : theme.panel,
+            border: `2px solid ${done ? theme.success : theme.panelBorder}`,
+            color: done ? theme.success : theme.subtext,
+            fontFamily: theme.font,
+            fontWeight: 700,
+            fontSize: 27,
+            whiteSpace: "nowrap",
+          }}
+        >
+          <IconGlyph name="database" size={28} color={done ? theme.success : theme.subtext} strokeWidth={1.8} />
+          {done ? `регистр #${hit} → максимум хвостов = ${highlight}` : "в каждом — максимум нулей"}
+        </div>
+        <div style={{ position: "absolute", left: cx, top: gridY + totalH + 110, transform: "translateX(-50%)", fontFamily: theme.mono, fontSize: 20, color: theme.subtext, opacity: enter }}>
+          6 бит хватает до 50 нулей (log₂ log₂ 2⁶⁴)
+        </div>
+      </>
+    );
+  }
+  if (phase === "harmonic") {
+    const regs = [2, 5, 1, 6, 3, 2, 4, 3];
+    const regP = (i: number) => smooth(clamp01((local - 4 - i * 3) / 12));
+    const avgP = smooth(clamp01((local - 30) / 20));
+    const errP = smooth(clamp01((local - impactLocal) / 18));
+    const ceilP = done ? spring({ frame: local - impactLocal, fps, config: { damping: 11, mass: 0.7 } }) : 0;
+    return (
+      <>
+        <div style={{ position: "absolute", left: cx, top: 300, transform: "translateX(-50%)", ...mono, fontSize: 26, color: theme.subtext, opacity: enter }}>
+          ГАРМОНИЧЕСКОЕ СРЕДНЕЕ
+        </div>
+        <div style={{ position: "absolute", left: 90, right: 90, top: 380, display: "flex", justifyContent: "center", gap: 10, opacity: enter }}>
+          {regs.map((v, i) => (
+            <div
+              key={i}
+              style={{
+                width: 118,
+                height: 110,
+                borderRadius: 18,
+                background: theme.panel,
+                border: `3px solid ${theme.accent}77`,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 4,
+                transform: `translateY(${(1 - regP(i)) * 30}px) scale(${0.6 + 0.4 * regP(i)})`,
+                opacity: regP(i),
+              }}
+            >
+              <div style={{ fontFamily: theme.font, fontWeight: 800, fontSize: 40, color: theme.text }}>{v}</div>
+              <div style={{ fontFamily: theme.mono, fontSize: 16, color: theme.accent }}>рег {i}</div>
+            </div>
+          ))}
+        </div>
+        <div
+          style={{
+            position: "absolute",
+            left: W / 2,
+            top: 560,
+            width: 4,
+            height: 110,
+            background: theme.accent,
+            opacity: avgP * enter,
+            transform: "translateX(-50%)",
+          }}
+        />
+        <div
+          style={{
+            position: "absolute",
+            left: cx,
+            top: 690,
+            transform: `translateX(-50%) scale(${0.8 + 0.2 * avgP})`,
+            opacity: avgP * enter,
+            background: theme.panel,
+            border: `3px solid ${theme.warning}88`,
+            borderRadius: 24,
+            padding: "20px 36px",
+            textAlign: "center",
+            boxShadow: `0 0 40px ${theme.warning}22`,
+          }}
+        >
+          <div style={{ fontFamily: theme.mono, fontWeight: 800, fontSize: 30, color: theme.warning }}>
+            1 / среднее( 2<span style={{ fontSize: 22 }}>-регистр</span> )
+          </div>
+          <div style={{ fontFamily: theme.font, fontSize: 26, color: theme.subtext, marginTop: 6 }}>гармоническое → гасит выбросы</div>
+        </div>
+        <div
+          style={{
+            position: "absolute",
+            left: 90,
+            right: 90,
+            top: 910,
+            display: "flex",
+            justifyContent: "space-between",
+            opacity: errP,
+            transform: `translateY(${(1 - errP) * 20}px)`,
+          }}
+        >
+          <div style={{ background: `${theme.success}14`, border: `2px solid ${theme.success}66`, borderRadius: 20, padding: "16px 22px", flex: 1, marginRight: 14, textAlign: "center" }}>
+            <div style={{ fontFamily: theme.mono, fontSize: 30, color: theme.success, fontWeight: 800 }}>ошибка = 1.04 / √m</div>
+            <div style={{ fontFamily: theme.mono, fontSize: 24, color: theme.text, marginTop: 6 }}>m=16384 → <span style={{ color: theme.success, fontWeight: 800 }}>0.81%</span></div>
+          </div>
+          <div style={{ background: `${theme.accent2}14`, border: `2px solid ${theme.accent2}66`, borderRadius: 20, padding: "16px 22px", flex: 1, textAlign: "center" }}>
+            <div style={{ fontFamily: theme.mono, fontSize: 30, color: theme.accent2, fontWeight: 800 }}>потолок 2⁶⁴</div>
+            <div style={{ fontFamily: theme.mono, fontSize: 20, color: theme.subtext, marginTop: 6 }}>18 446 744×10¹⁵ разных</div>
+          </div>
+        </div>
+        {done ? <PulseRing x={cx} y={1030} triggerFrame={impactLocal} tone="success" size={420} /> : null}
+        <div
+          style={{
+            position: "absolute",
+            left: cx,
+            top: 1170,
+            transform: `translateX(-50%) scale(${ceilP || 0.85})`,
+            opacity: done ? ceilP : 0.5,
+            padding: "14px 28px",
+            borderRadius: 999,
+            background: done ? `${theme.success}1A` : theme.panel,
+            border: `2px solid ${done ? theme.success : theme.panelBorder}`,
+            color: done ? theme.success : theme.subtext,
+            fontFamily: theme.font,
+            fontWeight: 800,
+            fontSize: 30,
+            whiteSpace: "nowrap",
+          }}
+        >
+          {done ? "16384 регистра → <1% как точный счётчик" : "чем больше регистров — тем точнее"}
+        </div>
+      </>
+    );
+  }
+  // phase === "scale"
+  const mergeP = smooth(clamp01((local - 8) / 18));
+  const donePop = done ? spring({ frame: local - impactLocal, fps, config: { damping: 11, mass: 0.7 } }) : 0;
+  const box = (x: number, label: string, highlightTone: string, opacityVal: number) => (
+    <div
+      style={{
+        position: "absolute",
+        left: x - 185,
+        top: 630,
+        width: 370,
+        height: 360,
+        borderRadius: 28,
+        background: theme.panel,
+        border: `3px solid ${highlightTone}`,
+        boxShadow: `0 0 50px ${highlightTone}22`,
+        opacity: opacityVal,
+        transform: `translateY(${(1 - opacityVal) * 40}px)`,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 10,
+      }}
+    >
+      <div style={{ width: 150, height: 110, borderRadius: 14, background: "#0D1420", border: `2px solid ${highlightTone}66`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <span style={{ fontFamily: theme.mono, fontWeight: 800, fontSize: 44, color: highlightTone }}>12 КБ</span>
+      </div>
+      <div style={{ fontFamily: theme.mono, fontSize: 24, color: highlightTone, fontWeight: 800 }}>{label}</div>
+      <div style={{ fontFamily: theme.font, fontSize: 24, color: theme.subtext }}>12288 байт</div>
+    </div>
+  );
+  return (
+    <>
+      <div style={{ position: "absolute", left: cx, top: 300, transform: "translateX(-50%)", ...mono, fontSize: 26, color: theme.subtext, opacity: enter }}>
+        ПАМЯТЬ ФИКСИРОВАНА
+      </div>
+      <div
+        style={{
+          position: "absolute",
+          left: cx,
+          top: 380,
+          transform: "translateX(-50%)",
+          display: "flex",
+          alignItems: "center",
+          gap: 18,
+          background: `${theme.success}12`,
+          border: `2px solid ${theme.success}55`,
+          borderRadius: 999,
+          padding: "12px 26px",
+          opacity: enter,
+        }}
+      >
+        <IconGlyph name="hard-drive" size={32} color={theme.success} strokeWidth={1.8} />
+        <span style={{ fontFamily: theme.mono, fontWeight: 800, fontSize: 28, color: theme.success }}>12 КБ vs миллиарды ID</span>
+      </div>
+      {box(295, "HLL 1", theme.accent, enter)}
+      {box(785, "HLL 2", theme.accent2, enter)}
+      <div
+        style={{
+          position: "absolute",
+          left: cx - 90,
+          top: 810,
+          width: 180,
+          height: 4,
+          background: theme.warning,
+          opacity: mergeP * enter,
+          borderRadius: 999,
+        }}
+      />
+      <div
+        style={{
+          position: "absolute",
+          left: cx,
+          top: 860,
+          transform: `translate(-50%, ${(1 - mergeP) * 20}px) scale(${mergeP})`,
+          opacity: mergeP,
+          background: theme.panel,
+          border: `2px solid ${theme.warning}99`,
+          borderRadius: 999,
+          padding: "10px 22px",
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+          whiteSpace: "nowrap",
+        }}
+      >
+        <span style={{ fontFamily: theme.mono, fontWeight: 800, fontSize: 24, color: theme.warning }}>PFMERGE →</span>
+        <span style={{ fontFamily: theme.font, fontSize: 24, color: theme.text }}>один HLL 12 КБ</span>
+      </div>
+      <div
+        style={{
+          position: "absolute",
+          left: cx,
+          top: 1060,
+          transform: "translateX(-50%)",
+          display: "flex",
+          alignItems: "center",
+          gap: 40,
+          opacity: enter,
+        }}
+      >
+        <div style={{ textAlign: "center" }}>
+          <div style={{ fontFamily: theme.mono, fontWeight: 800, fontSize: 46, color: theme.text }}>~0.81%</div>
+          <div style={{ fontFamily: theme.font, fontSize: 24, color: theme.subtext, marginTop: 4 }}>ошибка</div>
+        </div>
+        <div style={{ width: 2, height: 70, background: theme.panelBorder }} />
+        <div style={{ textAlign: "center" }}>
+          <div style={{ fontFamily: theme.mono, fontWeight: 800, fontSize: 46, color: theme.text }}>2⁶⁴</div>
+          <div style={{ fontFamily: theme.font, fontSize: 24, color: theme.subtext, marginTop: 4 }}>потолок разных</div>
+        </div>
+      </div>
+      {done ? <PulseRing x={cx} y={970} triggerFrame={impactLocal} tone="warning" size={360} /> : null}
+      <div
+        style={{
+          position: "absolute",
+          left: cx,
+          top: 1210,
+          transform: `translateX(-50%) scale(${donePop || 0.9})`,
+          opacity: done ? donePop : 0.5,
+          padding: "14px 28px",
+          borderRadius: 999,
+          background: done ? `${theme.warning}16` : theme.panel,
+          border: `2px solid ${done ? theme.warning : theme.panelBorder}`,
+          color: done ? theme.warning : theme.subtext,
+          fontFamily: theme.font,
+          fontWeight: 800,
+          fontSize: 28,
+          whiteSpace: "nowrap",
+        }}
+      >
+        фикс 12 КБ — платишь местом, экономишь подсчётом
+      </div>
+    </>
+  );
+};
+
 /* ──────────────────────────── сцена-сториборд ──────────────────────────── */
 
 /** Каждая фраза диктора — свой бит с движением камеры между битами. */
@@ -3015,6 +3570,7 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     "proof-sequence": { scale: 0.92, y: -20 },
     "fft-wave": { scale: 0.94, y: -30 },
     "qr-repair": { scale: 0.9, y: -30 },
+    "hll-estimate": { scale: 0.92, y: -20 },
   };
   const cur = cams[slot.beat.visual] ?? { scale: 1, y: 0 };
   const prev = idx > 0 ? cams[slots[idx - 1].beat.visual] ?? cur : cur;
@@ -3169,6 +3725,16 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             damaged={slot.beat.params?.damaged as number | undefined}
             label={slot.beat.params?.label as string | undefined}
             weather={slot.beat.params?.weather as boolean | undefined}
+          />
+        );
+      case "hll-estimate":
+        return (
+          <HllEstimate
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as "hash" | "registers" | "harmonic" | "scale" | undefined) ?? "hash"}
+            highlight={slot.beat.params?.highlight as number | undefined}
           />
         );
       default:
