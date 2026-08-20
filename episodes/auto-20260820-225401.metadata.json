@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "slug": "auto-20260820-225401",
+  "targets": {
+    "youtube": {
+      "title": "Как HyperLogLog считает миллиарды за 12 КБ",
+      "description": "Как HyperLogLog оценивает число уникальных объектов: хэш, ведущие нули, регистры и ошибка около 0,81%.",
+      "tags": ["HyperLogLog", "Redis", "алгоритмы", "информатика", "shortvideo"],
+      "category_id": "28",
+      "privacy_status": "public",
+      "made_for_kids": false,
+      "contains_synthetic_media": true,
+      "notify_subscribers": false
+    },
+    "instagram": {
+      "caption": "Как HyperLogLog считает миллиарды уникальных объектов в 12 КБ. #информатика #алгоритмы #shortvideo",
+      "share_to_feed": true
+    }
+  }
+}
