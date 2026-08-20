@@ -50,6 +50,7 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
     if (beat.visual === "proof-sequence") impact = start + Math.round(dur * 0.92);
     if (beat.visual === "fft-wave")
       impact = start + Math.round(dur * (beat.params?.phase === "square" ? 0.85 : 0.5));
+    if (beat.visual === "qr-repair") impact = start + Math.round(dur * 0.6);
     return { beat, start, end, impact };
   });
 };
@@ -82,6 +83,11 @@ export const storySfx = (
     if (s.beat.visual === "proof-sequence") events.push({ frame: s.impact, sound: "ding" });
     if (s.beat.visual === "fft-wave")
       events.push({ frame: s.impact, sound: s.beat.params?.phase === "fft" ? "whoosh" : "pop" });
+    if (s.beat.visual === "qr-repair") {
+      const ph = s.beat.params?.phase;
+      const sound = ph === "restore" ? "ding" : ph === "encode" ? "click" : "pop";
+      events.push({ frame: s.impact, sound });
+    }
   }
   return events;
 };
@@ -2535,6 +2541,445 @@ const FftWave: React.FC<{
   );
 };
 
+/** QR-матрица: damage — модули стираются с угла (поцарапанный/оторванный угол),
+ *  restore — стёртые клетки возвращаются по уцелевшим, в конце — бейдж «КОД ЧИТАЕТСЯ»,
+ *  encode — данные режутся на 8-битные кодовые слова и добавляются контрольные,
+ *  levels — четыре уровня защиты растут вместе с размером квадрата. */
+const QrRepair: React.FC<{
+  local: number;
+  fps: number;
+  impactLocal: number;
+  phase?: "damage" | "restore" | "encode" | "levels";
+  damaged?: number;
+  label?: string;
+  weather?: boolean;
+}> = ({ local, fps, impactLocal, phase = "damage", damaged = 0.33, label, weather = false }) => {
+  const enter = spring({ frame: local, fps, config: { damping: 15, mass: 0.8 } });
+  const done = local >= impactLocal;
+  const cx = W / 2;
+
+  const qrDark = "#1A2130";
+  const qrCard = "#F7F9FE";
+
+  const mono: React.CSSProperties = { fontFamily: theme.mono, fontWeight: 800, letterSpacing: 2 };
+
+  // детерминированные модули данных вне зон finder-паттернов
+  const isFinderZone = (S: number, r: number, c: number) =>
+    (r < 7 && c < 7) || (r < 7 && c >= S - 7) || (r >= S - 7 && c < 7);
+  const isDark = (S: number, r: number, c: number) =>
+    !isFinderZone(S, r, c) && random(`qrc-${S}-${r}-${c}`) > 0.45;
+
+  // «оторванный угол»: треугольный срез от правого нижнего угла матрицы
+  const cornerCut = (S: number, frac: number): number => {
+    let k = 0;
+    const want = S * S * Math.min(1, Math.max(0, frac));
+    while ((k * (k + 1)) / 2 < want && k < 2 * S) k++;
+    return k;
+  };
+  const isCut = (S: number, r: number, c: number, k: number) => (S - 1 - r) + (S - 1 - c) < k;
+
+  const finder = (x: number, y: number, m: number) => (
+    <div
+      style={{
+        position: "absolute",
+        left: x,
+        top: y,
+        width: 7 * m,
+        height: 7 * m,
+        background: qrDark,
+        borderRadius: 3 * m,
+      }}
+    >
+      <div style={{ position: "absolute", left: m, top: m, width: 5 * m, height: 5 * m, background: qrCard }} />
+      <div style={{ position: "absolute", left: 2 * m, top: 2 * m, width: 3 * m, height: 3 * m, background: qrDark, borderRadius: m }} />
+    </div>
+  );
+
+  // белая карточка с матрицей модулей; eraseK — радиус стёртой зоны (0 = целая)
+  const matrix = (S: number, m: number, centerX: number, centerY: number, eraseK: number) => {
+    const q = m; // тихая зона
+    const card = S * m + 2 * q;
+    return (
+      <div
+        style={{
+          position: "absolute",
+          left: centerX - card / 2,
+          top: centerY - card / 2,
+          width: card,
+          height: card,
+          padding: q,
+          boxSizing: "border-box",
+          background: qrCard,
+          borderRadius: 26,
+          boxShadow: "0 30px 90px rgba(0,0,0,0.55)",
+          opacity: enter,
+        }}
+      >
+        <div style={{ position: "relative", width: S * m, height: S * m }}>
+          {finder(0, 0, m)}
+          {finder((S - 7) * m, 0, m)}
+          {finder(0, (S - 7) * m, m)}
+          {Array.from({ length: S }).flatMap((_, r) =>
+            Array.from({ length: S }).map((_, c) => {
+              const erased = isCut(S, r, c, eraseK);
+              return (
+                <div key={`${r}-${c}`} style={{ position: "absolute", left: c * m, top: r * m, width: m, height: m }}>
+                  {erased ? (
+                    <div
+                      style={{
+                        position: "absolute",
+                        inset: Math.max(1.5, m * 0.12),
+                        border: `1.5px dashed ${theme.danger}`,
+                        borderRadius: Math.max(2, m * 0.16),
+                        background: `${theme.danger}14`,
+                      }}
+                    />
+                  ) : isDark(S, r, c) ? (
+                    <div
+                      style={{
+                        position: "absolute",
+                        inset: Math.max(1, m * 0.14),
+                        background: qrDark,
+                        borderRadius: Math.max(2, m * 0.2),
+                      }}
+                    />
+                  ) : null}
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  // капли дождя и блик внешнего света — поверх матрицы
+  const weatherOverlay = () =>
+    weather ? (
+      <>
+        {Array.from({ length: 9 }).map((_, i) => {
+          const x = cx - 330 + random(`rainx${i}`) * 560;
+          const y = 380 + ((local * (14 + random(`raink${i}`) * 10) + random(`rainy${i}`) * 860) % 860);
+          return (
+            <div
+              key={i}
+              style={{
+                position: "absolute",
+                left: x,
+                top: y,
+                width: 2,
+                height: 34,
+                borderRadius: 2,
+                background: "linear-gradient(180deg, transparent, rgba(103,232,249,0.85))",
+                transform: "rotate(12deg)",
+              }}
+            />
+          );
+        })}
+        <div
+          style={{
+            position: "absolute",
+            left: cx - 370,
+            top: 400,
+            width: 740,
+            height: 320,
+            borderRadius: "50%",
+            transform: "rotate(-14deg)",
+            background: "linear-gradient(105deg, transparent, rgba(255,255,255,0.25), transparent)",
+            opacity: 0.45 + 0.2 * Math.sin(local / 14),
+          }}
+        />
+      </>
+    ) : null;
+
+  if (phase === "damage" || phase === "restore") {
+    const S = 21;
+    const m = 26;
+    const centerX = cx;
+    const centerY = 620;
+    const kFull = cornerCut(S, damaged);
+    const prog =
+      phase === "damage"
+        ? smooth(clamp01((local - 8) / Math.max(impactLocal - 8, 1)))
+        : smooth(clamp01((local - 4) / Math.max(impactLocal - 4, 1)));
+    const eraseK = phase === "damage" ? Math.round(kFull * Math.min(1, prog)) : Math.round(kFull * (1 - prog));
+    const scratchFade = phase === "damage" && done ? Math.exp(-(local - impactLocal) * 0.16) : 0;
+    const badgePop =
+      phase === "restore" && done ? spring({ frame: local - impactLocal, fps, config: { damping: 11, mass: 0.7 } }) : 0;
+    const caption = label ?? (phase === "restore" ? "ВОССТАНОВЛЕНО ПО УЦЕЛЕВШИМ" : "СТЁРТО");
+
+    return (
+    <>
+      {matrix(S, m, centerX, centerY, eraseK)}
+      {scratchFade > 0.01 ? (
+        <div
+          style={{
+            position: "absolute",
+            left: centerX - 190,
+            top: centerY + 40,
+            width: 420,
+            height: 8,
+            borderRadius: 999,
+            background: `linear-gradient(90deg, transparent, ${theme.danger}, transparent)`,
+            boxShadow: `0 0 28px ${theme.danger}AA`,
+            transform: `rotate(-26deg)`,
+            opacity: scratchFade,
+          }}
+        />
+      ) : null}
+      {phase === "damage" && done ? <PulseRing x={centerX} y={centerY} triggerFrame={impactLocal} tone="danger" size={620} /> : null}
+      {phase === "restore" && done ? <PulseRing x={centerX} y={centerY} triggerFrame={impactLocal} tone="success" size={620} /> : null}
+      {weatherOverlay()}
+      <div
+        style={{
+          position: "absolute",
+          left: centerX,
+          top: centerY + (S * m) / 2 + m + 84,
+          transform: "translateX(-50%)",
+          ...mono,
+          fontSize: 25,
+          color: phase === "damage" ? theme.danger : theme.subtext,
+          opacity: enter,
+        }}
+      >
+        {caption}
+      </div>
+      {phase === "restore" && done ? (
+        <div
+          style={{
+            position: "absolute",
+            left: centerX,
+            top: centerY + (S * m) / 2 + m + 150,
+            transform: `translateX(-50%) scale(${badgePop})`,
+            display: "flex",
+            alignItems: "center",
+            gap: 14,
+            padding: "16px 32px",
+            borderRadius: 999,
+            background: `${theme.success}18`,
+            border: `2px solid ${theme.success}`,
+            color: theme.success,
+            fontFamily: theme.font,
+            fontWeight: 800,
+            fontSize: 32,
+            whiteSpace: "nowrap",
+            boxShadow: `0 0 50px ${theme.success}33`,
+            opacity: badgePop,
+          }}
+        >
+          <IconGlyph name="check-check" size={34} color={theme.success} strokeWidth={2.2} />
+          КОД ЧИТАЕТСЯ
+        </div>
+      ) : null}
+      {phase === "damage" && done ? (
+        <div
+          style={{
+            position: "absolute",
+            left: centerX,
+            top: centerY + (S * m) / 2 + m + 150,
+            transform: "translateX(-50%)",
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+            padding: "14px 30px",
+            borderRadius: 999,
+            background: `${theme.danger}14`,
+            border: `2px solid ${theme.danger}88`,
+            color: theme.danger,
+            fontFamily: theme.font,
+            fontWeight: 800,
+            fontSize: 28,
+            whiteSpace: "nowrap",
+            opacity: enter,
+          }}
+        >
+          <IconGlyph name="eraser" size={30} color={theme.danger} strokeWidth={2} />
+          НЕ ПРОЧИТАТЬ
+        </div>
+      ) : null}
+    </>
+    );
+  }
+
+  if (phase === "encode") {
+    const S = 15;
+    const m = 18;
+    const centerY = 640;
+    const byte = (tone: string, lab: string, isCtrl: boolean, opacity: number) => (
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 16,
+          padding: "12px 18px",
+          borderRadius: 20,
+          background: theme.panel,
+          border: `2px solid ${tone}88`,
+          boxShadow: `0 0 30px ${tone}1F`,
+          opacity,
+        }}
+      >
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 20px)", gridTemplateRows: "repeat(2, 20px)", gap: 4 }}>
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div
+              key={i}
+              style={{
+                width: 20,
+                height: 20,
+                borderRadius: 4,
+                background: (i * 7 + (isCtrl ? 3 : 1)) % 5 === 0 ? qrCard : qrDark,
+                border: `1px solid ${qrDark}44`,
+              }}
+            />
+          ))}
+        </div>
+        {isCtrl ? <IconGlyph name="shield-plus" size={24} color={tone} strokeWidth={2} /> : null}
+        <div style={{ fontFamily: theme.mono, fontSize: 22, letterSpacing: 1, color: tone, whiteSpace: "nowrap" }}>{lab}</div>
+      </div>
+    );
+    const dataP = (i: number) => smooth(clamp01((local - 6 - i * 8) / 14));
+    const ctrlP = done ? spring({ frame: local - impactLocal, fps, config: { damping: 12, mass: 0.7 } }) : 0;
+    const arrowP = smooth(clamp01((local - 12) / 12));
+    return (
+      <>
+        <div
+          style={{
+            position: "absolute",
+            left: cx,
+            top: 300,
+            transform: "translateX(-50%)",
+            ...mono,
+            fontSize: 25,
+            color: theme.subtext,
+            opacity: enter,
+          }}
+        >
+          ДАННЫЕ → КОДОВЫЕ СЛОВА · 8 БИТ
+        </div>
+        {matrix(S, m, cx - 240, centerY, 0)}
+        <div
+          style={{
+            position: "absolute",
+            left: cx - 40,
+            top: centerY - 14,
+            width: 90,
+            height: 6,
+            borderRadius: 999,
+            background: `linear-gradient(90deg, ${theme.accent}00, ${theme.accent})`,
+            opacity: arrowP * enter,
+          }}
+        />
+        <div style={{ position: "absolute", left: cx + 66, top: 430, display: "flex", flexDirection: "column", gap: 18, opacity: enter }}>
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div
+              key={`d${i}`}
+              style={{
+                transform: `translateY(${(1 - dataP(i)) * 26}px) scale(${0.6 + 0.4 * dataP(i)})`,
+                opacity: dataP(i),
+              }}
+            >
+              {byte(theme.accent, `слово ${i + 1}`, false, 1)}
+            </div>
+          ))}
+          {Array.from({ length: 2 }).map((_, i) => (
+            <div key={`c${i}`} style={{ transform: `translateY(${(1 - ctrlP) * 26}px) scale(${0.6 + 0.4 * ctrlP})`, opacity: ctrlP }}>
+              {byte(theme.accent2, `контроль ${i + 1}`, true, ctrlP)}
+            </div>
+          ))}
+        </div>
+        {done ? <PulseRing x={cx + 66 + 96} y={640} triggerFrame={impactLocal} tone="accent2" size={330} /> : null}
+        <div
+          style={{
+            position: "absolute",
+            left: cx,
+            top: 1030,
+            transform: "translateX(-50%)",
+            ...mono,
+            fontSize: 24,
+            color: theme.accent2,
+            opacity: ctrlP,
+          }}
+        >
+          ПЛЮС КОНТРОЛЬ — ВОССТАНОВЯТ СТЁРТОЕ
+        </div>
+      </>
+    );
+  }
+
+  // phase === "levels" — четыре уровня защиты, квадрат растёт вместе с уровнем
+  const spec = [
+    { S: 9, m: 16, L: "L", p: "7%" },
+    { S: 11, m: 17, L: "M", p: "15%" },
+    { S: 13, m: 18, L: "Q", p: "25%" },
+    { S: 15, m: 20, L: "H", p: "30%" },
+  ];
+  const cols = [200, 880];
+  const rows = [530, 900];
+  const poss = [
+    { x: cols[0], y: rows[0] },
+    { x: cols[1], y: rows[0] },
+    { x: cols[0], y: rows[1] },
+    { x: cols[1], y: rows[1] },
+  ];
+  const levelP = (i: number) => smooth(clamp01((local - 4 - i * 5) / 14));
+  return (
+    <>
+      <div
+        style={{
+          position: "absolute",
+          left: cx,
+          top: 300,
+          transform: "translateX(-50%)",
+          ...mono,
+          fontSize: 25,
+          color: theme.subtext,
+          opacity: enter,
+        }}
+      >
+        ЧЕТЫРЕ УРОВНЯ ЗАЩИТЫ
+      </div>
+      {spec.map((s, i) => {
+        const pos = poss[i];
+        const pp = levelP(i);
+        return (
+          <div key={i} style={{ position: "absolute", inset: 0, opacity: pp * enter }}>
+            {matrix(s.S, s.m, pos.x, pos.y, 0)}
+            <div
+              style={{
+                position: "absolute",
+                left: pos.x,
+                top: pos.y + (s.S * s.m) / 2 + s.m + 18,
+                transform: "translateX(-50%)",
+                display: "flex",
+                alignItems: "center",
+                gap: 12,
+              }}
+            >
+              <span style={{ fontFamily: theme.font, fontWeight: 800, fontSize: 42, color: theme.accent }}>{s.L}</span>
+              <span style={{ fontFamily: theme.mono, fontSize: 26, color: theme.subtext }}>{s.p}</span>
+            </div>
+            {i === 3 && done ? <PulseRing x={pos.x} y={pos.y} triggerFrame={impactLocal} tone="accent" size={420} /> : null}
+          </div>
+        );
+      })}
+      <div
+        style={{
+          position: "absolute",
+          left: cx,
+          top: 1330,
+          transform: "translateX(-50%)",
+          ...mono,
+          fontSize: 24,
+          color: theme.subtext,
+          opacity: enter,
+        }}
+      >
+        {label ?? "БОЛЬШЕ ЗАЩИТЫ — КРУПНЕЕ КВАДРАТ"}
+      </div>
+    </>
+  );
+};
+
 /* ──────────────────────────── сцена-сториборд ──────────────────────────── */
 
 /** Каждая фраза диктора — свой бит с движением камеры между битами. */
@@ -2569,6 +3014,7 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     "paradox-box": { scale: 0.9, y: -30 },
     "proof-sequence": { scale: 0.92, y: -20 },
     "fft-wave": { scale: 0.94, y: -30 },
+    "qr-repair": { scale: 0.9, y: -30 },
   };
   const cur = cams[slot.beat.visual] ?? { scale: 1, y: 0 };
   const prev = idx > 0 ? cams[slots[idx - 1].beat.visual] ?? cur : cur;
@@ -2711,6 +3157,18 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             fps={fps}
             impactLocal={impactLocal}
             phase={(slot.beat.params?.phase as "square" | "fft" | undefined) ?? "square"}
+          />
+        );
+      case "qr-repair":
+        return (
+          <QrRepair
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as "damage" | "restore" | "encode" | "levels" | undefined) ?? "damage"}
+            damaged={slot.beat.params?.damaged as number | undefined}
+            label={slot.beat.params?.label as string | undefined}
+            weather={slot.beat.params?.weather as boolean | undefined}
           />
         );
       default:

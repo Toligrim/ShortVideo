@@ -83,7 +83,8 @@ export interface StoryBeat {
     | "verdict-scan"
     | "paradox-box"
     | "proof-sequence"
-    | "fft-wave";
+    | "fft-wave"
+    | "qr-repair";
   onWord?: string; // бит начинается на этом слове реплики
   params?: Record<string, unknown>;
 }
