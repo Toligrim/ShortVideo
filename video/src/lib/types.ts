@@ -81,7 +81,9 @@ export interface StoryBeat {
     | "medal-mint"
     | "ancient-code"
     | "verdict-scan"
-    | "paradox-box";
+    | "paradox-box"
+    | "proof-sequence"
+    | "fft-wave";
   onWord?: string; // бит начинается на этом слове реплики
   params?: Record<string, unknown>;
 }

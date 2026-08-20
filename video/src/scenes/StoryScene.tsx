@@ -47,6 +47,9 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
     if (beat.visual === "ancient-code") impact = start + Math.round(dur * 0.6);
     if (beat.visual === "verdict-scan") impact = start + Math.round(dur * 0.62);
     if (beat.visual === "paradox-box") impact = start + Math.round(dur * 0.55);
+    if (beat.visual === "proof-sequence") impact = start + Math.round(dur * 0.92);
+    if (beat.visual === "fft-wave")
+      impact = start + Math.round(dur * (beat.params?.phase === "square" ? 0.85 : 0.5));
     return { beat, start, end, impact };
   });
 };
@@ -76,6 +79,9 @@ export const storySfx = (
     if (s.beat.visual === "ancient-code") events.push({ frame: s.impact, sound: "pop" });
     if (s.beat.visual === "verdict-scan") events.push({ frame: s.impact, sound: "click" });
     if (s.beat.visual === "paradox-box") events.push({ frame: s.impact, sound: "slam" });
+    if (s.beat.visual === "proof-sequence") events.push({ frame: s.impact, sound: "ding" });
+    if (s.beat.visual === "fft-wave")
+      events.push({ frame: s.impact, sound: s.beat.params?.phase === "fft" ? "whoosh" : "pop" });
   }
   return events;
 };
@@ -1964,6 +1970,571 @@ const ParadoxBox: React.FC<{
   );
 };
 
+/** Итерации Люка—Лемера: run — конвейер значений от старта до нуля; steps — формула со стрелкой на нуль последнего шага. */
+const ProofSequence: React.FC<{
+  local: number;
+  fps: number;
+  impactLocal: number;
+  mode?: "run" | "steps";
+  start?: number;
+  steps?: string;
+}> = ({ local, fps, impactLocal, mode = "run", start = 4, steps = "136 000 000" }) => {
+  const enter = spring({ frame: local, fps, config: { damping: 15, mass: 0.8 } });
+  const done = local >= impactLocal;
+  const cx = W / 2;
+  const target = Number((steps || "").replace(/\D/g, "")) || 136000000;
+  const fmt = (n: number) => n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+
+  const labelStyle: React.CSSProperties = {
+    fontFamily: theme.mono,
+    fontWeight: 700,
+    letterSpacing: 3,
+  };
+
+  if (mode === "run") {
+    const crateW = 146;
+    const gap = 20;
+    const total = 6 * crateW + 5 * gap;
+    const x0 = cx - total / 2;
+    const rowY = 660;
+    const crates = [
+      { v: String(start), label: "S0", tone: theme.accent },
+      { v: "14", label: "S1", tone: theme.accent },
+      { v: "194", label: "S2", tone: theme.accent2 },
+      { v: "37634", label: "S3", tone: theme.accent2 },
+      { v: "…", label: "шаги", tone: theme.subtext },
+      { v: done ? "0" : "?", label: "последний", tone: theme.success },
+    ];
+    const crateP = (i: number) => smooth(clamp01((local - 4 - i * 7) / 16));
+    const counterP = smooth(clamp01(local / Math.max(impactLocal, 1)));
+    const lastCrateX = x0 + total - crateW / 2;
+    const badgeP = done ? spring({ frame: local - impactLocal, fps, config: { damping: 11, mass: 0.7 } }) : 0;
+    return (
+      <>
+        <div
+          style={{
+            position: "absolute",
+            left: cx,
+            top: 300,
+            transform: "translateX(-50%)",
+            ...labelStyle,
+            fontSize: 28,
+            color: theme.subtext,
+            opacity: enter,
+          }}
+        >
+          КОНВЕЙЕР ЛЮКА—ЛЕМЕРА
+        </div>
+        {/* лента-конвейер */}
+        <div
+          style={{
+            position: "absolute",
+            left: x0 + 26,
+            top: rowY + 208,
+            width: total - 52,
+            height: 14,
+            borderRadius: 999,
+            background: "#0D1420",
+            border: `2px solid ${theme.panelBorder}`,
+            overflow: "hidden",
+            opacity: enter,
+          }}
+        >
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              backgroundImage: `repeating-linear-gradient(90deg, ${theme.accent}55 0 26px, transparent 26px 52px)`,
+              backgroundPosition: `${-((local * 6) % 52)}px 0`,
+            }}
+          />
+        </div>
+        <div style={{ position: "absolute", left: x0, top: rowY, display: "flex", alignItems: "center", opacity: enter }}>
+          {crates.map((c, i) => (
+            <React.Fragment key={i}>
+              {i > 0 ? (
+                <div
+                  style={{
+                    width: gap,
+                    textAlign: "center",
+                    fontFamily: theme.font,
+                    fontWeight: 800,
+                    fontSize: 42,
+                    color: theme.subtext,
+                    opacity: crateP(i) * 0.8,
+                  }}
+                >
+                  ›
+                </div>
+              ) : null}
+              <div
+                style={{
+                  width: crateW,
+                  height: 150,
+                  borderRadius: 22,
+                  background: theme.panel,
+                  border: `3px solid ${c.tone}`,
+                  boxShadow: `0 0 34px ${c.tone}30`,
+                  transform: `translateY(${(1 - crateP(i)) * 60}px) scale(${0.5 + 0.5 * crateP(i)})`,
+                  opacity: crateP(i) * enter,
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 8,
+                }}
+              >
+                <div
+                  style={{
+                    fontFamily: theme.font,
+                    fontWeight: 800,
+                    fontSize: c.v.length > 4 ? 34 : 46,
+                    color: c.v === "…" || c.v === "?" ? theme.subtext : theme.text,
+                  }}
+                >
+                  {c.v}
+                </div>
+                <div style={{ fontFamily: theme.mono, fontSize: 19, letterSpacing: 1, color: c.tone }}>{c.label}</div>
+              </div>
+            </React.Fragment>
+          ))}
+        </div>
+        {done ? <PulseRing x={lastCrateX} y={rowY + 75} triggerFrame={impactLocal} tone="success" size={210} /> : null}
+        <div style={{ position: "absolute", left: cx, top: rowY + 300, transform: "translateX(-50%)", textAlign: "center", opacity: enter }}>
+          <div style={{ ...labelStyle, fontSize: 24, color: theme.subtext }}>ШАГ</div>
+          <div
+            style={{
+              fontFamily: theme.mono,
+              fontWeight: 800,
+              fontSize: 56,
+              color: done ? theme.success : theme.text,
+              textShadow: done ? `0 0 34px ${theme.success}66` : "none",
+            }}
+          >
+            {fmt(Math.round(counterP * target))}
+          </div>
+        </div>
+        {done ? (
+          <div
+            style={{
+              position: "absolute",
+              left: cx,
+              top: rowY + 420,
+              transform: `translateX(-50%) scale(${badgeP})`,
+              opacity: badgeP,
+              padding: "16px 32px",
+              borderRadius: 999,
+              background: `${theme.success}18`,
+              border: `2px solid ${theme.success}`,
+              color: theme.success,
+              fontFamily: theme.font,
+              fontWeight: 800,
+              fontSize: 34,
+              whiteSpace: "nowrap",
+              boxShadow: `0 0 50px ${theme.success}33`,
+            }}
+          >
+            НОЛЬ → ЧИСЛО ПРОСТОЕ
+          </div>
+        ) : null}
+      </>
+    );
+  }
+
+  // mode === "steps"
+  const chipW = 158;
+  const gap = 22;
+  const total = 5 * chipW + 4 * gap;
+  const x0 = cx - total / 2;
+  const rowY = 1060;
+  const chips = [
+    { v: "4", label: "S(0)", tone: theme.accent },
+    { v: "14", label: "S(1)", tone: theme.accent },
+    { v: "194", label: "S(2)", tone: theme.accent2 },
+    { v: "…", label: "ещё шаги", tone: theme.subtext },
+    { v: done ? "0" : "?", label: "последний", tone: theme.success },
+  ];
+  const chipP = (i: number) => smooth(clamp01((local - 6 - i * 6) / 14));
+  const formulaP = smooth(clamp01((local - 4) / 18));
+  const arrowP = smooth(clamp01(local / Math.max(impactLocal, 1)));
+  const arrowX = interpolate(arrowP, [0, 1], [x0 + chipW / 2, x0 + (chips.length - 1) * (chipW + gap) + chipW / 2]);
+  const arrowY = rowY - 160;
+  const lastChipX = x0 + total - chipW / 2;
+  const badgeP = done ? spring({ frame: local - impactLocal, fps, config: { damping: 11, mass: 0.7 } }) : 0;
+  return (
+    <>
+      <div
+        style={{
+          position: "absolute",
+          left: 90,
+          right: 90,
+          top: 330,
+          opacity: formulaP * enter,
+          transform: `translateY(${(1 - formulaP) * 50}px)`,
+        }}
+      >
+        <div style={{ textAlign: "center", ...labelStyle, fontSize: 27, color: theme.subtext }}>ТЕСТ ЛЮКА—ЛЕМЕРА</div>
+        <div
+          style={{
+            textAlign: "center",
+            fontFamily: theme.mono,
+            fontWeight: 800,
+            fontSize: 62,
+            color: theme.accent,
+            marginTop: 24,
+            textShadow: `0 0 44px ${theme.accent}44`,
+          }}
+        >
+          S(n) = (S(n−1)² − 2) mod M
+        </div>
+        <div
+          style={{
+            marginTop: 22,
+            textAlign: "center",
+            fontFamily: theme.font,
+            fontSize: 34,
+            color: theme.text,
+          }}
+        >
+          старт{" "}
+          <span style={{ fontFamily: theme.mono, fontWeight: 800, fontSize: 40, color: theme.success }}>
+            S(0) = {start}
+          </span>
+          , M — само число
+        </div>
+      </div>
+      {/* стрелка, доезжающая до нуля последнего шага */}
+      <div
+        style={{
+          position: "absolute",
+          left: arrowX,
+          top: arrowY,
+          transform: "translateX(-50%)",
+          opacity: enter,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+        }}
+      >
+        <div
+          style={{
+            width: 4,
+            height: 58,
+            background: done ? theme.success : theme.accent,
+            boxShadow: `0 0 18px ${done ? theme.success : theme.accent}`,
+            opacity: arrowP,
+          }}
+        />
+        <div
+          style={{
+            fontFamily: theme.font,
+            fontWeight: 800,
+            fontSize: 40,
+            lineHeight: 1,
+            color: done ? theme.success : theme.accent,
+            opacity: arrowP,
+          }}
+        >
+          ▼
+        </div>
+      </div>
+      <div style={{ position: "absolute", left: x0, top: rowY, display: "flex", alignItems: "center", opacity: enter }}>
+        {chips.map((c, i) => (
+          <React.Fragment key={i}>
+            {i > 0 ? (
+              <div style={{ width: gap, textAlign: "center", color: theme.subtext, fontSize: 34, fontWeight: 800, opacity: chipP(i) * 0.8 }}>
+                ›
+              </div>
+            ) : null}
+            <div
+              style={{
+                width: chipW,
+                height: 118,
+                borderRadius: 20,
+                background: theme.panel,
+                border: `3px solid ${c.tone}`,
+                boxShadow: `0 0 30px ${c.tone}33`,
+                transform: `translateY(${(1 - chipP(i)) * 40}px) scale(${0.6 + 0.4 * chipP(i)})`,
+                opacity: chipP(i) * enter,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 6,
+              }}
+            >
+              <div
+                style={{
+                  fontFamily: theme.font,
+                  fontWeight: 800,
+                  fontSize: 46,
+                  color: c.v === "…" || c.v === "?" ? theme.subtext : theme.text,
+                }}
+              >
+                {c.v}
+              </div>
+              <div style={{ fontFamily: theme.mono, fontSize: 19, letterSpacing: 1, color: c.tone }}>{c.label}</div>
+            </div>
+          </React.Fragment>
+        ))}
+      </div>
+      {done ? <PulseRing x={lastChipX} y={rowY + 59} triggerFrame={impactLocal} tone="success" size={200} /> : null}
+      {done ? (
+        <div
+          style={{
+            position: "absolute",
+            left: cx,
+            top: rowY + 210,
+            transform: `translateX(-50%) scale(${badgeP})`,
+            opacity: badgeP,
+            padding: "16px 32px",
+            borderRadius: 999,
+            background: `${theme.success}18`,
+            border: `2px solid ${theme.success}`,
+            color: theme.success,
+            fontFamily: theme.font,
+            fontWeight: 800,
+            fontSize: 34,
+            whiteSpace: "nowrap",
+            boxShadow: `0 0 50px ${theme.success}33`,
+          }}
+        >
+          НОЛЬ НА ПОСЛЕДНЕМ ШАГЕ → ПРОСТОЕ
+        </div>
+      ) : null}
+    </>
+  );
+};
+
+/** Гигантский квадрат числа и его ускорение: FFT раскладывает волну на синусоиды. */
+const FftWave: React.FC<{
+  local: number;
+  fps: number;
+  impactLocal: number;
+  phase?: "square" | "fft";
+}> = ({ local, fps, impactLocal, phase = "square" }) => {
+  const enter = spring({ frame: local, fps, config: { damping: 15, mass: 0.8 } });
+  const done = local >= impactLocal;
+  const cx = W / 2;
+
+  type Sine = { a: number; f: number; ph: number };
+  const sinePath = (waves: Sine[], width: number, baseY: number, t: number): string => {
+    const n = 110;
+    let d = "";
+    for (let i = 0; i <= n; i++) {
+      let y = baseY;
+      for (const w of waves) y += w.a * Math.sin((2 * Math.PI * w.f * i) / n + t * w.ph);
+      d += `${i === 0 ? "M" : "L"} ${((i / n) * width).toFixed(2)} ${y.toFixed(2)} `;
+    }
+    return d;
+  };
+
+  const labelStyle: React.CSSProperties = {
+    fontFamily: theme.mono,
+    fontWeight: 700,
+    letterSpacing: 3,
+  };
+
+  if (phase === "fft") {
+    const waves: (Sine & { c: string; label: string })[] = [
+      { a: 60, f: 1, ph: 0.9, c: theme.accent, label: "низкая частота" },
+      { a: 40, f: 3, ph: 2.1, c: theme.accent2, label: "средняя частота" },
+      { a: 24, f: 7, ph: 4.3, c: theme.success, label: "высокая частота" },
+    ];
+    const waveW = 920;
+    const waveX = cx - waveW / 2;
+    const built = smooth(clamp01(local / 18));
+    const splitP = smooth(clamp01((local - impactLocal) / 26));
+    const compY = 470;
+    const compH = 190;
+    const splitY = [730, 880, 1030];
+    const splitH = 150;
+    const impulseP = done ? spring({ frame: local - impactLocal, fps, config: { damping: 11, mass: 0.8 } }) : 0;
+    return (
+      <>
+        <div style={{ position: "absolute", left: cx, top: 270, transform: "translateX(-50%)", ...labelStyle, fontSize: 28, color: theme.subtext, opacity: enter }}>
+          FFT — БЫСТРОЕ ПРЕОБРАЗОВАНИЕ ФУРЬЕ
+        </div>
+        {/* составная волна */}
+        <div style={{ position: "absolute", left: waveX, top: compY - 30, width: waveW, textAlign: "center", ...labelStyle, fontSize: 24, color: theme.subtext, opacity: built * enter }}>
+          ВОЛНА-ГИГАНТ (сумма частот)
+        </div>
+        <svg width={waveW} height={compH} style={{ position: "absolute", left: waveX, top: compY, opacity: built * enter }}>
+          <path
+            d={sinePath(waves, waveW, compH / 2, local / 22)}
+            fill="none"
+            stroke={theme.accent}
+            strokeWidth={6}
+            strokeLinecap="round"
+          />
+        </svg>
+        <div
+          style={{
+            position: "absolute",
+            left: waveX,
+            top: compY + compH + 8,
+            width: waveW,
+            height: 3,
+            background: `linear-gradient(90deg, transparent, ${theme.panelBorder}, transparent)`,
+            opacity: built * enter,
+          }}
+        />
+        {/* разложение на синусоиды */}
+        {waves.map((w, i) => {
+          const p = smooth(clamp01(splitP - i * 0.24));
+          if (p <= 0) return null;
+          return (
+            <React.Fragment key={i}>
+              <svg width={waveW} height={splitH} style={{ position: "absolute", left: waveX, top: splitY[i] - splitH / 2, opacity: p }}>
+                <path d={sinePath([{ a: w.a, f: w.f, ph: w.ph }], waveW, splitH / 2, local / 22)} fill="none" stroke={w.c} strokeWidth={5} strokeLinecap="round" />
+              </svg>
+              <div style={{ position: "absolute", left: waveX + 16, top: splitY[i] + splitH / 2 - 44, ...labelStyle, fontSize: 22, color: w.c, opacity: p }}>
+                {w.label}
+              </div>
+            </React.Fragment>
+          );
+        })}
+        {done ? (
+          <div
+            style={{
+              position: "absolute",
+              left: cx,
+              top: splitY[2] + 90,
+              transform: `translateX(-50%) scale(${impulseP})`,
+              opacity: impulseP,
+              display: "flex",
+              alignItems: "center",
+              gap: 16,
+              padding: "16px 32px",
+              borderRadius: 999,
+              background: `${theme.warning}16`,
+              border: `2px solid ${theme.warning}`,
+              color: theme.warning,
+              fontFamily: theme.font,
+              fontWeight: 800,
+              fontSize: 34,
+              whiteSpace: "nowrap",
+              boxShadow: `0 0 50px ${theme.warning}33`,
+            }}
+          >
+            <IconGlyph name="zap" size={40} color={theme.warning} strokeWidth={1.8} />
+            КВАДРАТЫ — В СОТНИ ТЫСЯЧ РАЗ БЫСТРЕЕ
+          </div>
+        ) : null}
+      </>
+    );
+  }
+
+  // phase === "square"
+  const square = 640;
+  const sqX = cx - square / 2;
+  const sqY = 520;
+  const rowH = 40;
+  const rows = 16;
+  const rowDigits = Array.from({ length: rows }).map((_, r) =>
+    Array.from({ length: 11 }).map((_, c) => Math.floor(random(`fftd${r}-${c}`) * 10))
+  );
+  const scroll = -((local * 2) % rowH);
+  const hourglassWarn = done;
+  return (
+    <>
+      <div style={{ position: "absolute", left: cx, top: 250, transform: "translateX(-50%)", ...labelStyle, fontSize: 28, color: theme.subtext, opacity: enter }}>
+        КВАДРАТ ЧИСЛА-ГИГАНТА
+      </div>
+      <div style={{ position: "absolute", left: 90, right: 90, top: 330, textAlign: "center", opacity: enter }}>
+        <span style={{ fontFamily: theme.mono, fontSize: 34, color: theme.text, fontWeight: 800 }}>
+          41 024 320 цифр
+        </span>
+        <span style={{ fontFamily: theme.font, fontWeight: 800, fontSize: 44, color: theme.accent2, margin: "0 22px" }}>×</span>
+        <span style={{ fontFamily: theme.mono, fontSize: 34, color: theme.text, fontWeight: 800 }}>
+          41 024 320 цифр
+        </span>
+        <div style={{ fontFamily: theme.font, fontSize: 30, color: theme.subtext, marginTop: 8 }}>результат — миллиарды знаков</div>
+      </div>
+      {/* гигантский квадрат цифр */}
+      <div
+        style={{
+          position: "absolute",
+          left: sqX,
+          top: sqY,
+          width: square,
+          height: square,
+          borderRadius: 30,
+          background: "#0D1420",
+          border: `3px solid ${theme.accent2}55`,
+          boxShadow: `0 0 90px ${theme.accent2}22`,
+          overflow: "hidden",
+          opacity: enter,
+          transform: `translateY(${(1 - enter) * 80}px) scale(${0.92 + 0.08 * enter})`,
+        }}
+      >
+        <div style={{ position: "absolute", inset: 0, transform: `translateY(${scroll}px)` }}>
+          {[0, 1].map((copy) => (
+            <div key={copy} style={{ position: "absolute", left: 0, right: 0, top: copy * rows * rowH }}>
+              {rowDigits.map((row, r) => (
+                <div key={r} style={{ display: "flex", justifyContent: "space-between", padding: "0 16px", height: rowH, alignItems: "center" }}>
+                  {row.map((d, c) => (
+                    <div key={c} style={{ fontFamily: theme.mono, fontSize: 26, color: (r + c) % 2 === 0 ? theme.subtext : theme.panelBorder }}>
+                      {d}
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: "linear-gradient(180deg, transparent 30%, #0D142088 100%)",
+          }}
+        >
+          <div style={{ fontFamily: theme.mono, fontWeight: 800, fontSize: 110, color: theme.accent2, textShadow: `0 0 50px ${theme.accent2}66` }}>
+            ?
+          </div>
+        </div>
+      </div>
+      {/* силуэт кита — масштаб гиганта */}
+      <div style={{ position: "absolute", left: 70, top: sqY + square + 40, fontSize: 110, opacity: 0.85, filter: "drop-shadow(0 0 24px rgba(0,0,0,0.6))", transform: `scale(${enter})` }}>
+        🐋
+      </div>
+      <div style={{ position: "absolute", left: 240, top: sqY + square + 96, fontFamily: theme.font, fontSize: 26, color: theme.subtext, opacity: enter }}>
+        не разглядеть
+      </div>
+      {/* часовая песочница: обычное умножение не справится */}
+      <div
+        style={{
+          position: "absolute",
+          left: cx,
+          top: sqY + square + 190,
+          transform: "translateX(-50%)",
+          display: "flex",
+          alignItems: "center",
+          gap: 16,
+          padding: "16px 32px",
+          borderRadius: 999,
+          border: `2px solid ${hourglassWarn ? theme.danger : theme.warning}88`,
+          background: `${hourglassWarn ? theme.danger : theme.warning}12`,
+          color: hourglassWarn ? theme.danger : theme.warning,
+          fontFamily: theme.font,
+          fontWeight: 700,
+          fontSize: 32,
+          opacity: enter,
+          whiteSpace: "nowrap",
+        }}
+      >
+        <IconGlyph name="hourglass" size={40} color={hourglassWarn ? theme.danger : theme.warning} strokeWidth={1.8} />
+        {hourglassWarn ? "обычное умножение — слишком долго" : "обычное умножение…"}
+      </div>
+      {done ? <PulseRing x={cx} y={sqY + square + 190} triggerFrame={impactLocal} tone="danger" size={330} /> : null}
+    </>
+  );
+};
+
 /* ──────────────────────────── сцена-сториборд ──────────────────────────── */
 
 /** Каждая фраза диктора — свой бит с движением камеры между битами. */
@@ -1996,6 +2567,8 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     "ancient-code": { scale: 0.92, y: -20 },
     "verdict-scan": { scale: 0.98, y: -10 },
     "paradox-box": { scale: 0.9, y: -30 },
+    "proof-sequence": { scale: 0.92, y: -20 },
+    "fft-wave": { scale: 0.94, y: -30 },
   };
   const cur = cams[slot.beat.visual] ?? { scale: 1, y: 0 };
   const prev = idx > 0 ? cams[slots[idx - 1].beat.visual] ?? cur : cur;
@@ -2118,6 +2691,26 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             trap={slot.beat.params?.trap as string | undefined}
             oracle={slot.beat.params?.oracle as string | undefined}
             stage={(slot.beat.params?.stage as "setup" | "crack" | undefined) ?? "setup"}
+          />
+        );
+      case "proof-sequence":
+        return (
+          <ProofSequence
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            mode={(slot.beat.params?.mode as "run" | "steps" | undefined) ?? "run"}
+            start={slot.beat.params?.start as number | undefined}
+            steps={slot.beat.params?.steps as string | undefined}
+          />
+        );
+      case "fft-wave":
+        return (
+          <FftWave
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as "square" | "fft" | undefined) ?? "square"}
           />
         );
       default:
