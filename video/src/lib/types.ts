@@ -89,7 +89,9 @@ export interface StoryBeat {
     | "bloom-bitarray"
     | "bloom-probe"
     | "coin-pair"
-    | "bit-extractor";
+    | "bit-extractor"
+    | "rule-110"
+    | "glider-collision";
   onWord?: string; // бит начинается на этом слове реплики
   params?: Record<string, unknown>;
 }

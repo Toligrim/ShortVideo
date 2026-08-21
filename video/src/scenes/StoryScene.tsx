@@ -56,6 +56,8 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
     if (beat.visual === "bloom-probe") impact = start + Math.round(dur * 0.55);
     if (beat.visual === "coin-pair") impact = start + Math.round(dur * 0.65);
     if (beat.visual === "bit-extractor") impact = start + Math.round(dur * 0.75);
+    if (beat.visual === "rule-110") impact = start + Math.round(dur * 0.6);
+    if (beat.visual === "glider-collision") impact = start + Math.round(dur * 0.7);
     return { beat, start, end, impact };
   });
 };
@@ -98,6 +100,8 @@ export const storySfx = (
     if (s.beat.visual === "bloom-probe") events.push({ frame: s.impact, sound: "pop" });
     if (s.beat.visual === "coin-pair") events.push({ frame: s.impact, sound: "pop" });
     if (s.beat.visual === "bit-extractor") events.push({ frame: s.impact, sound: "pop" });
+    if (s.beat.visual === "rule-110") events.push({ frame: s.impact, sound: "click" });
+    if (s.beat.visual === "glider-collision") events.push({ frame: s.impact, sound: "slam" });
   }
   return events;
 };
@@ -4344,6 +4348,264 @@ const BitExtractorVisual: React.FC<{
   );
 };
 
+/** Таблица истинности Rule 110: 8 комбинаций соседей → результат, или оценка клетки. */
+const Rule110Visual: React.FC<{
+  local: number;
+  fps: number;
+  impactLocal: number;
+  mode?: "truth-table" | "cell-eval";
+}> = ({ local, fps, impactLocal, mode = "truth-table" }) => {
+  const enter = spring({ frame: local, fps, config: { damping: 15, mass: 0.8 } });
+  const done = local >= impactLocal;
+  const cx = W / 2;
+
+  const rule110 = [
+    [1, 1, 1, 0],
+    [1, 1, 0, 1],
+    [1, 0, 1, 1],
+    [1, 0, 0, 0],
+    [0, 1, 1, 1],
+    [0, 1, 0, 1],
+    [0, 0, 1, 1],
+    [0, 0, 0, 0],
+  ];
+
+  const labelStyle: React.CSSProperties = {
+    fontFamily: theme.mono,
+    fontWeight: 700,
+    letterSpacing: 3,
+  };
+
+  if (mode === "cell-eval") {
+    const cellW = 80;
+    const gap = 6;
+    const cells = 20;
+    const totalW = cells * cellW + (cells - 1) * gap;
+    const startX = cx - totalW / 2;
+    const rowY = 820;
+    const neighborhood = [0, 1, 1];
+    const centerIdx = 10;
+
+    const cellVal = (i: number) => {
+      if (i >= centerIdx - 1 && i <= centerIdx + 1) return neighborhood[i - centerIdx + 1];
+      return ((i * 7 + 3) % 3 === 0) ? 1 : 0;
+    };
+
+    const resultBit = 1;
+    const revealP = smooth(clamp01((local - 10) / Math.max(impactLocal - 10, 1)));
+
+    return (
+      <>
+        <div style={{ position: "absolute", left: cx, top: 300, transform: "translateX(-50%)", ...labelStyle, fontSize: 28, color: theme.subtext, opacity: enter }}>
+          ОЦЕНКА КЛЕТКИ
+        </div>
+        <div style={{ position: "absolute", left: cx, top: 390, transform: "translateX(-50%)", fontFamily: theme.font, fontSize: 32, color: theme.text, opacity: enter }}>
+          Три соседа определяют судьбу центральной клетки
+        </div>
+        <div style={{ position: "absolute", left: cx, top: 480, transform: "translateX(-50%)", ...labelStyle, fontSize: 24, color: theme.accent, opacity: enter }}>
+          ПРАВИЛО 110
+        </div>
+        {Array.from({ length: cells }).map((_, i) => {
+          const x = startX + i * (cellW + gap);
+          const isCenter = i === centerIdx;
+          const isNeighbor = i >= centerIdx - 1 && i <= centerIdx + 1;
+          const val = cellVal(i);
+          const color = isCenter ? theme.accent : isNeighbor ? theme.accent2 : val ? theme.text : theme.panelBorder;
+          const pulse = isCenter ? 1 + 0.04 * Math.sin(local / 6) : 1;
+          return (
+            <div key={i} style={{
+              position: "absolute", left: x, top: rowY,
+              width: cellW, height: cellW,
+              borderRadius: 16,
+              border: `3px solid ${color}`,
+              background: isCenter ? `${theme.accent}22` : isNeighbor ? `${theme.accent2}18` : val ? `${theme.text}14` : "#0D1420",
+              boxShadow: isCenter ? `0 0 30px ${theme.accent}44` : "none",
+              opacity: enter,
+              transform: `scale(${pulse})`,
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}>
+              <span style={{ fontFamily: theme.mono, fontWeight: 800, fontSize: 44, color }}>{val}</span>
+            </div>
+          );
+        })}
+        {done ? (
+          <div style={{
+            position: "absolute", left: cx, top: rowY + cellW + 60,
+            transform: `translateX(-50%) scale(${revealP})`, opacity: revealP,
+            display: "flex", alignItems: "center", gap: 16,
+            padding: "16px 32px", borderRadius: 999,
+            background: `${theme.success}18`, border: `2px solid ${theme.success}`,
+            color: theme.success, fontFamily: theme.font, fontWeight: 800, fontSize: 34,
+          }}>
+            1 → 0 → 1 → {resultBit}
+          </div>
+        ) : null}
+        {done ? <PulseRing x={cx} y={rowY + cellW / 2} triggerFrame={impactLocal} tone="accent" size={200} /> : null}
+      </>
+    );
+  }
+
+  const rowH = 68;
+  const startY = 380;
+  const colX = [cx - 200, cx - 70, cx + 70, cx + 200];
+  const headers = ["L", "C", "R", "→"];
+
+  return (
+    <>
+      <div style={{ position: "absolute", left: cx, top: 260, transform: "translateX(-50%)", ...labelStyle, fontSize: 30, color: theme.subtext, opacity: enter }}>
+        ПРАВИЛО 110
+      </div>
+      <div style={{ position: "absolute", left: cx, top: 330, transform: "translateX(-50%)", fontFamily: theme.font, fontSize: 26, color: theme.text, opacity: enter }}>
+        8 комбинаций соседей → 8 результатов
+      </div>
+      {headers.map((h, i) => (
+        <div key={i} style={{
+          position: "absolute", left: colX[i], top: startY - rowH,
+          transform: "translateX(-50%)", ...labelStyle, fontSize: 24, color: i === 3 ? theme.success : theme.accent2,
+          opacity: enter,
+        }}>
+          {h}
+        </div>
+      ))}
+      {rule110.map((row, r) => {
+        const rowP = smooth(clamp01((local - r * 4) / 14));
+        const highlighted = done && r === 1;
+        return (
+          <React.Fragment key={r}>
+            {row.map((val, c) => {
+              const isOutput = c === 3;
+              const color = isOutput ? (val ? theme.success : theme.panelBorder) : (val ? theme.accent : theme.accent2);
+              return (
+                <div key={c} style={{
+                  position: "absolute", left: colX[c], top: startY + r * rowH,
+                  transform: `translateX(-50%) scale(${highlighted ? 1.15 : 1})`,
+                  opacity: rowP * enter,
+                  fontFamily: theme.mono, fontWeight: 800, fontSize: isOutput ? 42 : 36,
+                  color: highlighted ? theme.accent : color,
+                  textShadow: highlighted ? `0 0 20px ${theme.accent}88` : "none",
+                }}>
+                  {val}
+                </div>
+              );
+            })}
+          </React.Fragment>
+        );
+      })}
+      {done ? <PulseRing x={colX[3]} y={startY + 1 * rowH} triggerFrame={impactLocal} tone="success" size={100} /> : null}
+    </>
+  );
+};
+
+/** Глайдеры Rule 110: локализованные структуры движутся и сталкиваются на ленте. */
+const GliderCollisionVisual: React.FC<{
+  local: number;
+  fps: number;
+  impactLocal: number;
+}> = ({ local, fps, impactLocal }) => {
+  const enter = spring({ frame: local, fps, config: { damping: 15, mass: 0.8 } });
+  const done = local >= impactLocal;
+  const cx = W / 2;
+
+  const cellW = 52;
+  const cols = 18;
+  const rows = 14;
+  const totalW = cols * cellW;
+  const startX = cx - totalW / 2;
+  const startY = 360;
+
+  const gliderA = [
+    [0, 1, 0],
+    [0, 0, 1],
+    [1, 1, 1],
+  ];
+  const gliderB = [
+    [1, 1, 1],
+    [1, 0, 0],
+    [0, 1, 0],
+  ];
+
+  const grid: number[][] = Array.from({ length: rows }, () => Array(cols).fill(0));
+
+  const place = (pattern: number[][], rowOffset: number, colOffset: number) => {
+    pattern.forEach((pRow, r) =>
+      pRow.forEach((val, c) => {
+        const rr = rowOffset + r;
+        const cc = colOffset + c;
+        if (rr >= 0 && rr < rows && cc >= 0 && cc < cols) grid[rr][cc] = val;
+      })
+    );
+  };
+
+  const speed = local * 0.12;
+  const gARow = 3;
+  const gACol = Math.round(2 + speed);
+  const gBRow = 8;
+  const gBCol = Math.round(14 - speed * 0.7);
+
+  place(gliderA, gARow, gACol);
+  place(gliderB, gBRow, gBCol);
+
+  const collide = gACol + 3 >= gBCol;
+  if (collide) {
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        if (grid[r][c] === 1 && r >= gARow && r <= gARow + 4 && c >= gBCol - 2) {
+          grid[r][c] = random(`rule110-fragment-${r}-${c}`) > 0.4 ? 1 : 0;
+        }
+      }
+    }
+  }
+
+  const labelStyle: React.CSSProperties = {
+    fontFamily: theme.mono,
+    fontWeight: 700,
+    letterSpacing: 3,
+  };
+
+  return (
+    <>
+      <div style={{ position: "absolute", left: cx, top: 260, transform: "translateX(-50%)", ...labelStyle, fontSize: 28, color: theme.subtext, opacity: enter }}>
+        ЛОКАЛИЗОВАННЫЕ СТРУКТУРЫ
+      </div>
+      <div style={{ position: "absolute", left: cx, top: 320, transform: "translateX(-50%)", fontFamily: theme.font, fontSize: 26, color: theme.text, opacity: enter }}>
+        Глайдеры движутся, сталкиваются, порождают новые
+      </div>
+      {grid.map((row, r) =>
+        row.map((val, c) => {
+          const x = startX + c * cellW;
+          const y = startY + r * cellW;
+          const isGliderA = r >= gARow && r < gARow + 3 && c >= gACol && c < gACol + 3 && gliderA[r - gARow]?.[c - gACol];
+          const isGliderB = r >= gBRow && r < gBRow + 3 && c >= gBCol && c < gBCol + 3 && gliderB[r - gBRow]?.[c - gBCol];
+          const color = isGliderA ? theme.accent : isGliderB ? theme.accent2 : val ? theme.text : theme.panelBorder;
+          const bg = isGliderA ? `${theme.accent}33` : isGliderB ? `${theme.accent2}33` : val ? `${theme.text}18` : "#0D1420";
+          return (
+            <div key={`${r}-${c}`} style={{
+              position: "absolute", left: x, top: y,
+              width: cellW - 2, height: cellW - 2,
+              borderRadius: 8,
+              background: bg,
+              border: `2px solid ${color}`,
+              opacity: enter * (val || isGliderA || isGliderB ? 1 : 0.3),
+            }} />
+          );
+        })
+      )}
+      {done ? <PulseRing x={cx} y={startY + rows * cellW / 2} triggerFrame={impactLocal} tone="warning" size={400} /> : null}
+      {done ? (
+        <div style={{
+          position: "absolute", left: cx, top: startY + rows * cellW + 40,
+          transform: "translateX(-50%)", padding: "14px 28px", borderRadius: 999,
+          background: `${theme.warning}18`, border: `2px solid ${theme.warning}`,
+          color: theme.warning, fontFamily: theme.font, fontWeight: 800, fontSize: 28,
+          opacity: enter, whiteSpace: "nowrap",
+        }}>
+          СТОЛКНОВЕНИЕ → НОВЫЕ ПАТТЕРНЫ
+        </div>
+      ) : null}
+    </>
+  );
+};
+
 /* ──────────────────────────── сцена-сториборд ──────────────────────────── */
 
 /** Каждая фраза диктора — свой бит с движением камеры между битами. */
@@ -4587,6 +4849,23 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
       case "bit-extractor":
         return (
           <BitExtractorVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+          />
+        );
+      case "rule-110":
+        return (
+          <Rule110Visual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            mode={(slot.beat.params?.mode as "truth-table" | "cell-eval" | undefined) ?? "truth-table"}
+          />
+        );
+      case "glider-collision":
+        return (
+          <GliderCollisionVisual
             local={local}
             fps={fps}
             impactLocal={impactLocal}
