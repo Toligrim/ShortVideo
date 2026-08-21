@@ -52,6 +52,8 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
       impact = start + Math.round(dur * (beat.params?.phase === "square" ? 0.85 : 0.5));
     if (beat.visual === "qr-repair") impact = start + Math.round(dur * 0.6);
     if (beat.visual === "hll-estimate") impact = start + Math.round(dur * 0.58);
+    if (beat.visual === "bloom-bitarray") impact = start + Math.round(dur * 0.72);
+    if (beat.visual === "bloom-probe") impact = start + Math.round(dur * 0.55);
     return { beat, start, end, impact };
   });
 };
@@ -90,6 +92,8 @@ export const storySfx = (
       events.push({ frame: s.impact, sound });
     }
     if (s.beat.visual === "hll-estimate") events.push({ frame: s.impact, sound: "pop" });
+    if (s.beat.visual === "bloom-bitarray") events.push({ frame: s.impact, sound: "ding" });
+    if (s.beat.visual === "bloom-probe") events.push({ frame: s.impact, sound: "pop" });
   }
   return events;
 };
@@ -3535,6 +3539,515 @@ const HllEstimate: React.FC<{
   );
 };
 
+/** Битовый массив фильтра Блума: ключ проходит через k хеш-функций, каждая ставит единицу в свой слот. */
+const BloomBitarray: React.FC<{
+  local: number;
+  fps: number;
+  impactLocal: number;
+  key?: string;
+  bits?: number[];
+  hashes?: number;
+}> = ({ local, fps, impactLocal, key = "user_42", bits = [2, 7, 11, 15], hashes = 4 }) => {
+  const enter = spring({ frame: local, fps, config: { damping: 15, mass: 0.8 } });
+  const cx = W / 2;
+  const arrayY = 920;
+  const totalBits = 16;
+  const cellW = 50;
+  const cellH = 52;
+  const gap = 5;
+  const arrayW = totalBits * (cellW + gap) - gap;
+  const arrayX = cx - arrayW / 2;
+
+  const mono: React.CSSProperties = { fontFamily: theme.mono, fontWeight: 800, letterSpacing: 2 };
+
+  // key pill position
+  const keyY = 430;
+  const keyEnter = spring({ frame: local, fps, config: { damping: 14, mass: 0.7 } });
+
+  // hash function boxes
+  const hashBoxW = 130;
+  const hashBoxH = 70;
+  const hashStartX = cx - (hashes * hashBoxW + (hashes - 1) * 20) / 2;
+  const hashY = 620;
+
+  // arrow from key to hash functions
+  const arrowP1 = smooth(clamp01((local - 6) / 14));
+  // hash function reveal
+  const hashReveal = (i: number) => smooth(clamp01((local - 10 - i * 5) / 14));
+  // arrow from hash to array
+  const arrowP2 = (i: number) => smooth(clamp01((local - 26 - i * 6) / 14));
+  // bit flip
+  const bitFlip = (i: number) => {
+    const f = local - impactLocal - i * 4;
+    if (f < 0) return 0;
+    return clamp01(spring({ frame: f, fps, config: { damping: 12, mass: 0.6 } }));
+  };
+
+  return (
+    <>
+      {/* header */}
+      <div
+        style={{
+          position: "absolute",
+          left: cx,
+          top: 300,
+          transform: "translateX(-50%)",
+          ...mono,
+          fontSize: 26,
+          color: theme.subtext,
+          opacity: enter,
+        }}
+      >
+        БИТОВЫЙ МАССИВ ФИЛЬТРА БЛУМА
+      </div>
+
+      {/* key pill */}
+      <div
+        style={{
+          position: "absolute",
+          left: cx - 130,
+          top: keyY,
+          width: 260,
+          height: 80,
+          borderRadius: 20,
+          background: theme.panel,
+          border: `3px solid ${theme.accent}`,
+          boxShadow: `0 0 40px ${theme.accent}33`,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 12,
+          opacity: keyEnter,
+          transform: `translateY(${(1 - keyEnter) * 40}px)`,
+        }}
+      >
+        <IconGlyph name="key-round" size={32} color={theme.accent} strokeWidth={1.8} />
+        <span style={{ fontFamily: theme.font, fontWeight: 800, fontSize: 30, color: theme.text }}>{key}</span>
+      </div>
+
+      {/* arrow: key → hash functions */}
+      <div
+        style={{
+          position: "absolute",
+          left: cx - 2,
+          top: keyY + 80,
+          width: 4,
+          height: hashY - keyY - 80,
+          background: `linear-gradient(180deg, ${theme.accent}, ${theme.accent}44)`,
+          opacity: arrowP1 * enter,
+        }}
+      />
+
+      {/* hash function boxes */}
+      {Array.from({ length: hashes }).map((_, i) => {
+        const x = hashStartX + i * (hashBoxW + 20);
+        const p = hashReveal(i);
+        const targetBit = bits[i] ?? i * 3;
+        return (
+          <React.Fragment key={i}>
+            <div
+              style={{
+                position: "absolute",
+                left: x,
+                top: hashY,
+                width: hashBoxW,
+                height: hashBoxH,
+                borderRadius: 16,
+                background: `${theme.accent2}18`,
+                border: `2px solid ${theme.accent2}88`,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 8,
+                opacity: p,
+                transform: `translateY(${(1 - p) * 20}px) scale(${0.7 + 0.3 * p})`,
+              }}
+            >
+              <IconGlyph name="hash" size={24} color={theme.accent2} strokeWidth={1.8} />
+              <span style={{ fontFamily: theme.mono, fontSize: 22, color: theme.accent2, fontWeight: 700 }}>h{i + 1}</span>
+            </div>
+            {/* arrow: hash → bit */}
+            <div
+              style={{
+                position: "absolute",
+                left: x + hashBoxW / 2 - 2,
+                top: hashY + hashBoxH,
+                width: 4,
+                height: arrayY - hashY - hashBoxH,
+                background: `linear-gradient(180deg, ${theme.accent2}88, ${theme.accent2}22)`,
+                opacity: arrowP2(i) * enter,
+              }}
+            />
+            {/* bit index label */}
+            <div
+              style={{
+                position: "absolute",
+                left: x + hashBoxW / 2,
+                top: arrayY - 34,
+                transform: "translateX(-50%)",
+                fontFamily: theme.mono,
+                fontSize: 18,
+                color: theme.accent,
+                opacity: arrowP2(i) * enter,
+              }}
+            >
+              [{targetBit}]
+            </div>
+          </React.Fragment>
+        );
+      })}
+
+      {/* bit array */}
+      <div
+        style={{
+          position: "absolute",
+          left: arrayX,
+          top: arrayY,
+          width: arrayW,
+          display: "flex",
+          gap,
+          opacity: enter,
+        }}
+      >
+        {Array.from({ length: totalBits }).map((_, i) => {
+          const isTarget = bits.includes(i);
+          const flipped = isTarget ? bitFlip(bits.indexOf(i)) : 0;
+          const isActive = isTarget && local >= impactLocal + bits.indexOf(i) * 4;
+          return (
+            <div
+              key={i}
+              style={{
+                width: cellW,
+                height: cellH,
+                borderRadius: 10,
+                border: `3px solid ${isActive ? theme.accent : theme.panelBorder}`,
+                background: isActive ? `${theme.accent}22` : "#0D1420",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 4,
+                opacity: enter,
+                transform: isTarget ? `scale(${0.8 + 0.2 * flipped})` : undefined,
+                boxShadow: isActive ? `0 0 ${20 + 15 * flipped}px ${theme.accent}66` : "none",
+              }}
+            >
+              <div
+                style={{
+                  fontFamily: theme.mono,
+                  fontWeight: 800,
+                  fontSize: 18,
+                  color: isActive ? theme.accent : theme.subtext,
+                }}
+              >
+                {isActive ? "1" : "0"}
+              </div>
+              <div style={{ fontFamily: theme.mono, fontSize: 12, color: theme.panelBorder }}>{i}</div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* label under array */}
+      <div
+        style={{
+          position: "absolute",
+          left: cx,
+          top: arrayY + cellH + 28,
+          transform: "translateX(-50%)",
+          ...mono,
+          fontSize: 20,
+          color: theme.subtext,
+          opacity: enter,
+        }}
+      >
+        {totalBits} СЛОТОВ · {hashes} ХЕШ-ФУНКЦИИ
+      </div>
+
+      {/* impact badge */}
+      {local >= impactLocal ? (
+        <div
+          style={{
+            position: "absolute",
+            left: cx,
+            top: arrayY + cellH + 80,
+            transform: `translateX(-50%) scale(${bitFlip(hashes - 1) || 0.8})`,
+            opacity: bitFlip(hashes - 1),
+            padding: "14px 28px",
+            borderRadius: 999,
+            background: `${theme.success}18`,
+            border: `2px solid ${theme.success}`,
+            color: theme.success,
+            fontFamily: theme.font,
+            fontWeight: 800,
+            fontSize: 28,
+            whiteSpace: "nowrap",
+            boxShadow: `0 0 40px ${theme.success}33`,
+          }}
+        >
+          КЛЮЧЕЙ НЕТ — ТОЛЬКО БИТЫ
+        </div>
+      ) : null}
+    </>
+  );
+};
+
+/** Фильтр Блума: запрос проверяет биты — все единицы «возможно есть», хотя бы один ноль «точно нет». */
+const BloomProbe: React.FC<{
+  local: number;
+  fps: number;
+  impactLocal: number;
+  key?: string;
+  probeBits?: number[];
+  result?: "maybe" | "no";
+  fileName?: string;
+}> = ({ local, fps, impactLocal, key = "user_42", probeBits = [2, 7, 11, 15], result = "no", fileName = "users.sst" }) => {
+  const enter = spring({ frame: local, fps, config: { damping: 15, mass: 0.8 } });
+  const cx = W / 2;
+  const arrayY = 580;
+  const totalBits = 16;
+  const cellW = 50;
+  const cellH = 52;
+  const gap = 5;
+  const arrayW = totalBits * (cellW + gap) - gap;
+  const arrayX = cx - arrayW / 2;
+
+  const mono: React.CSSProperties = { fontFamily: theme.mono, fontWeight: 800, letterSpacing: 2 };
+
+  const keyY = 340;
+  const keyEnter = spring({ frame: local, fps, config: { damping: 14, mass: 0.7 } });
+
+  // scan animation: probe key travels down, arrow scans bits
+  const scanP = smooth(clamp01((local - 8) / Math.max(impactLocal - 12, 1)));
+  const scanIdx = Math.min(probeBits.length - 1, Math.floor(scanP * probeBits.length));
+
+  // result reveal
+  const done = local >= impactLocal;
+  const resultP = done ? spring({ frame: local - impactLocal, fps, config: { damping: 12, mass: 0.7 } }) : 0;
+
+  // file icon position
+  const fileY = 1140;
+  const fileEnter = done ? spring({ frame: local - impactLocal - 6, fps, config: { damping: 14, mass: 0.8 } }) : 0;
+  const skipX = result === "no" ? interpolate(fileEnter, [0, 1], [cx, W + 200]) : cx;
+
+  return (
+    <>
+      {/* header */}
+      <div
+        style={{
+          position: "absolute",
+          left: cx,
+          top: 240,
+          transform: "translateX(-50%)",
+          ...mono,
+          fontSize: 26,
+          color: theme.subtext,
+          opacity: enter,
+        }}
+      >
+        ЗАПРОС К ФИЛЬТРУ БЛУМА
+      </div>
+
+      {/* query key */}
+      <div
+        style={{
+          position: "absolute",
+          left: cx - 130,
+          top: keyY,
+          width: 260,
+          height: 80,
+          borderRadius: 20,
+          background: theme.panel,
+          border: `3px solid ${theme.warning}`,
+          boxShadow: `0 0 40px ${theme.warning}33`,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 12,
+          opacity: keyEnter,
+          transform: `translateY(${(1 - keyEnter) * 40}px)`,
+        }}
+      >
+        <IconGlyph name="search" size={28} color={theme.warning} strokeWidth={2} />
+        <span style={{ fontFamily: theme.font, fontWeight: 800, fontSize: 30, color: theme.text }}>{key}</span>
+      </div>
+
+      {/* arrow: key → array */}
+      <div
+        style={{
+          position: "absolute",
+          left: cx - 2,
+          top: keyY + 80,
+          width: 4,
+          height: arrayY - keyY - 80,
+          background: `linear-gradient(180deg, ${theme.warning}, ${theme.warning}44)`,
+          opacity: scanP * enter,
+        }}
+      />
+
+      {/* bit array */}
+      <div
+        style={{
+          position: "absolute",
+          left: arrayX,
+          top: arrayY,
+          width: arrayW,
+          display: "flex",
+          gap,
+          opacity: enter,
+        }}
+      >
+        {Array.from({ length: totalBits }).map((_, i) => {
+          const isProbe = probeBits.includes(i);
+          const probeIdx = isProbe ? probeBits.indexOf(i) : -1;
+          const scanning = isProbe && probeIdx <= scanIdx;
+          const isOne = isProbe || random(`bloom-${i}`) > 0.4; // pre-set some bits
+          return (
+            <div
+              key={i}
+              style={{
+                width: cellW,
+                height: cellH,
+                borderRadius: 10,
+                border: `3px solid ${scanning ? theme.warning : isOne ? `${theme.accent}66` : theme.panelBorder}`,
+                background: scanning ? `${theme.warning}22` : isOne ? `${theme.accent}18` : "#0D1420",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 4,
+                opacity: enter,
+                boxShadow: scanning ? `0 0 18px ${theme.warning}55` : "none",
+              }}
+            >
+              <div
+                style={{
+                  fontFamily: theme.mono,
+                  fontWeight: 800,
+                  fontSize: 18,
+                  color: scanning ? theme.warning : isOne ? theme.accent : theme.subtext,
+                }}
+              >
+                {isOne ? "1" : "0"}
+              </div>
+              <div style={{ fontFamily: theme.mono, fontSize: 12, color: theme.panelBorder }}>{i}</div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* array label */}
+      <div
+        style={{
+          position: "absolute",
+          left: cx,
+          top: arrayY + cellH + 20,
+          transform: "translateX(-50%)",
+          ...mono,
+          fontSize: 20,
+          color: theme.subtext,
+          opacity: enter,
+        }}
+      >
+        ПРОВЕРЯЕМ БИТЫ ПО ХЕШАМ
+      </div>
+
+      {/* result badge */}
+      {done ? (
+        <div
+          style={{
+            position: "absolute",
+            left: cx,
+            top: arrayY + cellH + 80,
+            transform: `translateX(-50%) scale(${resultP})`,
+            opacity: resultP,
+            padding: "18px 36px",
+            borderRadius: 999,
+            background: result === "no" ? `${theme.success}18` : `${theme.warning}18`,
+            border: `2px solid ${result === "no" ? theme.success : theme.warning}`,
+            color: result === "no" ? theme.success : theme.warning,
+            fontFamily: theme.font,
+            fontWeight: 800,
+            fontSize: 32,
+            whiteSpace: "nowrap",
+            boxShadow: `0 0 50px ${result === "no" ? theme.success : theme.warning}33`,
+          }}
+        >
+          {result === "no" ? "ТОЧНО НЕТ" : "ВОЗМОЖНО ЕСТЬ"}
+        </div>
+      ) : null}
+
+      {/* file card */}
+      {done ? (
+        <div
+          style={{
+            position: "absolute",
+            left: skipX - 160,
+            top: fileY,
+            width: 320,
+            height: 140,
+            borderRadius: 22,
+            background: theme.panel,
+            border: `3px solid ${result === "no" ? theme.success : theme.warning}88`,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 16,
+            opacity: fileEnter,
+            transform: `translateY(${(1 - fileEnter) * 30}px)`,
+            boxShadow: `0 0 40px ${(result === "no" ? theme.success : theme.warning)}22`,
+          }}
+        >
+          <IconGlyph
+            name={result === "no" ? "file-check" : "file-question"}
+            size={48}
+            color={result === "no" ? theme.success : theme.warning}
+            strokeWidth={1.7}
+          />
+          <div>
+            <div style={{ fontFamily: theme.mono, fontWeight: 700, fontSize: 28, color: theme.text }}>{fileName}</div>
+            <div
+              style={{
+                fontFamily: theme.font,
+                fontSize: 22,
+                color: result === "no" ? theme.success : theme.warning,
+                marginTop: 4,
+              }}
+            >
+              {result === "no" ? "пропущен" : "нужно читать"}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {/* skip arrow for "no" */}
+      {done && result === "no" ? (
+        <div
+          style={{
+            position: "absolute",
+            left: cx,
+            top: fileY + 180,
+            transform: `translateX(-50%) scale(${fileEnter})`,
+            opacity: fileEnter,
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+            padding: "12px 24px",
+            borderRadius: 999,
+            background: `${theme.success}12`,
+            border: `1px solid ${theme.success}66`,
+          }}
+        >
+          <IconGlyph name="skip-forward" size={28} color={theme.success} strokeWidth={2} />
+          <span style={{ fontFamily: theme.font, fontWeight: 700, fontSize: 24, color: theme.success }}>
+            ЧТЕНИЕ ДИСКА ЭКОНОМИТСЯ
+          </span>
+        </div>
+      ) : null}
+    </>
+  );
+};
+
 /* ──────────────────────────── сцена-сториборд ──────────────────────────── */
 
 /** Каждая фраза диктора — свой бит с движением камеры между битами. */
@@ -3571,6 +4084,8 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     "fft-wave": { scale: 0.94, y: -30 },
     "qr-repair": { scale: 0.9, y: -30 },
     "hll-estimate": { scale: 0.92, y: -20 },
+    "bloom-bitarray": { scale: 0.88, y: -30 },
+    "bloom-probe": { scale: 0.88, y: -20 },
   };
   const cur = cams[slot.beat.visual] ?? { scale: 1, y: 0 };
   const prev = idx > 0 ? cams[slots[idx - 1].beat.visual] ?? cur : cur;
@@ -3735,6 +4250,29 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             impactLocal={impactLocal}
             phase={(slot.beat.params?.phase as "hash" | "registers" | "harmonic" | "scale" | undefined) ?? "hash"}
             highlight={slot.beat.params?.highlight as number | undefined}
+          />
+        );
+      case "bloom-bitarray":
+        return (
+          <BloomBitarray
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            key={slot.beat.params?.key as string | undefined}
+            bits={slot.beat.params?.bits as number[] | undefined}
+            hashes={slot.beat.params?.hashes as number | undefined}
+          />
+        );
+      case "bloom-probe":
+        return (
+          <BloomProbe
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            key={slot.beat.params?.key as string | undefined}
+            probeBits={slot.beat.params?.probeBits as number[] | undefined}
+            result={(slot.beat.params?.result as "maybe" | "no" | undefined) ?? "no"}
+            fileName={slot.beat.params?.fileName as string | undefined}
           />
         );
       default:
