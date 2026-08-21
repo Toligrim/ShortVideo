@@ -5042,7 +5042,7 @@ const DebruijnCycleVisual: React.FC<{
             opacity: enter,
           }}
         >
-          <span style={{ color: done ? theme.success : theme.subtext }}>{done ? "65551" : "65536"} БИТ ЛИНЕЙНО</span>
+          <span style={{ color: done ? theme.success : theme.subtext }}>{done ? "65551 БИТ ЛИНЕЙНО" : "65536 + 15 БИТ"}</span>
           <span style={{ fontFamily: theme.font, fontWeight: 700, fontSize: 20, color: theme.subtext }}>N + окно − 1</span>
         </div>
         {done ? <PulseRing x={cx} y={lineY + 27} triggerFrame={impactLocal} tone="success" size={760} /> : null}
