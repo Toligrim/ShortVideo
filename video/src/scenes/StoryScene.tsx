@@ -4797,7 +4797,7 @@ const DebruijnCycleVisual: React.FC<{
     const R = 280;
     const cy = 820;
     const segs = 32;
-    const windowSize = 8;
+    const windowSize = 16;
     const activeSeg = Math.floor((local / 4) % segs);
     const readingBits = Array.from({ length: windowSize }).map((_, k) => {
       const idx = (activeSeg + k) % segs;
@@ -4869,13 +4869,13 @@ const DebruijnCycleVisual: React.FC<{
             opacity: tickP,
           }}
         />
-        <div style={{ position: "absolute", left: cx - 320, top: cy + R + 50, width: 640, display: "flex", gap: 6, opacity: tickP * enter, justifyContent: "center" }}>
+        <div style={{ position: "absolute", left: cx - 380, top: cy + R + 50, width: 760, display: "flex", gap: 4, opacity: tickP * enter, justifyContent: "center" }}>
           {readingBits.map((b, i) => (
             <div
               key={i}
               style={{
-                width: 56,
-                height: 56,
+                width: 40,
+                height: 50,
                 borderRadius: 12,
                 background: b ? theme.accent : theme.accent2,
                 color: b ? "#06121A" : theme.text,
@@ -4884,7 +4884,7 @@ const DebruijnCycleVisual: React.FC<{
                 justifyContent: "center",
                 fontFamily: theme.mono,
                 fontWeight: 800,
-                fontSize: 30,
+                fontSize: 24,
                 border: `2px solid ${b ? theme.accent : theme.accent2}`,
                 boxShadow: `0 0 16px ${b ? theme.accent : theme.accent2}55`,
               }}
