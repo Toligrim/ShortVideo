@@ -91,7 +91,8 @@ export interface StoryBeat {
     | "coin-pair"
     | "bit-extractor"
     | "rule-110"
-    | "glider-collision";
+    | "glider-collision"
+    | "debruijn-cycle";
   onWord?: string; // бит начинается на этом слове реплики
   params?: Record<string, unknown>;
 }

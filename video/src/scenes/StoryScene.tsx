@@ -58,6 +58,7 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
     if (beat.visual === "bit-extractor") impact = start + Math.round(dur * 0.75);
     if (beat.visual === "rule-110") impact = start + Math.round(dur * 0.6);
     if (beat.visual === "glider-collision") impact = start + Math.round(dur * 0.7);
+    if (beat.visual === "debruijn-cycle") impact = start + Math.round(dur * 0.58);
     return { beat, start, end, impact };
   });
 };
@@ -102,6 +103,11 @@ export const storySfx = (
     if (s.beat.visual === "bit-extractor") events.push({ frame: s.impact, sound: "pop" });
     if (s.beat.visual === "rule-110") events.push({ frame: s.impact, sound: "click" });
     if (s.beat.visual === "glider-collision") events.push({ frame: s.impact, sound: "slam" });
+    if (s.beat.visual === "debruijn-cycle") {
+      const ph = s.beat.params?.phase;
+      const sound = ph === "graph" ? "pop" : ph === "angle" ? "ding" : ph === "linear" ? "click" : "pop";
+      events.push({ frame: s.impact, sound });
+    }
   }
   return events;
 };
@@ -4606,6 +4612,590 @@ const GliderCollisionVisual: React.FC<{
   );
 };
 
+/** Кольцо де Брёйна: window — кольцо битов с 16-битным окном; graph — мини-граф де Брёйна и эйлеров обход; angle — кольцевой датчик угла; linear — разрез кольца в линию с хвостиком. */
+const DebruijnCycleVisual: React.FC<{
+  local: number;
+  fps: number;
+  impactLocal: number;
+  phase?: "window" | "graph" | "angle" | "linear";
+}> = ({ local, fps, impactLocal, phase = "window" }) => {
+  const enter = spring({ frame: local, fps, config: { damping: 15, mass: 0.8 } });
+  const done = local >= impactLocal;
+  const cx = W / 2;
+  const mono: React.CSSProperties = { fontFamily: theme.mono, fontWeight: 800, letterSpacing: 2 };
+
+  if (phase === "graph") {
+    // Мини-граф де Брёйна для n=3 (вершины 2 бита, рёбра 3 бита) — принцип масштабируется до n=16
+    const nodes = [
+      { id: "00", x: cx, y: 460, label: "00" },
+      { id: "01", x: cx + 240, y: 760, label: "01" },
+      { id: "11", x: cx, y: 1040, label: "11" },
+      { id: "10", x: cx - 240, y: 760, label: "10" },
+    ];
+    const edges = [
+      { from: 0, to: 0, label: "000" },
+      { from: 0, to: 1, label: "001" },
+      { from: 1, to: 2, label: "011" },
+      { from: 2, to: 3, label: "110" },
+      { from: 3, to: 1, label: "101" },
+      { from: 1, to: 0, label: "010" },
+      { from: 2, to: 2, label: "111" },
+      { from: 3, to: 0, label: "100" },
+    ];
+    const prog = smooth(clamp01((local - 6) / Math.max(impactLocal - 6, 1)));
+    const edgeCount = Math.floor(prog * edges.length);
+    const badgeP = done ? spring({ frame: local - impactLocal, fps, config: { damping: 11, mass: 0.7 } }) : 0;
+    const nodePulse = (idx: number) => 1 + 0.03 * Math.sin((local + idx * 8) / 9);
+    return (
+      <>
+        <div style={{ position: "absolute", left: cx, top: 280, transform: "translateX(-50%)", ...mono, fontSize: 26, color: theme.subtext, opacity: enter }}>
+          ГРАФ де БРЁЙНА · n=3
+        </div>
+        <div style={{ position: "absolute", left: cx, top: 330, transform: "translateX(-50%)", fontFamily: theme.font, fontSize: 24, color: theme.subtext, opacity: enter }}>
+          вершины 2 бита · рёбра 3 бита
+        </div>
+        <div style={{ position: "absolute", left: cx, top: 370, transform: "translateX(-50%)", fontFamily: theme.mono, fontSize: 21, color: theme.accent, opacity: enter }}>
+          n=16 → 32768 вершин · 65536 рёбер
+        </div>
+        {edges.map((e, i) => {
+          const n1 = nodes[e.from];
+          const n2 = nodes[e.to];
+          const visible = i < edgeCount || done;
+          const isSelf = e.from === e.to;
+          if (!visible) return null;
+          const dx = n2.x - n1.x;
+          const dy = n2.y - n1.y;
+          const len = Math.sqrt(dx * dx + dy * dy) || 1;
+          const ang = (Math.atan2(dy, dx) * 180) / Math.PI;
+          const mx = (n1.x + n2.x) / 2;
+          const my = (n1.y + n2.y) / 2;
+          if (isSelf) {
+            return (
+              <React.Fragment key={i}>
+                <div
+                  style={{
+                    position: "absolute",
+                    left: n1.x + 58,
+                    top: n1.y - 34,
+                    width: 86,
+                    height: 86,
+                    borderRadius: "50%",
+                    border: `3px solid ${theme.accent2}`,
+                    opacity: enter * 0.9,
+                  }}
+                />
+                <div
+                  style={{
+                    position: "absolute",
+                    left: n1.x + 96,
+                    top: n1.y - 46,
+                    transform: "translateX(-50%)",
+                    fontFamily: theme.mono,
+                    fontWeight: 800,
+                    fontSize: 20,
+                    color: theme.accent2,
+                    background: theme.panel,
+                    padding: "2px 8px",
+                    borderRadius: 8,
+                    opacity: enter,
+                  }}
+                >
+                  {e.label}
+                </div>
+              </React.Fragment>
+            );
+          }
+          return (
+            <React.Fragment key={i}>
+              <div
+                style={{
+                  position: "absolute",
+                  left: n1.x,
+                  top: n1.y,
+                  width: len,
+                  height: 4,
+                  transformOrigin: "0 50%",
+                  transform: `translateY(-50%) rotate(${ang}deg)`,
+                  background: i < edgeCount ? theme.accent : theme.panelBorder,
+                  opacity: enter,
+                }}
+              />
+              <div style={{ position: "absolute", left: n1.x + (dx * 2) / 3, top: n1.y + (dy * 2) / 3, transform: `rotate(${ang}deg)` , color: theme.accent, fontSize: 24 }}>›</div>
+              <div
+                style={{
+                  position: "absolute",
+                  left: mx,
+                  top: my - 18,
+                  transform: "translate(-50%, -50%)",
+                  fontFamily: theme.mono,
+                  fontWeight: 700,
+                  fontSize: 19,
+                  color: theme.text,
+                  background: `${theme.panel}CC`,
+                  padding: "2px 8px",
+                  borderRadius: 8,
+                  opacity: enter,
+                }}
+              >
+                {e.label}
+              </div>
+            </React.Fragment>
+          );
+        })}
+        {nodes.map((n, i) => (
+          <div
+            key={n.id}
+            style={{
+              position: "absolute",
+              left: n.x - 62,
+              top: n.y - 52,
+              width: 124,
+              height: 104,
+              borderRadius: 20,
+              background: theme.panel,
+              border: `3px solid ${theme.accent}`,
+              boxShadow: `0 0 30px ${theme.accent}22`,
+              opacity: enter,
+              transform: `scale(${nodePulse(i)})`,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 4,
+            }}
+          >
+            <div style={{ fontFamily: theme.mono, fontWeight: 800, fontSize: 36, color: theme.text }}>{n.label}</div>
+            <div style={{ fontFamily: theme.mono, fontSize: 16, color: theme.subtext }}>вершина</div>
+          </div>
+        ))}
+        <div
+          style={{
+            position: "absolute",
+            left: cx,
+            top: 1210,
+            transform: `translateX(-50%) scale(${done ? badgeP : 0.92})`,
+            opacity: done ? badgeP : enter * 0.9,
+            padding: "14px 26px",
+            borderRadius: 999,
+            background: done ? `${theme.success}18` : theme.panel,
+            border: `2px solid ${done ? theme.success : theme.panelBorder}`,
+            color: done ? theme.success : theme.subtext,
+            fontFamily: theme.font,
+            fontWeight: 800,
+            fontSize: 28,
+            whiteSpace: "nowrap",
+          }}
+        >
+          {done ? "эйлеров обход = кольцо де Брёйна" : `пройдено рёбер ${edgeCount}/8`}
+        </div>
+        {done ? <PulseRing x={cx} y={760} triggerFrame={impactLocal} tone="success" size={520} /> : null}
+      </>
+    );
+  }
+
+  if (phase === "angle") {
+    const R = 280;
+    const cy = 820;
+    const segs = 32;
+    const windowSize = 8;
+    const activeSeg = Math.floor((local / 4) % segs);
+    const readingBits = Array.from({ length: windowSize }).map((_, k) => {
+      const idx = (activeSeg + k) % segs;
+      return random(`angle-bit-${idx}`) > 0.5 ? 1 : 0;
+    });
+    const readingVal = parseInt(readingBits.join(""), 2);
+    const angleDeg = Math.round((readingVal / 256) * 360) % 360;
+    const tickP = smooth(clamp01((local - 6) / 16));
+    const needleA = ((activeSeg / segs) * 360 - 90) * (Math.PI / 180);
+    const nx = cx + (R + 54) * Math.cos(needleA);
+    const ny = cy + (R + 54) * Math.sin(needleA);
+    const reveal = done ? spring({ frame: local - impactLocal, fps, config: { damping: 11, mass: 0.7 } }) : 0;
+    return (
+      <>
+        <div style={{ position: "absolute", left: cx, top: 300, transform: "translateX(-50%)", ...mono, fontSize: 26, color: theme.subtext, opacity: enter }}>
+          КОЛЬЦЕВОЙ ДАТЧИК · 16 БИТ = 65536 УГЛОВ
+        </div>
+        <div
+          style={{
+            position: "absolute",
+            left: cx - R,
+            top: cy - R,
+            width: R * 2,
+            height: R * 2,
+            borderRadius: "50%",
+            background: "#0D1420",
+            border: `3px solid ${theme.panelBorder}`,
+            opacity: enter,
+            transform: `scale(${0.92 + 0.08 * enter})`,
+            boxShadow: "0 0 60px rgba(0,0,0,0.5)",
+            overflow: "hidden",
+          }}
+        >
+          <svg width={R * 2} height={R * 2} style={{ position: "absolute", inset: 0 }}>
+            {Array.from({ length: segs }).map((_, i) => {
+              const a0 = (i / segs) * 360 - 90;
+              const a1 = ((i + 1) / segs) * 360 - 90;
+              const r0 = i % 2 === 0 ? 34 : 22;
+              const bit = random(`angle-seg-${i}`) > 0.5 ? 1 : 0;
+              const isInWindow = ((i - activeSeg + segs) % segs) < windowSize;
+              const col = isInWindow ? (bit ? theme.accent : theme.accent2) : bit ? `${theme.accent}33` : `${theme.accent2}33`;
+              const largeArc = 0;
+              const x0 = R + (R - r0) * Math.cos((a0 * Math.PI) / 180);
+              const y0 = R + (R - r0) * Math.sin((a0 * Math.PI) / 180);
+              const x1 = R + (R - r0) * Math.cos((a1 * Math.PI) / 180);
+              const y1 = R + (R - r0) * Math.sin((a1 * Math.PI) / 180);
+              const x2 = R + R * Math.cos((a1 * Math.PI) / 180);
+              const y2 = R + R * Math.sin((a1 * Math.PI) / 180);
+              const x3 = R + R * Math.cos((a0 * Math.PI) / 180);
+              const y3 = R + R * Math.sin((a0 * Math.PI) / 180);
+              return <path key={i} d={`M ${x0} ${y0} L ${x1} ${y1} L ${x2} ${y2} L ${x3} ${y3} Z`} fill={col} stroke={isInWindow ? theme.text : "transparent"} strokeWidth={isInWindow ? 1.2 : 0} />;
+            })}
+            <circle cx={R} cy={R} r={R - 70} fill={theme.bg} stroke={theme.panelBorder} strokeWidth={2} />
+          </svg>
+          <div style={{ position: "absolute", left: R - 90, top: R - 40, width: 180, textAlign: "center", fontFamily: theme.mono, fontWeight: 800, fontSize: 56, color: theme.text, opacity: tickP }}>{angleDeg}°</div>
+          <div style={{ position: "absolute", left: R - 90, top: R + 26, width: 180, textAlign: "center", fontFamily: theme.mono, fontSize: 20, color: theme.subtext, letterSpacing: 1, opacity: tickP }}>УГОЛ</div>
+        </div>
+        <div
+          style={{
+            position: "absolute",
+            left: nx - 22,
+            top: ny - 22,
+            width: 44,
+            height: 44,
+            borderRadius: "50%",
+            background: theme.warning,
+            border: `3px solid ${theme.text}`,
+            boxShadow: `0 0 20px ${theme.warning}`,
+            opacity: tickP,
+          }}
+        />
+        <div style={{ position: "absolute", left: cx - 320, top: cy + R + 50, width: 640, display: "flex", gap: 6, opacity: tickP * enter, justifyContent: "center" }}>
+          {readingBits.map((b, i) => (
+            <div
+              key={i}
+              style={{
+                width: 56,
+                height: 56,
+                borderRadius: 12,
+                background: b ? theme.accent : theme.accent2,
+                color: b ? "#06121A" : theme.text,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontFamily: theme.mono,
+                fontWeight: 800,
+                fontSize: 30,
+                border: `2px solid ${b ? theme.accent : theme.accent2}`,
+                boxShadow: `0 0 16px ${b ? theme.accent : theme.accent2}55`,
+              }}
+            >
+              {b}
+            </div>
+          ))}
+        </div>
+        <div style={{ position: "absolute", left: cx, top: cy + R + 140, transform: "translateX(-50%)", fontFamily: theme.mono, fontSize: 21, color: theme.subtext, letterSpacing: 1, opacity: tickP * enter }}>
+          ОКНО {windowSize} БИТ → ОДНОЗНАЧНЫЙ УГОЛ
+        </div>
+        <div
+          style={{
+            position: "absolute",
+            left: cx,
+            top: cy + R + 190,
+            transform: `translateX(-50%) scale(${done ? reveal : 0.9})`,
+            opacity: done ? reveal : enter * 0.85,
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+            padding: "14px 26px",
+            borderRadius: 999,
+            background: done ? `${theme.success}18` : theme.panel,
+            border: `2px solid ${done ? theme.success : theme.panelBorder}`,
+            color: done ? theme.success : theme.subtext,
+            fontFamily: theme.font,
+            fontWeight: 800,
+            fontSize: 28,
+            whiteSpace: "nowrap",
+          }}
+        >
+          <IconGlyph name="scan" size={28} color={done ? theme.success : theme.subtext} strokeWidth={1.8} />
+          {done ? "16 ТОЧЕК → ТОЧНЫЙ УГОЛ" : "датчик видит лишь окно рядом"}
+        </div>
+        {done ? <PulseRing x={cx} y={cy} triggerFrame={impactLocal} tone="success" size={620} /> : null}
+      </>
+    );
+  }
+
+  if (phase === "linear") {
+    const R = 230;
+    const cy = 780;
+    const ringX = 300;
+    const lineY = 1180;
+    const cutP = smooth(clamp01((local - 10) / Math.max(impactLocal - 10, 1)));
+    const tailBits = Array.from({ length: 15 }).map((_, i) => (i % 2 === 0 ? 1 : 0));
+    const lineBits = 34;
+    const bitW = 18;
+    const lineW = lineBits * (bitW + 2);
+    const lineX = cx - lineW / 2;
+    const lineProg = smooth(clamp01((local - impactLocal) / 18));
+    return (
+      <>
+        <div style={{ position: "absolute", left: cx, top: 300, transform: "translateX(-50%)", ...mono, fontSize: 26, color: theme.subtext, opacity: enter }}>
+          КОЛЬЦО → ЛИНИЯ
+        </div>
+        <div
+          style={{
+            position: "absolute",
+            left: ringX - R,
+            top: cy - R,
+            width: R * 2,
+            height: R * 2,
+            borderRadius: "50%",
+            border: `4px solid ${theme.accent}`,
+            opacity: enter,
+            transform: `scale(${0.9 + 0.1 * enter})`,
+            boxShadow: `0 0 50px ${theme.accent}22`,
+          }}
+        >
+          <div
+            style={{
+              position: "absolute",
+              right: -18,
+              top: R - 3,
+              width: 36,
+              height: 6,
+              background: theme.danger,
+              transform: `rotate(${-12 + 30 * cutP}deg)`,
+              opacity: cutP,
+              boxShadow: `0 0 14px ${theme.danger}`,
+            }}
+          />
+          <div
+            style={{
+              position: "absolute",
+              left: "50%",
+              top: "50%",
+              transform: "translate(-50%, -50%)",
+              fontFamily: theme.mono,
+              fontWeight: 800,
+              fontSize: 28,
+              color: theme.accent,
+              opacity: enter,
+            }}
+          >
+            65536
+          </div>
+        </div>
+        <div style={{ position: "absolute", left: ringX + R + 30, top: cy - 14, width: 90, height: 4, background: theme.accent, opacity: cutP * enter, borderRadius: 999 }} />
+        <div style={{ position: "absolute", left: ringX + R + 40, top: cy - 26, color: theme.accent, fontFamily: theme.font, fontWeight: 800, fontSize: 30, opacity: cutP * enter }}>›</div>
+        <div style={{ position: "absolute", left: cx, top: cy + R + 34, transform: "translateX(-50%)", fontFamily: theme.font, fontSize: 24, color: theme.subtext, opacity: cutP * enter }}>разрежешь кольцо</div>
+        <div style={{ position: "absolute", left: lineX, top: lineY, width: lineW, height: 54, display: "flex", gap: 2, opacity: enter }}>
+          {Array.from({ length: lineBits }).map((_, i) => {
+            const isTail = i >= lineBits - 15;
+            const v = isTail ? tailBits[i - (lineBits - 15)] : random(`linear-${i}`) > 0.5 ? 1 : 0;
+            const hl = isTail && lineProg > 0;
+            return (
+              <div
+                key={i}
+                style={{
+                  width: bitW,
+                  height: 54,
+                  borderRadius: 8,
+                  background: hl ? theme.warning : v ? `${theme.accent}22` : `${theme.accent2}22`,
+                  border: `2px solid ${hl ? theme.warning : v ? theme.accent : theme.accent2}`,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontFamily: theme.mono,
+                  fontWeight: 800,
+                  fontSize: 18,
+                  color: hl ? "#06121A" : v ? theme.accent : theme.accent2,
+                  transform: hl ? `scale(${0.9 + 0.1 * lineProg})` : undefined,
+                  opacity: enter,
+                }}
+              >
+                {v}
+              </div>
+            );
+          })}
+        </div>
+        <div style={{ position: "absolute", left: lineX + (lineBits - 15) * (bitW + 2), top: lineY + 64, width: 15 * (bitW + 2), height: 3, background: theme.warning, opacity: lineProg }} />
+        <div style={{ position: "absolute", left: lineX + (lineBits - 15) * (bitW + 2) + 6, top: lineY + 74, fontFamily: theme.mono, fontSize: 19, color: theme.warning, letterSpacing: 1, opacity: lineProg }}>
+          +15 бит начала
+        </div>
+        <div
+          style={{
+            position: "absolute",
+            left: cx,
+            top: lineY + 122,
+            transform: "translateX(-50%)",
+            display: "flex",
+            alignItems: "center",
+            gap: 16,
+            padding: "14px 26px",
+            borderRadius: 999,
+            background: done ? `${theme.success}18` : theme.panel,
+            border: `2px solid ${done ? theme.success : theme.panelBorder}`,
+            color: done ? theme.success : theme.subtext,
+            fontFamily: theme.mono,
+            fontWeight: 800,
+            fontSize: 26,
+            opacity: enter,
+          }}
+        >
+          <span style={{ color: done ? theme.success : theme.subtext }}>{done ? "65551" : "65536"} БИТ ЛИНЕЙНО</span>
+          <span style={{ fontFamily: theme.font, fontWeight: 700, fontSize: 20, color: theme.subtext }}>N + окно − 1</span>
+        </div>
+        {done ? <PulseRing x={cx} y={lineY + 27} triggerFrame={impactLocal} tone="success" size={760} /> : null}
+      </>
+    );
+  }
+
+  // phase === "window"
+  const R = 260;
+  const cy = 820;
+  const total = 32;
+  const win = 16;
+  const winStart = Math.floor(((local / 3) % total));
+  const bits = Array.from({ length: total }).map((_, i) => (random(`dbw-${i}`) > 0.5 ? 1 : 0));
+  const ringEnter = spring({ frame: local, fps, config: { damping: 15, mass: 0.8 } });
+  const winP = smooth(clamp01((local - 8) / Math.max(impactLocal - 8, 1)));
+  const badgeP = done ? spring({ frame: local - impactLocal, fps, config: { damping: 11, mass: 0.7 } }) : 0;
+  return (
+    <>
+      <div style={{ position: "absolute", left: cx, top: 300, transform: "translateX(-50%)", ...mono, fontSize: 26, color: theme.subtext, opacity: enter }}>
+        КОЛЬЦО де БРЁЙНА · 2¹⁶ = 65536
+      </div>
+      <div style={{ position: "absolute", left: cx, top: 350, transform: "translateX(-50%)", fontFamily: theme.font, fontSize: 24, color: theme.subtext, opacity: enter }}>
+        16-битное окно скользит по кольцу
+      </div>
+      <div
+        style={{
+          position: "absolute",
+          left: cx - R,
+          top: cy - R,
+          width: R * 2,
+          height: R * 2,
+          borderRadius: "50%",
+          border: `3px solid ${theme.panelBorder}`,
+          opacity: ringEnter,
+          transform: `scale(${0.88 + 0.12 * ringEnter})`,
+          boxShadow: "0 0 60px rgba(0,0,0,0.5)",
+        }}
+      />
+      {bits.map((b, i) => {
+        const ang = (i / total) * 360 - 90;
+        const rad = (ang * Math.PI) / 180;
+        const inWin = ((i - winStart + total) % total) < win;
+        const r = R - 18;
+        const x = cx + r * Math.cos(rad);
+        const y = cy + r * Math.sin(rad);
+        const col = b ? theme.accent : theme.accent2;
+        return (
+          <div
+            key={i}
+            style={{
+              position: "absolute",
+              left: x - 18,
+              top: y - 18,
+              width: 36,
+              height: 36,
+              borderRadius: "50%",
+              background: b ? `${theme.accent}22` : `${theme.accent2}22`,
+              border: `2px solid ${inWin ? theme.warning : col}`,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontFamily: theme.mono,
+              fontWeight: 800,
+              fontSize: 18,
+              color: inWin ? theme.warning : col,
+              opacity: ringEnter,
+              transform: `scale(${inWin ? 1.18 : 1})`,
+              boxShadow: inWin ? `0 0 16px ${theme.warning}55` : "none",
+            }}
+          >
+            {b}
+          </div>
+        );
+      })}
+      {/* скоба окна */}
+      <svg width={R * 2 + 40} height={R * 2 + 40} style={{ position: "absolute", left: cx - R - 20, top: cy - R - 20, opacity: winP * enter, pointerEvents: "none" }}>
+        {(() => {
+          const a0 = (winStart / total) * 360 - 90;
+          const a1 = ((winStart + win) / total) * 360 - 90;
+          const rr = R + 26;
+          const x0 = R + 20 + rr * Math.cos((a0 * Math.PI) / 180);
+          const y0 = R + 20 + rr * Math.sin((a0 * Math.PI) / 180);
+          const x1 = R + 20 + rr * Math.cos((a1 * Math.PI) / 180);
+          const y1 = R + 20 + rr * Math.sin((a1 * Math.PI) / 180);
+          const largeArc = win / total > 0.5 ? 1 : 0;
+          return <path d={`M ${x0} ${y0} A ${rr} ${rr} 0 ${largeArc} 1 ${x1} ${y1}`} fill="none" stroke={theme.warning} strokeWidth={4} strokeLinecap="round" />;
+        })()}
+      </svg>
+      <div
+        style={{
+          position: "absolute",
+          left: cx,
+          top: cy + R + 36,
+          transform: "translateX(-50%)",
+          display: "flex",
+          gap: 4,
+          opacity: winP * enter,
+        }}
+      >
+        {Array.from({ length: win }).map((_, k) => {
+          const bit = bits[(winStart + k) % total];
+          return (
+            <div
+              key={k}
+              style={{
+                width: 38,
+                height: 44,
+                borderRadius: 9,
+                background: bit ? theme.accent : theme.accent2,
+                color: bit ? "#06121A" : theme.text,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontFamily: theme.mono,
+                fontWeight: 800,
+                fontSize: 22,
+                border: `2px solid ${bit ? theme.accent : theme.accent2}`,
+              }}
+            >
+              {bit}
+            </div>
+          );
+        })}
+      </div>
+      <div style={{ position: "absolute", left: cx, top: cy + R + 96, transform: "translateX(-50%)", fontFamily: theme.mono, fontSize: 20, color: theme.warning, letterSpacing: 1, opacity: winP * enter }}>
+        ОКНО 16 БИТ → ОДИН ИЗ 65536
+      </div>
+      <div
+        style={{
+          position: "absolute",
+          left: cx,
+          top: cy + R + 140,
+          transform: `translateX(-50%) scale(${done ? badgeP : 0.94})`,
+          opacity: done ? badgeP : enter * 0.9,
+          padding: "14px 26px",
+          borderRadius: 999,
+          background: done ? `${theme.success}18` : theme.panel,
+          border: `2px solid ${done ? theme.success : theme.panelBorder}`,
+          color: done ? theme.success : theme.subtext,
+          fontFamily: theme.font,
+          fontWeight: 800,
+          fontSize: 28,
+          whiteSpace: "nowrap",
+        }}
+      >
+        {done ? "каждое окно — ровно раз" : "65536 окон · 65536 значений"}
+      </div>
+      {done ? <PulseRing x={cx} y={cy} triggerFrame={impactLocal} tone="success" size={620} /> : null}
+    </>
+  );
+};
+
 /* ──────────────────────────── сцена-сториборд ──────────────────────────── */
 
 /** Каждая фраза диктора — свой бит с движением камеры между битами. */
@@ -4646,6 +5236,7 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     "bloom-probe": { scale: 0.88, y: -20 },
     "coin-pair": { scale: 0.96, y: -10 },
     "bit-extractor": { scale: 0.92, y: -20 },
+    "debruijn-cycle": { scale: 0.92, y: -20 },
   };
   const cur = cams[slot.beat.visual] ?? { scale: 1, y: 0 };
   const prev = idx > 0 ? cams[slots[idx - 1].beat.visual] ?? cur : cur;
@@ -4869,6 +5460,15 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             local={local}
             fps={fps}
             impactLocal={impactLocal}
+          />
+        );
+      case "debruijn-cycle":
+        return (
+          <DebruijnCycleVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as "window" | "graph" | "angle" | "linear" | undefined) ?? "window"}
           />
         );
       default:
