@@ -7,6 +7,7 @@ import type { StoryScene as StoryProps, StoryBeat, Word } from "../lib/types";
 import { IconGlyph } from "../primitives/IconGlyph";
 import { PulseRing } from "../lib/Motion";
 import { SceneHeading } from "./SceneHeading";
+import { OrbitFftGroups } from "./OrbitFftGroups";
 
 /* ──────────────────────────── расписание битов ──────────────────────────── */
 
@@ -59,6 +60,10 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
     if (beat.visual === "rule-110") impact = start + Math.round(dur * 0.6);
     if (beat.visual === "glider-collision") impact = start + Math.round(dur * 0.7);
     if (beat.visual === "debruijn-cycle") impact = start + Math.round(dur * 0.58);
+    if (beat.visual === "orbit-fft-groups") {
+      const phase = beat.params?.phase;
+      impact = start + Math.round(dur * (phase === "orbit" ? 0.68 : 0.58));
+    }
     return { beat, start, end, impact };
   });
 };
@@ -106,6 +111,11 @@ export const storySfx = (
     if (s.beat.visual === "debruijn-cycle") {
       const ph = s.beat.params?.phase;
       const sound = ph === "graph" ? "pop" : ph === "angle" ? "ding" : ph === "linear" ? "click" : "pop";
+      events.push({ frame: s.impact, sound });
+    }
+    if (s.beat.visual === "orbit-fft-groups") {
+      const ph = s.beat.params?.phase;
+      const sound = ph === "stages" ? "whoosh" : ph === "groups" ? "ding" : "pop";
       events.push({ frame: s.impact, sound });
     }
   }
@@ -5230,6 +5240,7 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     "paradox-box": { scale: 0.9, y: -30 },
     "proof-sequence": { scale: 0.92, y: -20 },
     "fft-wave": { scale: 0.94, y: -30 },
+    "orbit-fft-groups": { scale: 0.88, y: -30 },
     "qr-repair": { scale: 0.9, y: -30 },
     "hll-estimate": { scale: 0.92, y: -20 },
     "bloom-bitarray": { scale: 0.88, y: -30 },
@@ -5469,6 +5480,18 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             fps={fps}
             impactLocal={impactLocal}
             phase={(slot.beat.params?.phase as "window" | "graph" | "angle" | "linear" | undefined) ?? "window"}
+          />
+        );
+      case "orbit-fft-groups":
+        return (
+          <OrbitFftGroups
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as "orbit" | "groups" | "stages" | undefined) ?? "orbit"}
+            asteroid={slot.beat.params?.asteroid as string | undefined}
+            observations={slot.beat.params?.observations as number | undefined}
+            year={slot.beat.params?.year as string | undefined}
           />
         );
       default:

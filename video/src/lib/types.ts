@@ -84,6 +84,7 @@ export interface StoryBeat {
     | "paradox-box"
     | "proof-sequence"
     | "fft-wave"
+    | "orbit-fft-groups"
     | "qr-repair"
     | "hll-estimate"
     | "bloom-bitarray"
