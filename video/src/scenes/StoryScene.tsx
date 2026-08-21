@@ -405,7 +405,7 @@ const TitleSlam: React.FC<{ local: number; fps: number; impactLocal: number; tex
             fontFamily: theme.font,
             fontSize: 48,
             color: theme.subtext,
-            opacity: interpolate(local, [14, 26], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" }),
+            opacity: interpolate(local, [2, 10], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" }),
           }}
         >
           {sub}

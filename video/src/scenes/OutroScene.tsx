@@ -35,10 +35,10 @@ export const OutroScene: React.FC<{ scene: OutroProps; frames: number }> = ({ sc
           position: "absolute",
           left: 130,
           right: 130,
-          top: layout.height * 0.38,
+          top: layout.height * 0.33,
           display: "flex",
           flexDirection: "column",
-          gap: 34,
+          gap: 24,
         }}
       >
         {(scene.bullets ?? []).map((b, i) => {
@@ -64,7 +64,7 @@ export const OutroScene: React.FC<{ scene: OutroProps; frames: number }> = ({ sc
                   flexShrink: 0,
                 }}
               />
-              <span style={{ fontFamily: theme.font, fontWeight: 700, fontSize: 56, color: theme.text }}>
+              <span style={{ fontFamily: theme.font, fontWeight: 700, fontSize: 48, color: theme.text }}>
                 {b}
               </span>
             </div>
@@ -75,7 +75,7 @@ export const OutroScene: React.FC<{ scene: OutroProps; frames: number }> = ({ sc
         <>
         <PulseRing
           x={layout.width / 2}
-          y={layout.height * 0.66 + 60}
+          y={layout.height * 0.59 + 60}
           triggerFrame={ctaFrom}
           size={420}
         />
@@ -84,7 +84,7 @@ export const OutroScene: React.FC<{ scene: OutroProps; frames: number }> = ({ sc
             position: "absolute",
             left: 0,
             right: 0,
-            top: layout.height * 0.66,
+            top: layout.height * 0.59,
             display: "flex",
             justifyContent: "center",
             opacity: interpolate(frame, [ctaFrom, ctaFrom + 12], [0, 1], {
@@ -100,10 +100,13 @@ export const OutroScene: React.FC<{ scene: OutroProps; frames: number }> = ({ sc
               color: "#06121A",
               fontFamily: theme.font,
               fontWeight: 800,
-              fontSize: 52,
-              padding: "26px 60px",
+              fontSize: 40,
+              padding: "16px 32px",
               borderRadius: 999,
               boxShadow: `0 0 60px ${theme.accent}66`,
+              maxWidth: 900,
+              textAlign: "center",
+              lineHeight: 1.05,
             }}
           >
             {scene.cta}
