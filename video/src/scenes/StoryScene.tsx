@@ -4804,7 +4804,7 @@ const DebruijnCycleVisual: React.FC<{
       return random(`angle-bit-${idx}`) > 0.5 ? 1 : 0;
     });
     const readingVal = parseInt(readingBits.join(""), 2);
-    const angleDeg = Math.round((readingVal / 256) * 360) % 360;
+    const angleDeg = (Math.round((readingVal / 2 ** windowSize) * 3600) / 10) % 360;
     const tickP = smooth(clamp01((local - 6) / 16));
     const needleA = ((activeSeg / segs) * 360 - 90) * (Math.PI / 180);
     const nx = cx + (R + 54) * Math.cos(needleA);
@@ -4852,7 +4852,7 @@ const DebruijnCycleVisual: React.FC<{
             })}
             <circle cx={R} cy={R} r={R - 70} fill={theme.bg} stroke={theme.panelBorder} strokeWidth={2} />
           </svg>
-          <div style={{ position: "absolute", left: R - 90, top: R - 40, width: 180, textAlign: "center", fontFamily: theme.mono, fontWeight: 800, fontSize: 56, color: theme.text, opacity: tickP }}>{angleDeg}°</div>
+          <div style={{ position: "absolute", left: R - 120, top: R - 40, width: 240, textAlign: "center", fontFamily: theme.mono, fontWeight: 800, fontSize: 56, color: theme.text, opacity: tickP }}>{angleDeg}°</div>
           <div style={{ position: "absolute", left: R - 90, top: R + 26, width: 180, textAlign: "center", fontFamily: theme.mono, fontSize: 20, color: theme.subtext, letterSpacing: 1, opacity: tickP }}>УГОЛ</div>
         </div>
         <div

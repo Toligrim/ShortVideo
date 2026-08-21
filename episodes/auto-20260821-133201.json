@@ -9,7 +9,7 @@
       "beats": [
         { "visual": "title-slam", "onWord": "Три", "params": { "text": "3 → 2 → 1", "sub": "65 536 бит" } },
         { "visual": "debruijn-cycle", "onWord": "Строка", "params": { "phase": "window" } },
-        { "visual": "title-slam", "onWord": "Каждая", "params": { "text": "65 536 КОМБИНАЦИЙ", "sub": "каждая ровно раз" } }
+        { "visual": "title-slam", "onWord": "Каждая", "params": { "text": "65 536", "sub": "комбинаций — каждая ровно раз" } }
       ]
     },
     {
