@@ -54,6 +54,8 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
     if (beat.visual === "hll-estimate") impact = start + Math.round(dur * 0.58);
     if (beat.visual === "bloom-bitarray") impact = start + Math.round(dur * 0.72);
     if (beat.visual === "bloom-probe") impact = start + Math.round(dur * 0.55);
+    if (beat.visual === "coin-pair") impact = start + Math.round(dur * 0.65);
+    if (beat.visual === "bit-extractor") impact = start + Math.round(dur * 0.75);
     return { beat, start, end, impact };
   });
 };
@@ -94,6 +96,8 @@ export const storySfx = (
     if (s.beat.visual === "hll-estimate") events.push({ frame: s.impact, sound: "pop" });
     if (s.beat.visual === "bloom-bitarray") events.push({ frame: s.impact, sound: "ding" });
     if (s.beat.visual === "bloom-probe") events.push({ frame: s.impact, sound: "pop" });
+    if (s.beat.visual === "coin-pair") events.push({ frame: s.impact, sound: "pop" });
+    if (s.beat.visual === "bit-extractor") events.push({ frame: s.impact, sound: "pop" });
   }
   return events;
 };
@@ -4048,6 +4052,298 @@ const BloomProbe: React.FC<{
   );
 };
 
+/** Две монетки падают попарно: совпадают — пропускаем, различаются — бит. */
+const CoinPairVisual: React.FC<{
+  local: number;
+  fps: number;
+  impactLocal: number;
+  faceA?: string;
+  faceB?: string;
+  match?: boolean;
+}> = ({ local, fps, impactLocal, faceA = "О", faceB = "Р", match = false }) => {
+  const enter = spring({ frame: local, fps, config: { damping: 15, mass: 0.8 } });
+  const cx = W / 2;
+  const coinR = 110;
+  const leftX = cx - 180;
+  const rightX = cx + 180;
+  const targetY = 860;
+  const coin1Y = interpolate(enter, [0, 1], [targetY - 320, targetY]);
+  const coin2P = spring({ frame: local - 8, fps, config: { damping: 13, mass: 0.8 } });
+  const coin2Y = interpolate(coin2P, [0, 1], [targetY - 320, targetY]);
+  const done = local >= impactLocal;
+  const resultP = done ? spring({ frame: local - impactLocal, fps, config: { damping: 12, mass: 0.7 } }) : 0;
+
+  const coinFace = (ch: string) => (
+    <div
+      style={{
+        width: coinR * 2,
+        height: coinR * 2,
+        borderRadius: "50%",
+        background: "radial-gradient(circle at 34% 28%, #EEF2F7, #9AA4B2 55%, #55606E 100%)",
+        border: "5px solid rgba(255,255,255,0.35)",
+        boxShadow: "0 0 60px rgba(0,0,0,0.45)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontFamily: theme.font,
+        fontWeight: 800,
+        fontSize: 100,
+        color: "#1B2230",
+      }}
+    >
+      {ch}
+    </div>
+  );
+
+  return (
+    <>
+      <div
+        style={{
+          position: "absolute",
+          left: cx,
+          top: 320,
+          transform: "translateX(-50%)",
+          fontFamily: theme.mono,
+          fontSize: 28,
+          letterSpacing: 3,
+          color: theme.subtext,
+          opacity: enter,
+        }}
+      >
+        ПАРА БРОСКОВ
+      </div>
+      {/* coin A */}
+      <div
+        style={{
+          position: "absolute",
+          left: leftX - coinR,
+          top: coin1Y,
+          opacity: enter,
+          transform: `rotate(${local * 3}deg)`,
+        }}
+      >
+        {coinFace(faceA)}
+      </div>
+      {/* coin B */}
+      <div
+        style={{
+          position: "absolute",
+          left: rightX - coinR,
+          top: coin2Y,
+          opacity: coin2P,
+          transform: `rotate(${-local * 2.5}deg)`,
+        }}
+      >
+        {coinFace(faceB)}
+      </div>
+      {/* separator line */}
+      <div
+        style={{
+          position: "absolute",
+          left: cx - 1,
+          top: targetY - coinR - 10,
+          width: 3,
+          height: coinR * 2 + 20,
+          background: `${theme.panelBorder}66`,
+          opacity: enter * 0.5,
+        }}
+      />
+      {/* result badge */}
+      {done ? (
+        <div
+          style={{
+            position: "absolute",
+            left: cx,
+            top: targetY + coinR + 50,
+            transform: `translateX(-50%) scale(${resultP})`,
+            opacity: resultP,
+            display: "flex",
+            alignItems: "center",
+            gap: 16,
+            padding: "16px 32px",
+            borderRadius: 999,
+            background: match ? `${theme.subtext}18` : `${theme.success}18`,
+            border: `2px solid ${match ? theme.subtext : theme.success}`,
+            color: match ? theme.subtext : theme.success,
+            fontFamily: theme.font,
+            fontWeight: 800,
+            fontSize: 32,
+            whiteSpace: "nowrap",
+            boxShadow: match ? "none" : `0 0 40px ${theme.success}33`,
+          }}
+        >
+          <IconGlyph name={match ? "x" : "check"} size={34} color={match ? theme.subtext : theme.success} strokeWidth={2.2} />
+          {match ? "ПРОПУСКАЕМ" : "ЕСТЬ БИТ"}
+        </div>
+      ) : null}
+    </>
+  );
+};
+
+/** Таблица извлечения битов: HT→1, TH→0, совпадения отброшены. */
+const BitExtractorVisual: React.FC<{
+  local: number;
+  fps: number;
+  impactLocal: number;
+}> = ({ local, fps, impactLocal }) => {
+  const enter = spring({ frame: local, fps, config: { damping: 15, mass: 0.8 } });
+  const cx = W / 2;
+  const done = local >= impactLocal;
+  const rowP = (i: number) => smooth(clamp01((local - 6 - i * 6) / 14));
+  const badgeP = done ? spring({ frame: local - impactLocal, fps, config: { damping: 11, mass: 0.7 } }) : 0;
+
+  const rows = [
+    { pair: "HT", bit: "1", tone: theme.success, crossed: false },
+    { pair: "TH", bit: "0", tone: theme.accent2, crossed: false },
+    { pair: "HH", bit: "—", tone: theme.subtext, crossed: true },
+    { pair: "TT", bit: "—", tone: theme.subtext, crossed: true },
+  ];
+
+  const cellH = 130;
+  const tableY = 520;
+  const tableW = 760;
+  const tableX = cx - tableW / 2;
+
+  return (
+    <>
+      <div
+        style={{
+          position: "absolute",
+          left: cx,
+          top: 320,
+          transform: "translateX(-50%)",
+          fontFamily: theme.mono,
+          fontSize: 28,
+          letterSpacing: 3,
+          color: theme.subtext,
+          opacity: enter,
+        }}
+      >
+        ТАБЛИЦА ИЗВЛЕЧЕНИЯ
+      </div>
+      {/* table rows */}
+      {rows.map((r, i) => {
+        const p = rowP(i);
+        const y = tableY + i * (cellH + 14);
+        return (
+          <div
+            key={i}
+            style={{
+              position: "absolute",
+              left: tableX,
+              top: y,
+              width: tableW,
+              height: cellH,
+              borderRadius: 22,
+              background: r.crossed ? `${theme.panel}88` : theme.panel,
+              border: `3px solid ${r.crossed ? `${theme.panelBorder}66` : r.tone}88`,
+              boxShadow: r.crossed ? "none" : `0 0 38px ${r.tone}22`,
+              display: "flex",
+              alignItems: "center",
+              padding: "0 36px",
+              gap: 24,
+              opacity: p * enter,
+              transform: `translateY(${(1 - p) * 30}px) scale(${0.92 + 0.08 * p})`,
+            }}
+          >
+            {/* pair label */}
+            <div
+              style={{
+                width: 120,
+                fontFamily: theme.mono,
+                fontWeight: 800,
+                fontSize: 44,
+                color: r.crossed ? theme.panelBorder : theme.text,
+                position: "relative",
+              }}
+            >
+              {r.pair}
+              {r.crossed ? (
+                <div
+                  style={{
+                    position: "absolute",
+                    left: -8,
+                    top: "50%",
+                    width: 136,
+                    height: 5,
+                    background: `${theme.danger}CC`,
+                    transform: "translateY(-50%) rotate(-8deg)",
+                  }}
+                />
+              ) : null}
+            </div>
+            {/* arrow */}
+            <div
+              style={{
+                fontFamily: theme.font,
+                fontSize: 36,
+                color: r.crossed ? theme.panelBorder : r.tone,
+              }}
+            >
+              →
+            </div>
+            {/* bit value */}
+            <div
+              style={{
+                width: 100,
+                textAlign: "center",
+                fontFamily: theme.font,
+                fontWeight: 800,
+                fontSize: 56,
+                color: r.crossed ? theme.panelBorder : r.tone,
+                textShadow: r.crossed ? "none" : `0 0 24px ${r.tone}55`,
+              }}
+            >
+              {r.bit}
+            </div>
+            {/* status badge */}
+            <div
+              style={{
+                marginLeft: "auto",
+                padding: "10px 20px",
+                borderRadius: 999,
+                fontFamily: theme.font,
+                fontWeight: 700,
+                fontSize: 24,
+                background: r.crossed ? `${theme.subtext}12` : `${r.tone}18`,
+                color: r.crossed ? theme.subtext : r.tone,
+                border: `2px solid ${r.crossed ? `${theme.subtext}44` : `${r.tone}66`}`,
+                whiteSpace: "nowrap",
+              }}
+            >
+              {r.crossed ? "ПРОПУСК" : "БИТ"}
+            </div>
+          </div>
+        );
+      })}
+      {/* impact badge */}
+      {done ? (
+        <div
+          style={{
+            position: "absolute",
+            left: cx,
+            top: tableY + rows.length * (cellH + 14) + 30,
+            transform: `translateX(-50%) scale(${badgeP})`,
+            opacity: badgeP,
+            padding: "14px 28px",
+            borderRadius: 999,
+            background: `${theme.success}18`,
+            border: `2px solid ${theme.success}`,
+            color: theme.success,
+            fontFamily: theme.font,
+            fontWeight: 800,
+            fontSize: 30,
+            whiteSpace: "nowrap",
+            boxShadow: `0 0 40px ${theme.success}33`,
+          }}
+        >
+          РАЗЛИЧИЯ = ЧЕСТНЫЕ БИТЫ
+        </div>
+      ) : null}
+    </>
+  );
+};
+
 /* ──────────────────────────── сцена-сториборд ──────────────────────────── */
 
 /** Каждая фраза диктора — свой бит с движением камеры между битами. */
@@ -4086,6 +4382,8 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     "hll-estimate": { scale: 0.92, y: -20 },
     "bloom-bitarray": { scale: 0.88, y: -30 },
     "bloom-probe": { scale: 0.88, y: -20 },
+    "coin-pair": { scale: 0.96, y: -10 },
+    "bit-extractor": { scale: 0.92, y: -20 },
   };
   const cur = cams[slot.beat.visual] ?? { scale: 1, y: 0 };
   const prev = idx > 0 ? cams[slots[idx - 1].beat.visual] ?? cur : cur;
@@ -4273,6 +4571,25 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             probeBits={slot.beat.params?.probeBits as number[] | undefined}
             result={(slot.beat.params?.result as "maybe" | "no" | undefined) ?? "no"}
             fileName={slot.beat.params?.fileName as string | undefined}
+          />
+        );
+      case "coin-pair":
+        return (
+          <CoinPairVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            faceA={slot.beat.params?.faceA as string | undefined}
+            faceB={slot.beat.params?.faceB as string | undefined}
+            match={slot.beat.params?.match as boolean | undefined}
+          />
+        );
+      case "bit-extractor":
+        return (
+          <BitExtractorVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
           />
         );
       default:
