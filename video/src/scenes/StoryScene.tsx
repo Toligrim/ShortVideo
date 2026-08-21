@@ -8,6 +8,7 @@ import { IconGlyph } from "../primitives/IconGlyph";
 import { PulseRing } from "../lib/Motion";
 import { SceneHeading } from "./SceneHeading";
 import { OrbitFftGroups } from "./OrbitFftGroups";
+import { GpsRelativity } from "./GpsRelativity";
 
 /* ──────────────────────────── расписание битов ──────────────────────────── */
 
@@ -60,6 +61,7 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
     if (beat.visual === "rule-110") impact = start + Math.round(dur * 0.6);
     if (beat.visual === "glider-collision") impact = start + Math.round(dur * 0.7);
     if (beat.visual === "debruijn-cycle") impact = start + Math.round(dur * 0.58);
+    if (beat.visual === "gps-relativity") impact = start + Math.round(dur * 0.62);
     if (beat.visual === "orbit-fft-groups") {
       const phase = beat.params?.phase;
       impact = start + Math.round(dur * (phase === "orbit" ? 0.68 : 0.58));
@@ -111,6 +113,11 @@ export const storySfx = (
     if (s.beat.visual === "debruijn-cycle") {
       const ph = s.beat.params?.phase;
       const sound = ph === "graph" ? "pop" : ph === "angle" ? "ding" : ph === "linear" ? "click" : "pop";
+      events.push({ frame: s.impact, sound });
+    }
+    if (s.beat.visual === "gps-relativity") {
+      const ph = s.beat.params?.phase;
+      const sound = ph === "factory" ? "click" : ph === "balance" ? "ding" : "pop";
       events.push({ frame: s.impact, sound });
     }
     if (s.beat.visual === "orbit-fft-groups") {
@@ -5248,6 +5255,7 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     "coin-pair": { scale: 0.96, y: -10 },
     "bit-extractor": { scale: 0.92, y: -20 },
     "debruijn-cycle": { scale: 0.92, y: -20 },
+    "gps-relativity": { scale: 0.9, y: -20 },
   };
   const cur = cams[slot.beat.visual] ?? { scale: 1, y: 0 };
   const prev = idx > 0 ? cams[slots[idx - 1].beat.visual] ?? cur : cur;
@@ -5480,6 +5488,15 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             fps={fps}
             impactLocal={impactLocal}
             phase={(slot.beat.params?.phase as "window" | "graph" | "angle" | "linear" | undefined) ?? "window"}
+          />
+        );
+      case "gps-relativity":
+        return (
+          <GpsRelativity
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as "orbit" | "speed" | "gravity" | "balance" | "factory" | "correction" | undefined) ?? "orbit"}
           />
         );
       case "orbit-fft-groups":

@@ -93,7 +93,8 @@ export interface StoryBeat {
     | "bit-extractor"
     | "rule-110"
     | "glider-collision"
-    | "debruijn-cycle";
+    | "debruijn-cycle"
+    | "gps-relativity";
   onWord?: string; // бит начинается на этом слове реплики
   params?: Record<string, unknown>;
 }
