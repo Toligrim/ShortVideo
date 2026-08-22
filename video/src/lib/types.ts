@@ -102,7 +102,8 @@ export interface StoryBeat {
     | "cuckoo-stash"
     | "inverse-sqrt-bits"
     | "merkle-tree"
-    | "stable-matching";
+    | "stable-matching"
+    | "busy-beaver";
   onWord?: string; // бит начинается на этом слове реплики
   params?: Record<string, unknown>;
 }

@@ -10,6 +10,7 @@ import { SceneHeading } from "./SceneHeading";
 import { OrbitFftGroups } from "./OrbitFftGroups";
 import { GpsRelativity } from "./GpsRelativity";
 import { InverseSqrtBits } from "./InverseSqrtBits";
+import { BusyBeaverVisual } from "./BusyBeaverVisual";
 
 /* ──────────────────────────── расписание битов ──────────────────────────── */
 
@@ -77,6 +78,7 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
       impact = start + Math.round(dur * (beat.params?.phase === "proof" ? 0.64 : 0.58));
     if (beat.visual === "stable-matching")
       impact = start + Math.round(dur * (beat.params?.phase === "final" ? 0.72 : 0.58));
+    if (beat.visual === "busy-beaver") impact = start + Math.round(dur * 0.62);
     return { beat, start, end, impact };
   });
 };
@@ -150,6 +152,7 @@ export const storySfx = (
       const ph = s.beat.params?.phase;
       events.push({ frame: s.impact, sound: ph === "final" ? "ding" : "pop" });
     }
+    if (s.beat.visual === "busy-beaver") events.push({ frame: s.impact, sound: "ding" });
   }
   return events;
 };
@@ -6756,6 +6759,7 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     "inverse-sqrt-bits": { scale: 0.92, y: -20 },
     "merkle-tree": { scale: 0.92, y: -20 },
     "stable-matching": { scale: 0.88, y: -20 },
+    "busy-beaver": { scale: 0.9, y: -20 },
   };
   const cur = cams[slot.beat.visual] ?? { scale: 1, y: 0 };
   const prev = idx > 0 ? cams[slots[idx - 1].beat.visual] ?? cur : cur;
@@ -7085,6 +7089,8 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             phase={(slot.beat.params?.phase as "propose" | "hold" | "final" | undefined) ?? "propose"}
           />
         );
+      case "busy-beaver":
+        return <BusyBeaverVisual local={local} fps={fps} impactLocal={impactLocal} />;
       default:
         return null;
     }
