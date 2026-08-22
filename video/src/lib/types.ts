@@ -99,7 +99,8 @@ export interface StoryBeat {
     | "gps-relativity"
     | "cuckoo-table"
     | "cuckoo-cycle"
-    | "cuckoo-stash";
+    | "cuckoo-stash"
+    | "inverse-sqrt-bits";
   onWord?: string; // бит начинается на этом слове реплики
   params?: Record<string, unknown>;
 }

@@ -9,6 +9,7 @@ import { PulseRing } from "../lib/Motion";
 import { SceneHeading } from "./SceneHeading";
 import { OrbitFftGroups } from "./OrbitFftGroups";
 import { GpsRelativity } from "./GpsRelativity";
+import { InverseSqrtBits } from "./InverseSqrtBits";
 
 /* ──────────────────────────── расписание битов ──────────────────────────── */
 
@@ -71,6 +72,7 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
     if (beat.visual === "cuckoo-table") impact = start + Math.round(dur * 0.58);
     if (beat.visual === "cuckoo-cycle") impact = start + Math.round(dur * 0.62);
     if (beat.visual === "cuckoo-stash") impact = start + Math.round(dur * 0.55);
+    if (beat.visual === "inverse-sqrt-bits") impact = start + Math.round(dur * 0.6);
     return { beat, start, end, impact };
   });
 };
@@ -135,6 +137,7 @@ export const storySfx = (
     if (s.beat.visual === "cuckoo-table") events.push({ frame: s.impact, sound: "pop" });
     if (s.beat.visual === "cuckoo-cycle") events.push({ frame: s.impact, sound: "slam" });
     if (s.beat.visual === "cuckoo-stash") events.push({ frame: s.impact, sound: "ding" });
+    if (s.beat.visual === "inverse-sqrt-bits") events.push({ frame: s.impact, sound: "pop" });
   }
   return events;
 };
@@ -6181,6 +6184,7 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     "cuckoo-table": { scale: 0.9, y: -30 },
     "cuckoo-cycle": { scale: 0.88, y: -30 },
     "cuckoo-stash": { scale: 0.9, y: -20 },
+    "inverse-sqrt-bits": { scale: 0.92, y: -20 },
   };
   const cur = cams[slot.beat.visual] ?? { scale: 1, y: 0 };
   const prev = idx > 0 ? cams[slots[idx - 1].beat.visual] ?? cur : cur;
@@ -6480,6 +6484,15 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             local={local}
             fps={fps}
             impactLocal={impactLocal}
+          />
+        );
+      case "inverse-sqrt-bits":
+        return (
+          <InverseSqrtBits
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as "strip" | "newton" | undefined) ?? "strip"}
           />
         );
       default:
