@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "slug": "auto-20260822-162101",
+  "targets": {
+    "youtube": {
+      "title": "Busy Beaver: пять состояний и 47 миллионов шагов",
+      "description": "Почему пять состояний машины Тьюринга дают предел в 47 176 870 шагов — и как это доказали.",
+      "tags": ["busy beaver", "машина Тьюринга", "теория вычислений", "математика", "информатика", "Coq"],
+      "category_id": "28",
+      "privacy_status": "public",
+      "made_for_kids": false,
+      "contains_synthetic_media": true,
+      "notify_subscribers": false
+    },
+    "instagram": {
+      "caption": "Busy Beaver: пять состояний и 47 176 870 шагов. Как маленькая машина получила огромный предел. #математика #информатика #shorts",
+      "share_to_feed": true
+    }
+  }
+}
