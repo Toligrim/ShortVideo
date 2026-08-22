@@ -6728,7 +6728,8 @@ const ReservoirSamplingVisual: React.FC<{
   fps: number;
   impactLocal: number;
   phase?: "stream" | "replace" | "survive" | "proof" | "fair";
-}> = ({ local, fps, impactLocal, phase = "stream" }) => {
+  chance?: string;
+}> = ({ local, fps, impactLocal, phase = "stream", chance }) => {
   const enter = spring({ frame: local, fps, config: { damping: 15, mass: 0.8 } });
   const arrived = local >= impactLocal;
   const flow = smooth(clamp01(local / Math.max(impactLocal - 8, 1)));
@@ -6736,15 +6737,16 @@ const ReservoirSamplingVisual: React.FC<{
   const current = phase === "replace" && arrived ? "2" : phase === "proof" && arrived ? "4" : "1";
   const incoming = phase === "proof" ? "4" : phase === "survive" ? "3" : phase === "fair" ? "N" : phase === "replace" ? "2" : "1";
   const reservoirColor = phase === "survive" ? theme.accent : arrived ? theme.success : theme.accent2;
+  const survivalLabel = chance ? `ПЕРЕЖИТЬ: ${chance} · ОСТАВИТЬ СТАРЫЙ` : "ОСТАВИТЬ СТАРЫЙ";
   const bottomLabel =
     phase === "proof"
       ? "1/4 × 3/4 = 1/4"
       : phase === "fair"
         ? "ПОСЛЕ N: КАЖДЫЙ 1/N"
         : phase === "survive"
-          ? "ОСТАВИТЬ СТАРЫЙ"
+          ? survivalLabel
           : phase === "replace"
-            ? "ЗАМЕНИТЬ С ВЕРОЯТНОСТЬЮ 1/2"
+            ? `ЗАМЕНИТЬ С ВЕРОЯТНОСТЬЮ ${chance ?? "1/2"}`
             : "ОДНА ЯЧЕЙКА · ОДИН ПРОХОД";
   const title =
     phase === "proof" ? "ПРОВЕРКА ЧЕСТНОСТИ" : phase === "fair" ? "РАВНЫЕ ШАНСЫ" : "ПОТОК → РЕЗЕРВУАР";
@@ -7319,6 +7321,7 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             fps={fps}
             impactLocal={impactLocal}
             phase={(slot.beat.params?.phase as "stream" | "replace" | "survive" | "proof" | "fair" | undefined) ?? "stream"}
+            chance={slot.beat.params?.chance as string | undefined}
           />
         );
       default:
