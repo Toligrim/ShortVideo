@@ -75,6 +75,8 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
     if (beat.visual === "inverse-sqrt-bits") impact = start + Math.round(dur * 0.6);
     if (beat.visual === "merkle-tree")
       impact = start + Math.round(dur * (beat.params?.phase === "proof" ? 0.64 : 0.58));
+    if (beat.visual === "stable-matching")
+      impact = start + Math.round(dur * (beat.params?.phase === "final" ? 0.72 : 0.58));
     return { beat, start, end, impact };
   });
 };
@@ -143,6 +145,10 @@ export const storySfx = (
     if (s.beat.visual === "merkle-tree") {
       const ph = s.beat.params?.phase;
       events.push({ frame: s.impact, sound: ph === "proof" ? "ding" : "pop" });
+    }
+    if (s.beat.visual === "stable-matching") {
+      const ph = s.beat.params?.phase;
+      events.push({ frame: s.impact, sound: ph === "final" ? "ding" : "pop" });
     }
   }
   return events;
@@ -6373,6 +6379,332 @@ const MerkleTreeVisual: React.FC<{ local: number; fps: number; impactLocal: numb
   );
 };
 
+/** Алгоритм Гейла—Шепли: две колонки (предлагающие и принимающие), движущиеся предложения, удержание лучшего, отказ и финальные стабильные пары. */
+const StableMatching: React.FC<{
+  local: number;
+  fps: number;
+  impactLocal: number;
+  phase?: "propose" | "hold" | "final";
+}> = ({ local, fps, impactLocal, phase = "propose" }) => {
+  const enter = spring({ frame: local, fps, config: { damping: 15, mass: 0.8 } });
+  const cx = W / 2;
+  const proposers = ["A", "B", "C"];
+  const acceptors = ["X", "Y", "Z"];
+  // финальные стабильные пары: A→Y, B→X, C→Z
+  const finalPairs = [
+    { p: 0, a: 1 },
+    { p: 1, a: 0 },
+    { p: 2, a: 2 },
+  ];
+  const leftX = cx - 320;
+  const rightX = cx + 320;
+  const startY = 500;
+  const gap = 200;
+  const cardW = 180;
+  const cardH = 130;
+
+  const mono: React.CSSProperties = { fontFamily: theme.mono, fontWeight: 800, letterSpacing: 2 };
+
+  const card = (
+    x: number,
+    y: number,
+    label: string,
+    color: string,
+    highlight: number,
+    rejected: boolean,
+  ) => {
+    const pulse = highlight > 0 ? 1 + 0.04 * Math.sin((local + highlight * 7) / 6) : 1;
+    const rejectOp = rejected ? 0.35 : 1;
+    return (
+      <div
+        style={{
+          position: "absolute",
+          left: x - cardW / 2,
+          top: y - cardH / 2,
+          width: cardW,
+          height: cardH,
+          borderRadius: 24,
+          background: theme.panel,
+          border: `3px solid ${rejected ? theme.panelBorder : color}${highlight > 0 ? "CC" : "66"}`,
+          boxShadow: highlight > 0 ? `0 0 ${40 + 12 * highlight}px ${color}44` : "none",
+          opacity: enter * rejectOp,
+          transform: `translateY(${(1 - enter) * 50}px) scale(${pulse})`,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 6,
+        }}
+      >
+        <IconGlyph
+          name={rejected ? "x" : "user"}
+          size={38}
+          color={rejected ? theme.danger : color}
+          strokeWidth={1.7}
+        />
+        <div style={{ fontFamily: theme.font, fontWeight: 800, fontSize: 34, color: rejected ? theme.subtext : theme.text }}>
+          {label}
+        </div>
+      </div>
+    );
+  };
+
+  // стрелка-предложение от proposer к acceptor
+  const proposalArrow = (
+    fromX: number,
+    fromY: number,
+    toX: number,
+    toY: number,
+    progress: number,
+    color: string,
+  ) => {
+    const x = interpolate(progress, [0, 1], [fromX, toX]);
+    const y = interpolate(progress, [0, 1], [fromY, toY]);
+    const op = progress > 0 && progress < 1 ? 1 : 0;
+    return (
+      <>
+        {/* след */}
+        <div
+          style={{
+            position: "absolute",
+            left: Math.min(fromX, x),
+            top: fromY - 2,
+            width: Math.abs(x - fromX) || 4,
+            height: 4,
+            background: `linear-gradient(90deg, ${color}00, ${color})`,
+            borderRadius: 999,
+            opacity: op * enter,
+          }}
+        />
+        {/* пилюля */}
+        <div
+          style={{
+            position: "absolute",
+            left: x,
+            top: y,
+            transform: "translate(-50%, -50%)",
+            padding: "8px 16px",
+            borderRadius: 999,
+            background: color,
+            color: "#06121A",
+            fontFamily: theme.mono,
+            fontWeight: 800,
+            fontSize: 22,
+            opacity: op * enter,
+            boxShadow: `0 0 22px ${color}AA`,
+            whiteSpace: "nowrap",
+          }}
+        >
+          →
+        </div>
+      </>
+    );
+  };
+
+  if (phase === "propose") {
+    // A proposes to X
+    const flowEnd = Math.max(impactLocal - 4, 1);
+    const p = smooth(clamp01(local / flowEnd));
+    return (
+      <>
+        <div style={{ position: "absolute", left: cx, top: 300, transform: "translateX(-50%)", ...mono, fontSize: 26, color: theme.subtext, opacity: enter }}>
+          ПРЕДЛАГАЮЩИЕ → ПРИНИМАЮЩИЕ
+        </div>
+        <div style={{ position: "absolute", left: leftX, top: startY - 120, transform: "translateX(-50%)", ...mono, fontSize: 22, color: theme.accent, opacity: enter }}>
+          ПРЕДЛАГАЮЩИЕ
+        </div>
+        <div style={{ position: "absolute", left: rightX, top: startY - 120, transform: "translateX(-50%)", ...mono, fontSize: 22, color: theme.accent2, opacity: enter }}>
+          ПРИНИМАЮЩИЕ
+        </div>
+        {proposers.map((name, i) => (
+          <React.Fragment key={`p${i}`}>
+            {card(leftX, startY + i * gap, name, theme.accent, i === 0 ? 1 : 0, false)}
+          </React.Fragment>
+        ))}
+        {acceptors.map((name, i) => (
+          <React.Fragment key={`a${i}`}>
+            {card(rightX, startY + i * gap, name, theme.accent2, 0, false)}
+          </React.Fragment>
+        ))}
+        {/* A → X */}
+        {proposalArrow(leftX + cardW / 2, startY, rightX - cardW / 2, startY, p, theme.accent)}
+        {local >= impactLocal ? <PulseRing x={rightX} y={startY} triggerFrame={impactLocal} tone="accent2" size={180} /> : null}
+        <div style={{ position: "absolute", left: cx, top: startY + 3 * gap + 60, transform: "translateX(-50%)", fontFamily: theme.font, fontWeight: 700, fontSize: 28, color: theme.subtext, opacity: enter }}>
+          A делает предложение X
+        </div>
+      </>
+    );
+  }
+
+  if (phase === "hold") {
+    // A holds X, B proposes to X (rejected), C proposes to Z
+    const flowP = smooth(clamp01(local / Math.max(impactLocal - 8, 1)));
+    const rejectP = local >= impactLocal ? smooth(clamp01((local - impactLocal) / 16)) : 0;
+    return (
+      <>
+        <div style={{ position: "absolute", left: cx, top: 300, transform: "translateX(-50%)", ...mono, fontSize: 26, color: theme.warning, opacity: enter }}>
+          ПРИНИМАЮЩИЙ ДЕРЖИТ ЛУЧШИЙ ВАРИАНТ
+        </div>
+        <div style={{ position: "absolute", left: leftX, top: startY - 120, transform: "translateX(-50%)", ...mono, fontSize: 22, color: theme.accent, opacity: enter }}>
+          ПРЕДЛАГАЮЩИЕ
+        </div>
+        <div style={{ position: "absolute", left: rightX, top: startY - 120, transform: "translateX(-50%)", ...mono, fontSize: 22, color: theme.accent2, opacity: enter }}>
+          ПРИНИМАЮЩИЕ
+        </div>
+        {proposers.map((name, i) => (
+          <React.Fragment key={`p${i}`}>
+            {card(leftX, startY + i * gap, name, theme.accent, i === 0 ? 1 : 0, i === 1 && rejectP > 0.5)}
+          </React.Fragment>
+        ))}
+        {acceptors.map((name, i) => (
+          <React.Fragment key={`a${i}`}>
+            {card(rightX, startY + i * gap, name, theme.accent2, i === 0 ? 1 : 0, false)}
+          </React.Fragment>
+        ))}
+        {/* A holds X — solid line */}
+        <div
+          style={{
+            position: "absolute",
+            left: leftX + cardW / 2,
+            top: startY - 2,
+            width: rightX - leftX - cardW,
+            height: 4,
+            background: theme.success,
+            opacity: enter,
+            boxShadow: `0 0 14px ${theme.success}`,
+          }}
+        />
+        <div
+          style={{
+            position: "absolute",
+            left: cx,
+            top: startY - 30,
+            transform: "translateX(-50%)",
+            padding: "6px 16px",
+            borderRadius: 999,
+            background: `${theme.success}22`,
+            border: `2px solid ${theme.success}`,
+            color: theme.success,
+            fontFamily: theme.mono,
+            fontWeight: 700,
+            fontSize: 20,
+            opacity: enter,
+          }}
+        >
+          удерживает
+        </div>
+        {/* B → X rejected */}
+        {proposalArrow(leftX + cardW / 2, startY + gap, rightX - cardW / 2, startY, flowP, theme.warning)}
+        {rejectP > 0.3 ? (
+          <div
+            style={{
+              position: "absolute",
+              left: rightX + cardW / 2 + 30,
+              top: startY - 14,
+              fontFamily: theme.mono,
+              fontWeight: 800,
+              fontSize: 26,
+              color: theme.danger,
+              opacity: rejectP,
+            }}
+          >
+            ✕ отказ
+          </div>
+        ) : null}
+        {local >= impactLocal ? <PulseRing x={rightX} y={startY} triggerFrame={impactLocal} tone="warning" size={200} /> : null}
+        <div style={{ position: "absolute", left: cx, top: startY + 3 * gap + 60, transform: "translateX(-50%)", fontFamily: theme.font, fontWeight: 700, fontSize: 28, color: theme.warning, opacity: enter }}>
+          X держит A, отказывает B
+        </div>
+      </>
+    );
+  }
+
+  // phase === "final" — стабильные пары
+  const lockP = smooth(clamp01(local / Math.max(impactLocal - 6, 1)));
+  const badgeP = local >= impactLocal ? spring({ frame: local - impactLocal, fps, config: { damping: 11, mass: 0.7 } }) : 0;
+  return (
+    <>
+      <div style={{ position: "absolute", left: cx, top: 300, transform: "translateX(-50%)", ...mono, fontSize: 26, color: theme.success, opacity: enter }}>
+        СТАБИЛЬНЫЕ ПАРЫ
+      </div>
+      <div style={{ position: "absolute", left: leftX, top: startY - 120, transform: "translateX(-50%)", ...mono, fontSize: 22, color: theme.accent, opacity: enter }}>
+        ПРЕДЛАГАЮЩИЕ
+      </div>
+      <div style={{ position: "absolute", left: rightX, top: startY - 120, transform: "translateX(-50%)", ...mono, fontSize: 22, color: theme.accent2, opacity: enter }}>
+        ПРИНИМАЮЩИЕ
+      </div>
+      {proposers.map((name, i) => (
+        <React.Fragment key={`p${i}`}>
+          {card(leftX, startY + i * gap, name, theme.success, 1, false)}
+        </React.Fragment>
+      ))}
+      {acceptors.map((name, i) => (
+        <React.Fragment key={`a${i}`}>
+          {card(rightX, startY + i * gap, name, theme.success, 1, false)}
+        </React.Fragment>
+      ))}
+      {/* линии стабильных пар */}
+      {finalPairs.map((pair, i) => {
+        const py = startY + pair.p * gap;
+        const ay = startY + pair.a * gap;
+        const lineP = smooth(clamp01(lockP - i * 0.22));
+        const x1 = leftX + cardW / 2;
+        const x2 = rightX - cardW / 2;
+        const y1 = py;
+        const y2 = ay;
+        const dx = x2 - x1;
+        const dy = y2 - y1;
+        const len = Math.sqrt(dx * dx + dy * dy);
+        const angle = (Math.atan2(dy, dx) * 180) / Math.PI;
+        return (
+          <div
+            key={i}
+            style={{
+              position: "absolute",
+              left: x1,
+              top: y1,
+              width: len * lineP,
+              height: 5,
+              transformOrigin: "0 50%",
+              transform: `translateY(-50%) rotate(${angle}deg)`,
+              background: theme.success,
+              borderRadius: 999,
+              boxShadow: `0 0 18px ${theme.success}88`,
+              opacity: enter * lineP,
+            }}
+          />
+        );
+      })}
+      {local >= impactLocal ? (
+        <>
+          <PulseRing x={cx} y={startY + gap} triggerFrame={impactLocal} tone="success" size={500} />
+          <div
+            style={{
+              position: "absolute",
+              left: cx,
+              top: startY + 3 * gap + 60,
+              transform: `translateX(-50%) scale(${badgeP})`,
+              opacity: badgeP,
+              padding: "14px 30px",
+              borderRadius: 999,
+              background: `${theme.success}18`,
+              border: `2px solid ${theme.success}`,
+              color: theme.success,
+              fontFamily: theme.font,
+              fontWeight: 800,
+              fontSize: 30,
+              whiteSpace: "nowrap",
+              boxShadow: `0 0 40px ${theme.success}33`,
+            }}
+          >
+            нет стабильных разочарований
+          </div>
+        </>
+      ) : null}
+    </>
+  );
+};
+
 /* ──────────────────────────── сцена-сториборд ──────────────────────────── */
 
 /** Каждая фраза диктора — свой бит с движением камеры между битами. */
@@ -6423,6 +6755,7 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     "cuckoo-stash": { scale: 0.9, y: -20 },
     "inverse-sqrt-bits": { scale: 0.92, y: -20 },
     "merkle-tree": { scale: 0.92, y: -20 },
+    "stable-matching": { scale: 0.88, y: -20 },
   };
   const cur = cams[slot.beat.visual] ?? { scale: 1, y: 0 };
   const prev = idx > 0 ? cams[slots[idx - 1].beat.visual] ?? cur : cur;
@@ -6741,6 +7074,15 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             impactLocal={impactLocal}
             phase={(slot.beat.params?.phase as "build" | "proof" | undefined) ?? "build"}
             leaf={slot.beat.params?.leaf as number | undefined}
+          />
+        );
+      case "stable-matching":
+        return (
+          <StableMatching
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as "propose" | "hold" | "final" | undefined) ?? "propose"}
           />
         );
       default:
