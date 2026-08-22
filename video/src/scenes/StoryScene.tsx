@@ -84,6 +84,10 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
       impact = start + Math.round(dur * (phase === "run" ? 0.95 : 0.62));
     }
     if (beat.visual === "secret-sharing") impact = start + Math.round(dur * 0.55);
+    if (beat.visual === "reservoir-sampling") {
+      const phase = beat.params?.phase;
+      impact = start + Math.round(dur * (phase === "proof" ? 0.72 : phase === "fair" ? 0.82 : 0.58));
+    }
     return { beat, start, end, impact };
   });
 };
@@ -159,6 +163,10 @@ export const storySfx = (
     }
     if (s.beat.visual === "busy-beaver") events.push({ frame: s.impact, sound: "ding" });
     if (s.beat.visual === "secret-sharing") events.push({ frame: s.impact, sound: "pop" });
+    if (s.beat.visual === "reservoir-sampling") {
+      const phase = s.beat.params?.phase;
+      events.push({ frame: s.impact, sound: phase === "proof" || phase === "fair" ? "ding" : "pop" });
+    }
   }
   return events;
 };
@@ -6714,6 +6722,202 @@ const StableMatching: React.FC<{
   );
 };
 
+/** Поток элементов входит в один слот резервуара; разные фазы показывают замену и доказательство честности. */
+const ReservoirSamplingVisual: React.FC<{
+  local: number;
+  fps: number;
+  impactLocal: number;
+  phase?: "stream" | "replace" | "survive" | "proof" | "fair";
+}> = ({ local, fps, impactLocal, phase = "stream" }) => {
+  const enter = spring({ frame: local, fps, config: { damping: 15, mass: 0.8 } });
+  const arrived = local >= impactLocal;
+  const flow = smooth(clamp01(local / Math.max(impactLocal - 8, 1)));
+  const incomingX = interpolate(flow, [0, 1], [120, 560]);
+  const current = phase === "replace" && arrived ? "2" : phase === "proof" && arrived ? "4" : "1";
+  const incoming = phase === "proof" ? "4" : phase === "survive" ? "3" : phase === "fair" ? "N" : phase === "replace" ? "2" : "1";
+  const reservoirColor = phase === "survive" ? theme.accent : arrived ? theme.success : theme.accent2;
+  const bottomLabel =
+    phase === "proof"
+      ? "1/4 × 3/4 = 1/4"
+      : phase === "fair"
+        ? "ПОСЛЕ N: КАЖДЫЙ 1/N"
+        : phase === "survive"
+          ? "ОСТАВИТЬ СТАРЫЙ"
+          : phase === "replace"
+            ? "ЗАМЕНИТЬ С ВЕРОЯТНОСТЬЮ 1/2"
+            : "ОДНА ЯЧЕЙКА · ОДИН ПРОХОД";
+  const title =
+    phase === "proof" ? "ПРОВЕРКА ЧЕСТНОСТИ" : phase === "fair" ? "РАВНЫЕ ШАНСЫ" : "ПОТОК → РЕЗЕРВУАР";
+  const item = (label: string, x: number, color: string, opacity = 1) => (
+    <div
+      key={`${label}-${x}`}
+      style={{
+        position: "absolute",
+        left: x,
+        top: 575,
+        width: 82,
+        height: 82,
+        borderRadius: 22,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: `${color}18`,
+        border: `3px solid ${color}99`,
+        color,
+        fontFamily: theme.mono,
+        fontSize: 32,
+        fontWeight: 800,
+        opacity: enter * opacity,
+      }}
+    >
+      {label}
+    </div>
+  );
+
+  return (
+    <>
+      <div
+        style={{
+          position: "absolute",
+          left: W / 2,
+          top: 260,
+          transform: "translateX(-50%)",
+          fontFamily: theme.mono,
+          fontSize: 28,
+          letterSpacing: 3,
+          color: theme.subtext,
+          opacity: enter,
+        }}
+      >
+        {title}
+      </div>
+      <div
+        style={{
+          position: "absolute",
+          left: 92,
+          top: 615,
+          width: 500,
+          height: 4,
+          background: `linear-gradient(90deg, ${theme.accent}00, ${theme.accent}AA, ${theme.accent}00)`,
+          opacity: enter,
+        }}
+      />
+      {["1", "2", "3", "4", "…"].map((label, i) => item(label, 98 + i * 108, i === 0 ? theme.accent : theme.subtext, phase === "fair" ? 0.38 : 0.8))}
+      <div
+        style={{
+          position: "absolute",
+          left: incomingX,
+          top: 575,
+          width: 82,
+          height: 82,
+          borderRadius: 22,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          background: `${theme.warning}28`,
+          border: `3px solid ${theme.warning}`,
+          color: theme.warning,
+          fontFamily: theme.mono,
+          fontSize: 32,
+          fontWeight: 800,
+          opacity: enter * (phase === "fair" ? 0.55 : 1),
+          boxShadow: `0 0 28px ${theme.warning}55`,
+        }}
+      >
+        {incoming}
+      </div>
+      <div
+        style={{
+          position: "absolute",
+          left: 610,
+          top: 420,
+          width: 350,
+          height: 360,
+          borderRadius: 30,
+          background: `${reservoirColor}12`,
+          border: `3px solid ${reservoirColor}AA`,
+          boxShadow: `0 0 60px ${reservoirColor}2E`,
+          opacity: enter,
+          transform: `translateY(${(1 - enter) * 70}px)`,
+          textAlign: "center",
+        }}
+      >
+        <div style={{ paddingTop: 30, fontFamily: theme.mono, fontSize: 25, color: reservoirColor, letterSpacing: 2 }}>
+          РЕЗЕРВУАР
+        </div>
+        <IconGlyph name="database" size={54} color={reservoirColor} strokeWidth={1.7} />
+        <div style={{ marginTop: 8, fontFamily: theme.font, fontSize: 26, color: theme.subtext }}>одна ячейка</div>
+        <div
+          style={{
+            margin: "22px auto 0",
+            width: 116,
+            height: 104,
+            borderRadius: 22,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: `${reservoirColor}22`,
+            border: `3px solid ${reservoirColor}`,
+            color: theme.text,
+            fontFamily: theme.mono,
+            fontSize: 50,
+            fontWeight: 800,
+            transform: `scale(${1 + (arrived ? 0.04 : 0) * Math.sin((local - impactLocal) / 5)})`,
+          }}
+        >
+          {current}
+        </div>
+      </div>
+      {phase === "proof" ? (
+        <div
+          style={{
+            position: "absolute",
+            left: 120,
+            top: 925,
+            width: 840,
+            height: 210,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            opacity: enter,
+          }}
+        >
+          <div style={{ width: 330, padding: "22px 16px", borderRadius: 22, background: `${theme.warning}18`, border: `3px solid ${theme.warning}88`, textAlign: "center", fontFamily: theme.mono, fontSize: 29, color: theme.warning }}>
+            новый: 1/4
+          </div>
+          <div style={{ fontFamily: theme.font, fontSize: 46, color: theme.subtext }}>×</div>
+          <div style={{ width: 330, padding: "22px 16px", borderRadius: 22, background: `${theme.accent}18`, border: `3px solid ${theme.accent}88`, textAlign: "center", fontFamily: theme.mono, fontSize: 29, color: theme.accent }}>
+            старый: 3/4
+          </div>
+        </div>
+      ) : null}
+      <div
+        style={{
+          position: "absolute",
+          left: W / 2,
+          top: phase === "proof" ? 1190 : 990,
+          transform: "translateX(-50%)",
+          minWidth: 610,
+          padding: "18px 30px",
+          borderRadius: 999,
+          textAlign: "center",
+          background: `${arrived ? theme.success : theme.panel}1F`,
+          border: `3px solid ${arrived ? theme.success : theme.panelBorder}`,
+          color: arrived ? theme.success : theme.subtext,
+          fontFamily: theme.mono,
+          fontSize: 29,
+          fontWeight: 800,
+          opacity: enter,
+          boxShadow: arrived ? `0 0 38px ${theme.success}44` : "none",
+        }}
+      >
+        {bottomLabel}
+      </div>
+      {arrived ? <PulseRing x={phase === "proof" ? W / 2 : 785} y={phase === "proof" ? 1030 : 600} triggerFrame={impactLocal} tone={phase === "survive" ? "accent" : "success"} size={phase === "proof" ? 180 : 160} /> : null}
+    </>
+  );
+};
+
 /* ──────────────────────────── сцена-сториборд ──────────────────────────── */
 
 /** Каждая фраза диктора — свой бит с движением камеры между битами. */
@@ -6767,6 +6971,7 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     "stable-matching": { scale: 0.88, y: -20 },
     "busy-beaver": { scale: 0.9, y: -20 },
     "secret-sharing": { scale: 0.9, y: -20 },
+    "reservoir-sampling": { scale: 0.9, y: -20 },
   };
   const cur = cams[slot.beat.visual] ?? { scale: 1, y: 0 };
   const prev = idx > 0 ? cams[slots[idx - 1].beat.visual] ?? cur : cur;
@@ -7105,6 +7310,15 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             fps={fps}
             impactLocal={impactLocal}
             phase={(slot.beat.params?.phase as "shares" | "curve" | "candidates" | "recover" | undefined) ?? "curve"}
+          />
+        );
+      case "reservoir-sampling":
+        return (
+          <ReservoirSamplingVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as "stream" | "replace" | "survive" | "proof" | "fair" | undefined) ?? "stream"}
           />
         );
       default:
