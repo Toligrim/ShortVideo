@@ -100,7 +100,8 @@ export interface StoryBeat {
     | "cuckoo-table"
     | "cuckoo-cycle"
     | "cuckoo-stash"
-    | "inverse-sqrt-bits";
+    | "inverse-sqrt-bits"
+    | "merkle-tree";
   onWord?: string; // бит начинается на этом слове реплики
   params?: Record<string, unknown>;
 }

@@ -73,6 +73,8 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
     if (beat.visual === "cuckoo-cycle") impact = start + Math.round(dur * 0.62);
     if (beat.visual === "cuckoo-stash") impact = start + Math.round(dur * 0.55);
     if (beat.visual === "inverse-sqrt-bits") impact = start + Math.round(dur * 0.6);
+    if (beat.visual === "merkle-tree")
+      impact = start + Math.round(dur * (beat.params?.phase === "proof" ? 0.64 : 0.58));
     return { beat, start, end, impact };
   });
 };
@@ -138,6 +140,10 @@ export const storySfx = (
     if (s.beat.visual === "cuckoo-cycle") events.push({ frame: s.impact, sound: "slam" });
     if (s.beat.visual === "cuckoo-stash") events.push({ frame: s.impact, sound: "ding" });
     if (s.beat.visual === "inverse-sqrt-bits") events.push({ frame: s.impact, sound: "pop" });
+    if (s.beat.visual === "merkle-tree") {
+      const ph = s.beat.params?.phase;
+      events.push({ frame: s.impact, sound: ph === "proof" ? "ding" : "pop" });
+    }
   }
   return events;
 };
@@ -6136,6 +6142,237 @@ const DebruijnCycleVisual: React.FC<{
   );
 };
 
+/** Дерево Меркла: build — листья→пары→корень, proof — лист+сиблинги+путь к корню. */
+const MerkleTreeVisual: React.FC<{ local: number; fps: number; impactLocal: number; phase?: string; leaf?: number }> = ({
+  local,
+  fps,
+  impactLocal,
+  phase = "build",
+  leaf = 2,
+}) => {
+  const enter = spring({ frame: local, fps, config: { damping: 15, mass: 0.8 } });
+  const done = local >= impactLocal;
+  const cx = W / 2;
+  const isProof = phase === "proof";
+  const sel = Math.max(0, Math.min(7, Math.round(leaf)));
+  // layout: 8 leaves bottom, 4 parents, 2, root top
+  const levels = [
+    { count: 1, y: 420, w: 140, h: 64, label: "корень" },
+    { count: 2, y: 610, w: 150, h: 56, label: "h" },
+    { count: 4, y: 830, w: 150, h: 52, label: "h" },
+    { count: 8, y: 1050, w: 100, h: 72, label: "лист" },
+  ];
+  const span = 980;
+  const nodePos = (lvl: number, idx: number) => {
+    const c = levels[lvl].count;
+    const gap = span / c;
+    return { x: cx - span / 2 + gap * (idx + 0.5), y: levels[lvl].y };
+  };
+  // proof path: collect indices per level containing the leaf's ancestry
+  const pathIdx: number[] = [];
+  let cur = sel;
+  for (let l = 3; l >= 0; l--) {
+    pathIdx[l] = cur;
+    cur = Math.floor(cur / 2);
+  }
+  const siblingIdx = (lvl: number) => (pathIdx[lvl] % 2 === 0 ? pathIdx[lvl] + 1 : pathIdx[lvl] - 1);
+  const revealP = (delay: number) => smooth(clamp01((local - delay) / 16));
+  const pulseP = done ? spring({ frame: local - impactLocal, fps, config: { damping: 11, mass: 0.7 } }) : 0;
+  const edge = (x1: number, y1: number, x2: number, y2: number, hl: boolean, op: number) => {
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    const len = Math.sqrt(dx * dx + dy * dy);
+    const ang = (Math.atan2(dy, dx) * 180) / Math.PI;
+    return (
+      <div
+        key={`${x1}-${y1}-${x2}`}
+        style={{
+          position: "absolute",
+          left: x1,
+          top: y1,
+          width: len,
+          height: hl ? 4 : 3,
+          transformOrigin: "0 50%",
+          transform: `rotate(${ang}deg)`,
+          background: hl ? theme.success : theme.panelBorder,
+          opacity: op * enter,
+          boxShadow: hl ? `0 0 12px ${theme.success}77` : "none",
+          zIndex: 1,
+        }}
+      />
+    );
+  };
+  return (
+    <>
+      <div
+        style={{
+          position: "absolute",
+          left: cx,
+          top: 300,
+          transform: "translateX(-50%)",
+          fontFamily: theme.mono,
+          fontWeight: 800,
+          fontSize: 26,
+          letterSpacing: 2,
+          color: theme.subtext,
+          opacity: enter,
+        }}
+      >
+        {isProof ? "ДОКАЗАТЕЛЬСТВО ВКЛЮЧЕНИЯ" : "ДЕРЕВО МЕРКЛА · BUILD"}
+      </div>
+      {/* edges */}
+      {levels.slice(0, 3).map((_, lvl) =>
+        Array.from({ length: levels[lvl].count }).map((__, i) => {
+          const top = nodePos(lvl, i);
+          const left = nodePos(lvl + 1, i * 2);
+          const right = nodePos(lvl + 1, i * 2 + 1);
+          const hlLeft = isProof && (pathIdx[lvl + 1] === i * 2 || siblingIdx(lvl + 1) === i * 2);
+          const hlRight = isProof && (pathIdx[lvl + 1] === i * 2 + 1 || siblingIdx(lvl + 1) === i * 2 + 1);
+          const hl = isProof ? ((pathIdx[lvl] === i) as boolean) : false;
+          const op = isProof ? (hl ? 1 : 0.35) : revealP(8 + lvl * 12 + i * 2);
+          const eOp = isProof ? (hl ? 1 : 0.25) : op;
+          return (
+            <React.Fragment key={`lvl${lvl}-${i}`}>
+              {edge(top.x, top.y + levels[lvl].h / 2, left.x, left.y - levels[lvl + 1].h / 2, (isProof && pathIdx[lvl] === i && pathIdx[lvl + 1] === i * 2) || (!isProof && hlLeft), eOp)}
+              {edge(top.x, top.y + levels[lvl].h / 2, right.x, right.y - levels[lvl + 1].h / 2, (isProof && pathIdx[lvl] === i && pathIdx[lvl + 1] === i * 2 + 1) || (!isProof && hlRight), eOp)}
+            </React.Fragment>
+          );
+        }),
+      )}
+      {/* nodes */}
+      {levels.map((lvl, li) =>
+        Array.from({ length: lvl.count }).map((__, i) => {
+          const p = nodePos(li, i);
+          const isPath = isProof && pathIdx[li] === i;
+          const isSib = isProof && siblingIdx(li) === i && li >= 1;
+          const isLeafSel = isProof && li === 3 && i === sel;
+          const color = li === 0 ? theme.success : isPath ? theme.success : isSib ? theme.warning : li === 3 ? theme.accent : theme.accent2;
+          const bg = li === 0 ? `${theme.success}1C` : isPath ? `${theme.success}18` : isSib ? `${theme.warning}18` : theme.panel;
+          const border = `3px solid ${isPath || isSib || li === 0 ? color : theme.panelBorder}`;
+          const reveal = isProof ? 1 : revealP(6 + li * 12 + i * 3);
+          const scale = isPath ? 1 + 0.06 * Math.sin(local / 8 + i) : 1;
+          const label =
+            li === 0 ? "ROOT" : li === 1 ? `H${i}` : li === 2 ? `H${i}` : `L${i}`;
+          const sub = li === 3 ? `блок ${i}` : li === 0 ? "32 байта" : "";
+          return (
+            <div
+              key={`n${li}-${i}`}
+              style={{
+                position: "absolute",
+                left: p.x - lvl.w / 2,
+                top: p.y - lvl.h / 2,
+                width: lvl.w,
+                height: lvl.h,
+                borderRadius: li === 3 ? 14 : 18,
+                background: bg,
+                border,
+                boxShadow: isPath ? `0 0 30px ${color}55` : isSib ? `0 0 20px ${color}44` : "none",
+                opacity: reveal * enter,
+                transform: `scale(${scale}) translateY(${(1 - reveal) * 20}px)`,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                zIndex: 2,
+              }}
+            >
+              {li === 3 ? <IconGlyph name="file-text" size={22} color={color} strokeWidth={1.7} /> : null}
+              <div style={{ fontFamily: theme.mono, fontWeight: 800, fontSize: li === 0 ? 28 : 26, color }}>{label}</div>
+              {sub ? <div style={{ fontFamily: theme.mono, fontSize: 14, color: theme.subtext }}>{sub}</div> : null}
+              {isLeafSel ? (
+                <div style={{ position: "absolute", inset: -6, borderRadius: 16, border: `2px dashed ${theme.success}`, opacity: 0.9 }} />
+              ) : null}
+            </div>
+          );
+        }),
+      )}
+      {isProof ? (
+        <>
+          <div
+            style={{
+              position: "absolute",
+              left: cx,
+              top: 1240,
+              transform: "translateX(-50%)",
+              display: "flex",
+              gap: 10,
+              opacity: enter,
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 18px", borderRadius: 999, background: `${theme.success}18`, border: `2px solid ${theme.success}`, fontFamily: theme.mono, fontSize: 20, color: theme.success, fontWeight: 800 }}>
+              <span style={{ width: 12, height: 12, borderRadius: 6, background: theme.success }} /> путь к корню
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 18px", borderRadius: 999, background: `${theme.warning}18`, border: `2px solid ${theme.warning}`, fontFamily: theme.mono, fontSize: 20, color: theme.warning, fontWeight: 800 }}>
+              <span style={{ width: 12, height: 12, borderRadius: 6, background: theme.warning }} /> сиблинги
+            </div>
+          </div>
+          <div
+            style={{
+              position: "absolute",
+              left: cx,
+              top: 1310,
+              transform: `translateX(-50%) scale(${pulseP || 0.95})`,
+              opacity: done ? pulseP : 0.85,
+              padding: "14px 28px",
+              borderRadius: 999,
+              background: `${theme.success}18`,
+              border: `2px solid ${theme.success}`,
+              color: theme.success,
+              fontFamily: theme.font,
+              fontWeight: 800,
+              fontSize: 28,
+              whiteSpace: "nowrap",
+            }}
+          >
+            нужно {levels.length - 1} хешей, не вся таблица
+          </div>
+          <PulseRing x={nodePos(0, 0).x} y={nodePos(0, 0).y} triggerFrame={impactLocal} tone="success" size={210} />
+        </>
+      ) : (
+        <>
+          <div
+            style={{
+              position: "absolute",
+              left: cx,
+              top: 1240,
+              transform: "translateX(-50%)",
+              fontFamily: theme.mono,
+              fontSize: 22,
+              color: theme.subtext,
+              opacity: enter,
+              letterSpacing: 1,
+            }}
+          >
+            листья → пары → корень
+          </div>
+          {done ? (
+            <div
+              style={{
+                position: "absolute",
+                left: cx,
+                top: 1300,
+                transform: `translateX(-50%) scale(${pulseP || 0.95})`,
+                opacity: done ? pulseP : 0,
+                padding: "14px 28px",
+                borderRadius: 999,
+                background: `${theme.success}18`,
+                border: `2px solid ${theme.success}`,
+                color: theme.success,
+                fontFamily: theme.font,
+                fontWeight: 800,
+                fontSize: 28,
+              }}
+            >
+              корень — один хеш на всё
+            </div>
+          ) : null}
+          {done ? <PulseRing x={nodePos(0, 0).x} y={nodePos(0, 0).y} triggerFrame={impactLocal} tone="success" size={210} /> : null}
+        </>
+      )}
+    </>
+  );
+};
+
 /* ──────────────────────────── сцена-сториборд ──────────────────────────── */
 
 /** Каждая фраза диктора — свой бит с движением камеры между битами. */
@@ -6185,6 +6422,7 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     "cuckoo-cycle": { scale: 0.88, y: -30 },
     "cuckoo-stash": { scale: 0.9, y: -20 },
     "inverse-sqrt-bits": { scale: 0.92, y: -20 },
+    "merkle-tree": { scale: 0.92, y: -20 },
   };
   const cur = cams[slot.beat.visual] ?? { scale: 1, y: 0 };
   const prev = idx > 0 ? cams[slots[idx - 1].beat.visual] ?? cur : cur;
@@ -6493,6 +6731,16 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             fps={fps}
             impactLocal={impactLocal}
             phase={(slot.beat.params?.phase as "strip" | "newton" | undefined) ?? "strip"}
+          />
+        );
+      case "merkle-tree":
+        return (
+          <MerkleTreeVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as "build" | "proof" | undefined) ?? "build"}
+            leaf={slot.beat.params?.leaf as number | undefined}
           />
         );
       default:
