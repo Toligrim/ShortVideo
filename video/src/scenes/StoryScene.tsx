@@ -66,6 +66,9 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
       const phase = beat.params?.phase;
       impact = start + Math.round(dur * (phase === "orbit" ? 0.68 : 0.58));
     }
+    if (beat.visual === "cuckoo-table") impact = start + Math.round(dur * 0.58);
+    if (beat.visual === "cuckoo-cycle") impact = start + Math.round(dur * 0.62);
+    if (beat.visual === "cuckoo-stash") impact = start + Math.round(dur * 0.55);
     return { beat, start, end, impact };
   });
 };
@@ -125,6 +128,9 @@ export const storySfx = (
       const sound = ph === "stages" ? "whoosh" : ph === "groups" ? "ding" : "pop";
       events.push({ frame: s.impact, sound });
     }
+    if (s.beat.visual === "cuckoo-table") events.push({ frame: s.impact, sound: "pop" });
+    if (s.beat.visual === "cuckoo-cycle") events.push({ frame: s.impact, sound: "slam" });
+    if (s.beat.visual === "cuckoo-stash") events.push({ frame: s.impact, sound: "ding" });
   }
   return events;
 };
@@ -2009,6 +2015,627 @@ const ParadoxBox: React.FC<{
             );
           })
         : null}
+    </>
+  );
+};
+
+/** Кукушкиное хеширование: две таблицы, два хеша, ключ прыгает между ними. */
+const CuckooTable: React.FC<{
+  local: number;
+  fps: number;
+  impactLocal: number;
+  keyLabel?: string;
+  showEviction?: boolean;
+}> = ({ local, fps, impactLocal, keyLabel = "ключ", showEviction = true }) => {
+  const enter = spring({ frame: local, fps, config: { damping: 15, mass: 0.8 } });
+  const evictP = smooth(clamp01((local - impactLocal + 8) / 28));
+  const cx = W / 2;
+  const tableW = 340;
+  const tableGap = 80;
+  const leftX = cx - tableW - tableGap / 2;
+  const rightX = cx + tableGap / 2;
+  const tableY = 460;
+  const rows = 6;
+  const cellH = 72;
+  const cellW = tableW - 40;
+  const key = keyLabel.length > 10 ? `${keyLabel.slice(0, 9)}…` : keyLabel;
+  const victim = "хозяин";
+  const h1Color = theme.accent;
+  const h2Color = theme.accent2;
+  const keyColor = theme.success;
+  const victimColor = theme.warning;
+  const flowP = smooth(clamp01(local / Math.max(impactLocal - 8, 1)));
+  const keyStartX = leftX - 180;
+  const keyEndX = leftX + 30 + 20 * Math.sin(local / 6);
+  const keyY = tableY + 120;
+
+  const cell = (x: number, y: number, row: number, label: string, color: string, active = false, pulse = false) => (
+    <div
+      key={row}
+      style={{
+        position: "absolute",
+        left: x - cellW / 2,
+        top: y + row * cellH,
+        width: cellW,
+        height: cellH - 8,
+        borderRadius: 12,
+        border: `3px solid ${active ? color : theme.panelBorder}`,
+        background: active ? `${color}1A` : theme.panel,
+        boxShadow: active ? `0 0 ${pulse ? 45 : 25}px ${color}55` : "none",
+        opacity: enter,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontFamily: theme.font,
+        fontWeight: 700,
+        fontSize: 28,
+        color: active ? color : theme.text,
+        transform: `scale(${pulse ? 1 + 0.06 * Math.sin(local / 7) : 1})`,
+      }}
+    >
+      {label}
+    </div>
+  );
+
+  const hashArrow = (x: number, y: number, color: string, label: string, progress: number) => (
+    <>
+      <div
+        style={{
+          position: "absolute",
+          left: x,
+          top: y - 60,
+          width: 3,
+          height: 70,
+          background: `linear-gradient(180deg, transparent, ${color})`,
+          opacity: enter * progress,
+        }}
+      />
+      <div
+        style={{
+          position: "absolute",
+          left: x - 8,
+          top: y - 50 + 70 * progress,
+          transform: "translateX(-50%) rotate(-90deg)",
+          borderLeft: "10px solid transparent",
+          borderRight: "10px solid transparent",
+          borderTop: `14px solid ${color}`,
+          opacity: enter * progress,
+        }}
+      />
+      <div
+        style={{
+          position: "absolute",
+          left: x + 25,
+          top: y - 40,
+          fontFamily: theme.mono,
+          fontSize: 22,
+          fontWeight: 800,
+          color,
+          opacity: enter * progress,
+        }}
+      >
+        {label}
+      </div>
+    </>
+  );
+
+  return (
+    <>
+      <div
+        style={{
+          position: "absolute",
+          left: cx,
+          top: 300,
+          transform: "translateX(-50%)",
+          fontFamily: theme.mono,
+          fontWeight: 800,
+          fontSize: 28,
+          color: theme.subtext,
+          opacity: enter,
+          letterSpacing: 2,
+        }}
+      >
+        ДВЕ ТАБЛИЦЫ, ДВА ХЕША
+      </div>
+      {/* Таблица 1 (h₁) */}
+      <div
+        style={{
+          position: "absolute",
+          left: leftX - 10,
+          top: tableY - 80,
+          width: tableW + 20,
+          height: rows * cellH + 100,
+          borderRadius: 20,
+          background: theme.panel,
+          border: `3px solid ${h1Color}77`,
+          boxShadow: `0 0 50px ${h1Color}18`,
+          opacity: enter,
+          transform: `translateY(${(1 - enter) * 60}px)`,
+        }}
+      >
+        <div style={{ textAlign: "center", paddingTop: 18, fontFamily: theme.font, fontWeight: 800, fontSize: 32, color: h1Color }}>T₁ (h₁)</div>
+        {Array.from({ length: rows }).map((_, i) =>
+          cell(leftX + tableW / 2, tableY, i, i === 2 ? victim : "·", h1Color, i === 2 && local >= impactLocal, i === 2 && local >= impactLocal)
+        )}
+      </div>
+      {/* Таблица 2 (h₂) */}
+      <div
+        style={{
+          position: "absolute",
+          left: rightX - 10,
+          top: tableY - 80,
+          width: tableW + 20,
+          height: rows * cellH + 100,
+          borderRadius: 20,
+          background: theme.panel,
+          border: `3px solid ${h2Color}77`,
+          boxShadow: `0 0 50px ${h2Color}18`,
+          opacity: enter,
+          transform: `translateY(${(1 - enter) * 60}px)`,
+        }}
+      >
+        <div style={{ textAlign: "center", paddingTop: 18, fontFamily: theme.font, fontWeight: 800, fontSize: 32, color: h2Color }}>T₂ (h₂)</div>
+        {Array.from({ length: rows }).map((_, i) =>
+          cell(rightX + tableW / 2, tableY, i, i === 4 && showEviction && local >= impactLocal ? key : "·", h2Color, i === 4 && showEviction && local >= impactLocal, i === 4 && showEviction && local >= impactLocal)
+        )}
+      </div>
+      {/* Ключ влетает в T₁ через h₁ */}
+      {hashArrow(leftX + tableW / 2, tableY + 2 * cellH, h1Color, "h₁", flowP)}
+      <div
+        style={{
+          position: "absolute",
+          left: interpolate(flowP, [0, 1], [keyStartX, keyEndX]),
+          top: keyY,
+          transform: "translate(-50%, -50%)",
+          padding: "10px 18px",
+          borderRadius: 999,
+          background: keyColor,
+          color: "#06121A",
+          fontFamily: theme.mono,
+          fontWeight: 800,
+          fontSize: 26,
+          opacity: enter,
+          boxShadow: `0 0 30px ${keyColor}AA`,
+        }}
+      >
+        {key}
+      </div>
+      {/* Вытеснение: хозяин улетает в T₂ через h₂ */}
+      {showEviction && local >= impactLocal ? (
+        <>
+          <div
+            style={{
+              position: "absolute",
+              left: leftX + tableW / 2 + 200,
+              top: tableY + 2 * cellH - 10,
+              fontFamily: theme.mono,
+              fontSize: 24,
+              color: h1Color,
+              opacity: evictP,
+            }}
+          >
+            h₁ → занято!
+          </div>
+          <div
+            style={{
+              position: "absolute",
+              left: rightX + tableW / 2,
+              top: tableY + 4 * cellH - 60,
+              fontFamily: theme.mono,
+              fontSize: 24,
+              color: h2Color,
+              opacity: evictP,
+            }}
+          >
+            h₂ → сюда
+          </div>
+          <div
+            style={{
+              position: "absolute",
+              left: interpolate(evictP, [0, 1], [leftX + tableW / 2 + 40, rightX + tableW / 2]),
+              top: interpolate(evictP, [0, 1], [tableY + 2 * cellH, tableY + 4 * cellH]),
+              transform: "translate(-50%, -50%)",
+              padding: "8px 16px",
+              borderRadius: 999,
+              background: victimColor,
+              color: "#06121A",
+              fontFamily: theme.mono,
+              fontWeight: 700,
+              fontSize: 24,
+              opacity: enter * evictP,
+              boxShadow: `0 0 25px ${victimColor}AA`,
+            }}
+          >
+            {victim}
+          </div>
+          {evictP > 0.85 ? <PulseRing x={rightX + tableW / 2} y={tableY + 4 * cellH} triggerFrame={impactLocal + 18} tone="accent2" size={160} /> : null}
+        </>
+      ) : null}
+      {/* Легенда */}
+      <div
+        style={{
+          position: "absolute",
+          left: cx,
+          top: 1320,
+          transform: "translateX(-50%)",
+          display: "flex",
+          gap: 40,
+          opacity: enter,
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ width: 18, height: 18, borderRadius: 9, background: h1Color }} />
+          <span style={{ fontFamily: theme.mono, fontSize: 24, color: theme.text }}>h₁ — первая таблица</span>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ width: 18, height: 18, borderRadius: 9, background: h2Color }} />
+          <span style={{ fontFamily: theme.mono, fontSize: 24, color: theme.text }}>h₂ — вторая таблица</span>
+        </div>
+      </div>
+    </>
+  );
+};
+
+/** Кукушкиный цикл: путь вытеснений замыкается в себя, вставка падает. */
+const CuckooCycle: React.FC<{
+  local: number;
+  fps: number;
+  impactLocal: number;
+  loadFactor?: number;
+}> = ({ local, fps, impactLocal, loadFactor = 0.5 }) => {
+  const enter = spring({ frame: local, fps, config: { damping: 15, mass: 0.8 } });
+  const cycleP = smooth(clamp01((local - impactLocal) / 32));
+  const cx = W / 2;
+  const tableW = 340;
+  const tableGap = 80;
+  const leftX = cx - tableW - tableGap / 2;
+  const rightX = cx + tableGap / 2;
+  const tableY = 420;
+  const rows = 6;
+  const cellH = 72;
+  const cellW = tableW - 40;
+  const cyclePath = [
+    { table: 1, row: 2, label: "A" },
+    { table: 2, row: 4, label: "B" },
+    { table: 1, row: 0, label: "C" },
+    { table: 2, row: 2, label: "D" },
+    { table: 1, row: 2, label: "A" },
+  ];
+
+  const cell = (x: number, y: number, row: number, label: string, color: string, highlight = false, tableNum: number) => (
+    <div
+      key={`${tableNum}-${row}`}
+      style={{
+        position: "absolute",
+        left: x - cellW / 2,
+        top: y + row * cellH,
+        width: cellW,
+        height: cellH - 8,
+        borderRadius: 12,
+        border: `3px solid ${highlight ? color : theme.panelBorder}`,
+        background: highlight ? `${color}1A` : theme.panel,
+        boxShadow: highlight ? `0 0 35px ${color}66` : "none",
+        opacity: enter,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontFamily: theme.font,
+        fontWeight: 700,
+        fontSize: 28,
+        color: highlight ? color : theme.text,
+      }}
+    >
+      {label}
+    </div>
+  );
+
+  return (
+    <>
+      <div
+        style={{
+          position: "absolute",
+          left: cx,
+          top: 260,
+          transform: "translateX(-50%)",
+          fontFamily: theme.mono,
+          fontWeight: 800,
+          fontSize: 28,
+          color: theme.danger,
+          opacity: enter,
+          letterSpacing: 2,
+        }}
+      >
+        ЦИКЛ КУКУШКИ → ВСТАВКА ПАДАЕТ
+      </div>
+      {/* Таблица 1 */}
+      <div
+        style={{
+          position: "absolute",
+          left: leftX - 10,
+          top: tableY - 80,
+          width: tableW + 20,
+          height: rows * cellH + 100,
+          borderRadius: 20,
+          background: theme.panel,
+          border: `3px solid ${theme.accent}77`,
+          boxShadow: `0 0 50px ${theme.accent}18`,
+          opacity: enter,
+          transform: `translateY(${(1 - enter) * 60}px)`,
+        }}
+      >
+        <div style={{ textAlign: "center", paddingTop: 18, fontFamily: theme.font, fontWeight: 800, fontSize: 32, color: theme.accent }}>T₁ (h₁)</div>
+        {Array.from({ length: rows }).map((_, i) =>
+          cell(leftX + tableW / 2, tableY, i, i === 2 ? "A" : i === 0 && cycleP > 0.4 ? "C" : "·", theme.accent, (i === 2 || (i === 0 && cycleP > 0.4)) && cycleP > 0.2, 1)
+        )}
+      </div>
+      {/* Таблица 2 */}
+      <div
+        style={{
+          position: "absolute",
+          left: rightX - 10,
+          top: tableY - 80,
+          width: tableW + 20,
+          height: rows * cellH + 100,
+          borderRadius: 20,
+          background: theme.panel,
+          border: `3px solid ${theme.accent2}77`,
+          boxShadow: `0 0 50px ${theme.accent2}18`,
+          opacity: enter,
+          transform: `translateY(${(1 - enter) * 60}px)`,
+        }}
+      >
+        <div style={{ textAlign: "center", paddingTop: 18, fontFamily: theme.font, fontWeight: 800, fontSize: 32, color: theme.accent2 }}>T₂ (h₂)</div>
+        {Array.from({ length: rows }).map((_, i) =>
+          cell(rightX + tableW / 2, tableY, i, i === 4 ? "B" : i === 2 && cycleP > 0.7 ? "D" : "·", theme.accent2, (i === 4 || (i === 2 && cycleP > 0.7)) && cycleP > 0.5, 2)
+        )}
+      </div>
+      {/* Стрелки цикла */}
+      {cyclePath.slice(0, 4).map((to, i) => {
+        const from = cyclePath[i];
+        const fx = from.table === 1 ? leftX + tableW / 2 : rightX + tableW / 2;
+        const fy = tableY + from.row * cellH;
+        const tx = to.table === 1 ? leftX + tableW / 2 : rightX + tableW / 2;
+        const ty = tableY + to.row * cellH;
+        const color = from.table === 1 ? theme.accent : theme.accent2;
+        const progress = smooth(clamp01((cycleP - i * 0.22) / 0.25));
+        const mx = fx + (tx - fx) * progress;
+        const my = fy + (ty - fy) * progress;
+        return (
+          <React.Fragment key={i}>
+            <div
+              style={{
+                position: "absolute",
+                left: mx,
+                top: my,
+                width: 14,
+                height: 14,
+                borderRadius: 7,
+                background: color,
+                opacity: enter * progress * (1 - progress > 0.1 ? 1 : 0),
+                transform: "translate(-50%, -50%)",
+                boxShadow: `0 0 20px ${color}`,
+              }}
+            />
+            {progress > 0.9 && i === 3 ? (
+              <div
+                style={{
+                  position: "absolute",
+                  left: cx,
+                  top: tableY + 5 * cellH + 40,
+                  transform: "translateX(-50%)",
+                  fontFamily: theme.mono,
+                  fontWeight: 800,
+                  fontSize: 28,
+                  color: theme.danger,
+                  opacity: enter * (cycleP - 0.88) / 0.12,
+                }}
+              >
+                ЗАМЫКАНИЕ → ЦИКЛ
+              </div>
+            ) : null}
+          </React.Fragment>
+        );
+      })}
+      {/* Статистика загрузки */}
+      <div
+        style={{
+          position: "absolute",
+          left: cx,
+          top: 1280,
+          transform: "translateX(-50%)",
+          padding: "18px 36px",
+          borderRadius: 999,
+          background: `${theme.danger}18`,
+          border: `2px solid ${theme.danger}`,
+          color: theme.danger,
+          fontFamily: theme.font,
+          fontWeight: 800,
+          fontSize: 28,
+          opacity: enter * cycleP,
+        }}
+      >
+        загрузка {Math.round(loadFactor * 100)}% → провал ~1/n²
+      </div>
+      {local >= impactLocal ? <PulseRing x={cx} y={tableY + 3 * cellH} triggerFrame={impactLocal} tone="danger" size={400} /> : null}
+    </>
+  );
+};
+
+/** Stash-буфер: циклический ключ уходит в стэш, загрузка ползёт к 100%. */
+const CuckooStash: React.FC<{
+  local: number;
+  fps: number;
+  impactLocal: number;
+}> = ({ local, fps, impactLocal }) => {
+  const enter = spring({ frame: local, fps, config: { damping: 15, mass: 0.8 } });
+  const stashP = smooth(clamp01((local - impactLocal) / 28));
+  const successP = smooth(clamp01((local - impactLocal - 12) / 24));
+  const cx = W / 2;
+  const tableW = 340;
+  const tableGap = 80;
+  const leftX = cx - tableW - tableGap / 2;
+  const rightX = cx + tableGap / 2;
+  const tableY = 420;
+  const rows = 6;
+  const cellH = 72;
+  const cellW = tableW - 40;
+  const key = "цикл";
+  const stashX = cx;
+  const stashY = 1100;
+
+  const cell = (x: number, y: number, row: number, label: string, color: string, highlight = false) => (
+    <div
+      key={`${x}-${row}`}
+      style={{
+        position: "absolute",
+        left: x - cellW / 2,
+        top: y + row * cellH,
+        width: cellW,
+        height: cellH - 8,
+        borderRadius: 12,
+        border: `3px solid ${highlight ? color : theme.panelBorder}`,
+        background: highlight ? `${color}1A` : theme.panel,
+        boxShadow: highlight ? `0 0 30px ${color}55` : "none",
+        opacity: enter,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontFamily: theme.font,
+        fontWeight: 700,
+        fontSize: 28,
+        color: highlight ? color : theme.text,
+      }}
+    >
+      {label}
+    </div>
+  );
+
+  return (
+    <>
+      <div
+        style={{
+          position: "absolute",
+          left: cx,
+          top: 260,
+          transform: "translateX(-50%)",
+          fontFamily: theme.mono,
+          fontWeight: 800,
+          fontSize: 28,
+          color: theme.success,
+          opacity: enter,
+          letterSpacing: 2,
+        }}
+      >
+        STASH — СТРАХОВКА ОТ ЦИКЛА
+      </div>
+      {/* Таблица 1 */}
+      <div
+        style={{
+          position: "absolute",
+          left: leftX - 10,
+          top: tableY - 80,
+          width: tableW + 20,
+          height: rows * cellH + 100,
+          borderRadius: 20,
+          background: theme.panel,
+          border: `3px solid ${theme.accent}77`,
+          boxShadow: `0 0 50px ${theme.accent}18`,
+          opacity: enter,
+          transform: `translateY(${(1 - enter) * 60}px)`,
+        }}
+      >
+        <div style={{ textAlign: "center", paddingTop: 18, fontFamily: theme.font, fontWeight: 800, fontSize: 32, color: theme.accent }}>T₁ (h₁)</div>
+        {Array.from({ length: rows }).map((_, i) =>
+          cell(leftX + tableW / 2, tableY, i, i === 2 ? "A" : "·", theme.accent, i === 2 && stashP < 0.5)
+        )}
+      </div>
+      {/* Таблица 2 */}
+      <div
+        style={{
+          position: "absolute",
+          left: rightX - 10,
+          top: tableY - 80,
+          width: tableW + 20,
+          height: rows * cellH + 100,
+          borderRadius: 20,
+          background: theme.panel,
+          border: `3px solid ${theme.accent2}77`,
+          boxShadow: `0 0 50px ${theme.accent2}18`,
+          opacity: enter,
+          transform: `translateY(${(1 - enter) * 60}px)`,
+        }}
+      >
+        <div style={{ textAlign: "center", paddingTop: 18, fontFamily: theme.font, fontWeight: 800, fontSize: 32, color: theme.accent2 }}>T₂ (h₂)</div>
+        {Array.from({ length: rows }).map((_, i) =>
+          cell(rightX + tableW / 2, tableY, i, i === 4 ? "B" : "·", theme.accent2, i === 4 && stashP < 0.5)
+        )}
+      </div>
+      {/* Ключ-цикл уходит в стэш */}
+      <div
+        style={{
+          position: "absolute",
+          left: interpolate(stashP, [0, 1], [leftX + tableW / 2, stashX]),
+          top: interpolate(stashP, [0, 1], [tableY + 2 * cellH, stashY]),
+          transform: "translate(-50%, -50%)",
+          padding: "12px 22px",
+          borderRadius: 16,
+          background: theme.success,
+          color: "#06121A",
+          fontFamily: theme.font,
+          fontWeight: 800,
+          fontSize: 30,
+          opacity: enter * stashP,
+          boxShadow: `0 0 40px ${theme.success}AA`,
+        }}
+      >
+        {key}
+      </div>
+      {/* Стэш-коробка */}
+      <div
+        style={{
+          position: "absolute",
+          left: stashX - 180,
+          top: stashY - 60,
+          width: 360,
+          height: 140,
+          borderRadius: 24,
+          background: theme.panel,
+          border: `3px solid ${theme.success}88`,
+          boxShadow: `0 0 60px ${theme.success}33`,
+          opacity: enter * stashP,
+          transform: `translateY(${(1 - stashP) * 40}px)`,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 10,
+        }}
+      >
+        <div style={{ fontFamily: theme.mono, fontSize: 24, color: theme.success, letterSpacing: 2 }}>STASH (O(log n))</div>
+        <div style={{ fontFamily: theme.mono, fontSize: 20, color: theme.subtext }}>буфер для «застрявших» ключей</div>
+        <div style={{ fontFamily: theme.font, fontWeight: 700, fontSize: 26, color: theme.text }}>емкость: ~log₂(tableSize)</div>
+      </div>
+      {/* Результат */}
+      <div
+        style={{
+          position: "absolute",
+          left: cx,
+          top: 1320,
+          transform: "translateX(-50%)",
+          padding: "18px 36px",
+          borderRadius: 999,
+          background: `${theme.success}18`,
+          border: `2px solid ${theme.success}`,
+          color: theme.success,
+          fontFamily: theme.font,
+          fontWeight: 800,
+          fontSize: 28,
+          opacity: enter * successP,
+        }}
+      >
+        провал O(n⁻³) · загрузка → 100% · рехэшей 0
+      </div>
+      {local >= impactLocal ? <PulseRing x={stashX} y={stashY} triggerFrame={impactLocal} tone="success" size={300} /> : null}
     </>
   );
 };
@@ -5256,6 +5883,9 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     "bit-extractor": { scale: 0.92, y: -20 },
     "debruijn-cycle": { scale: 0.92, y: -20 },
     "gps-relativity": { scale: 0.9, y: -20 },
+    "cuckoo-table": { scale: 0.9, y: -30 },
+    "cuckoo-cycle": { scale: 0.88, y: -30 },
+    "cuckoo-stash": { scale: 0.9, y: -20 },
   };
   const cur = cams[slot.beat.visual] ?? { scale: 1, y: 0 };
   const prev = idx > 0 ? cams[slots[idx - 1].beat.visual] ?? cur : cur;
@@ -5509,6 +6139,33 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             asteroid={slot.beat.params?.asteroid as string | undefined}
             observations={slot.beat.params?.observations as number | undefined}
             year={slot.beat.params?.year as string | undefined}
+          />
+        );
+      case "cuckoo-table":
+        return (
+          <CuckooTable
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            keyLabel={slot.beat.params?.key as string | undefined}
+            showEviction={slot.beat.params?.evict as boolean | undefined}
+          />
+        );
+      case "cuckoo-cycle":
+        return (
+          <CuckooCycle
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            loadFactor={slot.beat.params?.load as number | undefined}
+          />
+        );
+      case "cuckoo-stash":
+        return (
+          <CuckooStash
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
           />
         );
       default:

@@ -94,7 +94,10 @@ export interface StoryBeat {
     | "rule-110"
     | "glider-collision"
     | "debruijn-cycle"
-    | "gps-relativity";
+    | "gps-relativity"
+    | "cuckoo-table"
+    | "cuckoo-cycle"
+    | "cuckoo-stash";
   onWord?: string; // бит начинается на этом слове реплики
   params?: Record<string, unknown>;
 }
