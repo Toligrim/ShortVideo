@@ -100,6 +100,7 @@ export interface StoryBeat {
     | "cuckoo-table"
     | "cuckoo-cycle"
     | "cuckoo-stash"
+    | "secret-sharing"
     | "inverse-sqrt-bits"
     | "merkle-tree"
     | "stable-matching"

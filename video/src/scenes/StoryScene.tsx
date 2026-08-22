@@ -11,6 +11,7 @@ import { OrbitFftGroups } from "./OrbitFftGroups";
 import { GpsRelativity } from "./GpsRelativity";
 import { InverseSqrtBits } from "./InverseSqrtBits";
 import { BusyBeaverVisual } from "./BusyBeaverVisual";
+import { SecretSharingVisual } from "./SecretSharingVisual";
 
 /* ──────────────────────────── расписание битов ──────────────────────────── */
 
@@ -82,6 +83,7 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
       const phase = beat.params?.phase;
       impact = start + Math.round(dur * (phase === "run" ? 0.95 : 0.62));
     }
+    if (beat.visual === "secret-sharing") impact = start + Math.round(dur * 0.55);
     return { beat, start, end, impact };
   });
 };
@@ -156,6 +158,7 @@ export const storySfx = (
       events.push({ frame: s.impact, sound: ph === "final" ? "ding" : "pop" });
     }
     if (s.beat.visual === "busy-beaver") events.push({ frame: s.impact, sound: "ding" });
+    if (s.beat.visual === "secret-sharing") events.push({ frame: s.impact, sound: "pop" });
   }
   return events;
 };
@@ -6763,6 +6766,7 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     "merkle-tree": { scale: 0.92, y: -20 },
     "stable-matching": { scale: 0.88, y: -20 },
     "busy-beaver": { scale: 0.9, y: -20 },
+    "secret-sharing": { scale: 0.9, y: -20 },
   };
   const cur = cams[slot.beat.visual] ?? { scale: 1, y: 0 };
   const prev = idx > 0 ? cams[slots[idx - 1].beat.visual] ?? cur : cur;
@@ -7094,6 +7098,15 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
         );
       case "busy-beaver":
         return <BusyBeaverVisual local={local} fps={fps} impactLocal={impactLocal} />;
+      case "secret-sharing":
+        return (
+          <SecretSharingVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as "shares" | "curve" | "candidates" | "recover" | undefined) ?? "curve"}
+          />
+        );
       default:
         return null;
     }
