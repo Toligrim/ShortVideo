@@ -69,12 +69,18 @@
         {
           "visual": "title-slam",
           "onWord": "Убери",
-          "params": {}
+          "params": {
+            "text": "БЕЗ ДЕРЕВА",
+            "sub": "полная цепочка"
+          }
         },
         {
           "visual": "title-slam",
           "onWord": "Пятьсот",
-          "params": {}
+          "params": {
+            "text": "500 ГБ → 70 МБ",
+            "sub": "полный узел → лёгкий клиент"
+          }
         }
       ]
     },
