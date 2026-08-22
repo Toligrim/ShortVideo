@@ -78,7 +78,10 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
       impact = start + Math.round(dur * (beat.params?.phase === "proof" ? 0.64 : 0.58));
     if (beat.visual === "stable-matching")
       impact = start + Math.round(dur * (beat.params?.phase === "final" ? 0.72 : 0.58));
-    if (beat.visual === "busy-beaver") impact = start + Math.round(dur * 0.62);
+    if (beat.visual === "busy-beaver") {
+      const phase = beat.params?.phase;
+      impact = start + Math.round(dur * (phase === "run" ? 0.95 : 0.62));
+    }
     return { beat, start, end, impact };
   });
 };
