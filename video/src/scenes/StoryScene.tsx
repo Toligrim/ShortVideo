@@ -61,6 +61,8 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
     if (beat.visual === "rule-110") impact = start + Math.round(dur * 0.6);
     if (beat.visual === "glider-collision") impact = start + Math.round(dur * 0.7);
     if (beat.visual === "debruijn-cycle") impact = start + Math.round(dur * 0.58);
+    if (beat.visual === "hamming-word") impact = start + Math.round(dur * 0.58);
+    if (beat.visual === "hamming-syndrome") impact = start + Math.round(dur * 0.64);
     if (beat.visual === "gps-relativity") impact = start + Math.round(dur * 0.62);
     if (beat.visual === "orbit-fft-groups") {
       const phase = beat.params?.phase;
@@ -118,6 +120,8 @@ export const storySfx = (
       const sound = ph === "graph" ? "pop" : ph === "angle" ? "ding" : ph === "linear" ? "click" : "pop";
       events.push({ frame: s.impact, sound });
     }
+    if (s.beat.visual === "hamming-word") events.push({ frame: s.impact, sound: "pop" });
+    if (s.beat.visual === "hamming-syndrome") events.push({ frame: s.impact, sound: "ding" });
     if (s.beat.visual === "gps-relativity") {
       const ph = s.beat.params?.phase;
       const sound = ph === "factory" ? "click" : ph === "balance" ? "ding" : "pop";
@@ -575,6 +579,295 @@ const PasswordLeak: React.FC<{ local: number; fps: number; impactLocal: number; 
           <IconGlyph name="eye" size={92} color={theme.danger} strokeWidth={1.6} />
         </div>
       ) : null}
+    </>
+  );
+};
+
+/** Семь позиций кода Хэмминга: три проверки и четыре бита данных. */
+const HammingWordVisual: React.FC<{
+  local: number;
+  fps: number;
+  impactLocal: number;
+  errorPosition?: number;
+}> = ({ local, fps, impactLocal, errorPosition = 5 }) => {
+  const enter = spring({ frame: local, fps, config: { damping: 15, mass: 0.8 } });
+  const error = Math.max(1, Math.min(7, Math.round(errorPosition)));
+  const errorEnter = spring({ frame: Math.max(0, local - impactLocal), fps, config: { damping: 12, mass: 0.7 } });
+  const bits = [0, 1, 1, 0, 1, 0, 1];
+  const cardWidth = 108;
+  const cardGap = 12;
+  const rowWidth = bits.length * cardWidth + (bits.length - 1) * cardGap;
+  const rowLeft = (W - rowWidth) / 2;
+  const errorX = rowLeft + (error - 1) * (cardWidth + cardGap) + cardWidth / 2;
+  const failed = local >= impactLocal;
+
+  return (
+    <>
+      <div
+        style={{
+          position: "absolute",
+          left: 80,
+          right: 80,
+          top: 390,
+          textAlign: "center",
+          fontFamily: theme.mono,
+          fontSize: 28,
+          letterSpacing: 3,
+          color: theme.subtext,
+          opacity: enter,
+        }}
+      >
+        СЕМЬ ПОЗИЦИЙ · ЧЕТЫРЕ ДАННЫХ · ТРИ ПРОВЕРКИ
+      </div>
+      <div
+        style={{
+          position: "absolute",
+          left: rowLeft,
+          top: 610,
+          display: "flex",
+          gap: cardGap,
+          opacity: enter,
+          transform: `translateY(${(1 - enter) * 50}px)`,
+        }}
+      >
+        {bits.map((bit, i) => {
+          const position = i + 1;
+          const parity = position === 1 || position === 2 || position === 4;
+          const activeError = failed && position === error;
+          const color = activeError ? theme.danger : parity ? theme.accent2 : theme.accent;
+          const shownBit = activeError ? 1 - bit : bit;
+          const pulse = activeError ? 1 + 0.06 * Math.sin((local - impactLocal) / 5) : 1;
+          return (
+            <div
+              key={position}
+              style={{
+                width: cardWidth,
+                height: 260,
+                borderRadius: 24,
+                border: `3px solid ${color}${activeError ? "EE" : "99"}`,
+                background: `${color}${activeError ? "24" : "12"}`,
+                boxShadow: `0 0 ${activeError ? 60 : 30}px ${color}${activeError ? "88" : "22"}`,
+                transform: `scale(${pulse})`,
+                textAlign: "center",
+                paddingTop: 22,
+              }}
+            >
+              <div style={{ fontFamily: theme.mono, fontSize: 24, color: theme.subtext }}>ПОЗИЦИЯ {position}</div>
+              <div
+                style={{
+                  marginTop: 30,
+                  fontFamily: theme.mono,
+                  fontSize: 86,
+                  fontWeight: 800,
+                  color,
+                  textShadow: `0 0 24px ${color}99`,
+                }}
+              >
+                {shownBit}
+              </div>
+              <div
+                style={{
+                  marginTop: 18,
+                  fontFamily: theme.font,
+                  fontSize: Math.min(20, fitText({
+                    text: parity ? "ПРОВЕРКА" : "ДАННЫЕ",
+                    withinWidth: cardWidth - 14,
+                    fontFamily: theme.font,
+                    fontWeight: 800,
+                  }).fontSize),
+                  fontWeight: 800,
+                  color: theme.text,
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {parity ? "ПРОВЕРКА" : "ДАННЫЕ"}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div
+        style={{
+          position: "absolute",
+          left: W / 2,
+          top: 1030,
+          transform: "translateX(-50%)",
+          fontFamily: theme.font,
+          fontWeight: 800,
+          fontSize: 42,
+          color: failed ? theme.danger : theme.text,
+          opacity: enter,
+        }}
+      >
+        {failed ? `БИТ ${error} ПЕРЕВЁРНУТ` : "КОДОВОЕ СЛОВО"}
+      </div>
+      {failed ? <PulseRing x={errorX} y={740} triggerFrame={impactLocal} tone="danger" size={170} /> : null}
+      <div
+        style={{
+          position: "absolute",
+          left: W / 2,
+          top: 1180,
+          transform: "translateX(-50%)",
+          fontFamily: theme.mono,
+          fontSize: 28,
+          color: failed ? theme.warning : theme.subtext,
+          opacity: failed ? errorEnter : enter,
+        }}
+      >
+        {failed ? "ПРОВЕРКИ НАЙДУТ АДРЕС" : "ПРОВЕРКИ СЛЕДЯТ ЗА ГРУППАМИ"}
+      </div>
+    </>
+  );
+};
+
+/** Три группы чётности складываются в двоичный синдром — адрес ошибки. */
+const HammingSyndromeVisual: React.FC<{
+  local: number;
+  fps: number;
+  impactLocal: number;
+  mode?: "groups" | "syndrome";
+  errorPosition?: number;
+}> = ({ local, fps, impactLocal, mode = "groups", errorPosition = 5 }) => {
+  const enter = spring({ frame: local, fps, config: { damping: 15, mass: 0.8 } });
+  const reveal = spring({ frame: Math.max(0, local - impactLocal), fps, config: { damping: 12, mass: 0.7 } });
+  const error = Math.max(1, Math.min(7, Math.round(errorPosition)));
+  const groups = [
+    { label: "П1", positions: [1, 3, 5, 7], value: "1", color: theme.accent },
+    { label: "П2", positions: [2, 3, 6, 7], value: "0", color: theme.accent2 },
+    { label: "П4", positions: [4, 5, 6, 7], value: "1", color: theme.success },
+  ];
+  const errorX = 782;
+  const rowTop = 500;
+  const failed = local >= impactLocal;
+
+  return (
+    <>
+      <div
+        style={{
+          position: "absolute",
+          left: 80,
+          right: 80,
+          top: 370,
+          textAlign: "center",
+          fontFamily: theme.mono,
+          fontSize: 28,
+          letterSpacing: 3,
+          color: theme.subtext,
+          opacity: enter,
+        }}
+      >
+        ТРИ ПРОВЕРКИ · ОДИН АДРЕС
+      </div>
+      {groups.map((group, row) => {
+        const y = rowTop + row * 220;
+        const result = mode === "groups" ? (failed ? "✓" : "?") : failed ? group.value : "·";
+        const resultColor = mode === "groups" ? theme.success : row === 1 ? theme.accent2 : group.color;
+        return (
+          <div
+            key={group.label}
+            style={{
+              position: "absolute",
+              left: 74,
+              top: y,
+              width: 932,
+              height: 158,
+              borderRadius: 26,
+              background: `${group.color}0D`,
+              border: `3px solid ${group.color}66`,
+              opacity: enter,
+              transform: `translateY(${(1 - enter) * 45}px)`,
+            }}
+          >
+            <div
+              style={{
+                position: "absolute",
+                left: 28,
+                top: 47,
+                width: 100,
+                fontFamily: theme.mono,
+                fontSize: 36,
+                fontWeight: 800,
+                color: group.color,
+              }}
+            >
+              {group.label}
+            </div>
+            {group.positions.map((position, i) => {
+              const activeError = failed && position === error;
+              return (
+                <div
+                  key={position}
+                  style={{
+                    position: "absolute",
+                    left: 154 + i * 142,
+                    top: 35,
+                    width: 108,
+                    height: 88,
+                    borderRadius: 18,
+                    border: `3px solid ${activeError ? theme.danger : group.color}99`,
+                    background: activeError ? `${theme.danger}26` : theme.panel,
+                    color: activeError ? theme.danger : theme.text,
+                    fontFamily: theme.mono,
+                    fontSize: 31,
+                    fontWeight: 700,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    boxShadow: activeError ? `0 0 32px ${theme.danger}88` : "none",
+                  }}
+                >
+                  {position}
+                </div>
+              );
+            })}
+            <div
+              style={{
+                position: "absolute",
+                right: 28,
+                top: 38,
+                width: 88,
+                height: 82,
+                borderRadius: 18,
+                background: `${resultColor}1C`,
+                border: `3px solid ${resultColor}AA`,
+                color: resultColor,
+                fontFamily: theme.mono,
+                fontSize: 38,
+                fontWeight: 800,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                opacity: mode === "groups" ? enter : reveal,
+              }}
+            >
+              {result}
+            </div>
+          </div>
+        );
+      })}
+      <div
+        style={{
+          position: "absolute",
+          left: W / 2,
+          top: 1210,
+          transform: "translateX(-50%)",
+          minWidth: 620,
+          padding: "20px 36px",
+          borderRadius: 24,
+          textAlign: "center",
+          background: `${failed ? theme.success : theme.panel}1F`,
+          border: `3px solid ${failed ? theme.success : theme.panelBorder}`,
+          color: failed ? theme.success : theme.subtext,
+          fontFamily: theme.mono,
+          fontSize: 38,
+          fontWeight: 800,
+          opacity: mode === "groups" ? enter : reveal,
+          boxShadow: failed ? `0 0 45px ${theme.success}55` : "none",
+        }}
+      >
+        {mode === "groups" ? "ГРУППЫ ПОЗИЦИЙ" : failed ? "СИНДРОМ 101  →  5" : "СИНДРОМ  ·  ·  ·"}
+      </div>
+      {failed && mode === "syndrome" ? <PulseRing x={errorX} y={1065} triggerFrame={impactLocal} tone="success" size={150} /> : null}
     </>
   );
 };
@@ -5882,6 +6175,8 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     "coin-pair": { scale: 0.96, y: -10 },
     "bit-extractor": { scale: 0.92, y: -20 },
     "debruijn-cycle": { scale: 0.92, y: -20 },
+    "hamming-word": { scale: 0.9, y: -25 },
+    "hamming-syndrome": { scale: 0.88, y: -25 },
     "gps-relativity": { scale: 0.9, y: -20 },
     "cuckoo-table": { scale: 0.9, y: -30 },
     "cuckoo-cycle": { scale: 0.88, y: -30 },
@@ -6118,6 +6413,25 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             fps={fps}
             impactLocal={impactLocal}
             phase={(slot.beat.params?.phase as "window" | "graph" | "angle" | "linear" | undefined) ?? "window"}
+          />
+        );
+      case "hamming-word":
+        return (
+          <HammingWordVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            errorPosition={slot.beat.params?.errorPosition as number | undefined}
+          />
+        );
+      case "hamming-syndrome":
+        return (
+          <HammingSyndromeVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            mode={(slot.beat.params?.mode as "groups" | "syndrome" | undefined) ?? "groups"}
+            errorPosition={slot.beat.params?.errorPosition as number | undefined}
           />
         );
       case "gps-relativity":

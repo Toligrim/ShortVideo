@@ -94,6 +94,8 @@ export interface StoryBeat {
     | "rule-110"
     | "glider-collision"
     | "debruijn-cycle"
+    | "hamming-word"
+    | "hamming-syndrome"
     | "gps-relativity"
     | "cuckoo-table"
     | "cuckoo-cycle"
