@@ -26,7 +26,7 @@
       "beats": [
         { "visual": "stable-matching", "onWord": "делает", "params": { "phase": "propose" } },
         { "visual": "stable-matching", "onWord": "держит", "params": { "phase": "hold" } },
-        { "visual": "stable-matching", "onWord": "Отвергнутый", "params": { "phase": "final" } }
+        { "visual": "stable-matching", "onWord": "Отвергнутый", "params": { "phase": "hold" } }
       ]
     },
     {
