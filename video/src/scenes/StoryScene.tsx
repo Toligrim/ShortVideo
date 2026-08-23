@@ -15,6 +15,8 @@ import { SecretSharingVisual } from "./SecretSharingVisual";
 import { CounterVisual, CounterPhase } from "./CounterVisual";
 import { TimsortRunsVisual } from "./TimsortRunsVisual";
 import { MincutContractVisual, type MincutContractPhase } from "./MincutContractVisual";
+import { BacktrackTreeVisual } from "./BacktrackTree";
+import { ThompsonParallelVisual } from "./ThompsonParallel";
 
 /* ──────────────────────────── расписание битов ──────────────────────────── */
 
@@ -105,6 +107,8 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
       const phase = beat.params?.phase;
       impact = start + Math.round(dur * (phase === "branch" ? 0.65 : phase === "repeat" ? 0.72 : 0.55));
     }
+    if (beat.visual === "backtrack-tree") impact = start + Math.round(dur * 0.78);
+    if (beat.visual === "thompson-parallel") impact = start + Math.round(dur * 0.72);
     return { beat, start, end, impact };
   });
 };
@@ -203,6 +207,8 @@ export const storySfx = (
       const sound = ph === "survive" ? "ding" : ph === "branch" ? "slam" : ph === "repeat" ? "whoosh" : "pop";
       events.push({ frame: s.impact, sound });
     }
+    if (s.beat.visual === "backtrack-tree") events.push({ frame: s.impact, sound: "slam" });
+    if (s.beat.visual === "thompson-parallel") events.push({ frame: s.impact, sound: "ding" });
   }
   return events;
 };
@@ -7420,6 +7426,8 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     "shuffle-deck": { scale: 0.9, y: -20 },
     counter: { scale: 0.92, y: -20 },
     "mincut-contract": { scale: 0.9, y: -20 },
+    "backtrack-tree": { scale: 0.86, y: -30 },
+    "thompson-parallel": { scale: 0.88, y: -25 },
   };
   const cur = cams[slot.beat.visual] ?? { scale: 1, y: 0 };
   const prev = idx > 0 ? cams[slots[idx - 1].beat.visual] ?? cur : cur;
@@ -7813,6 +7821,27 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             fps={fps}
             impactLocal={impactLocal}
             phase={(slot.beat.params?.phase as MincutContractPhase | undefined) ?? "contract"}
+          />
+        );
+      case "backtrack-tree":
+        return (
+          <BacktrackTreeVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            pattern={slot.beat.params?.pattern as string | undefined}
+            branches={slot.beat.params?.branches as number | undefined}
+            depth={slot.beat.params?.depth as number | undefined}
+          />
+        );
+      case "thompson-parallel":
+        return (
+          <ThompsonParallelVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            threads={slot.beat.params?.threads as number | undefined}
+            symbols={slot.beat.params?.symbols as number | undefined}
           />
         );
       default:

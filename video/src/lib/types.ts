@@ -110,7 +110,9 @@ export interface StoryBeat {
     | "shuffle-deck"
     | "timsort-runs"
     | "counter"
-    | "mincut-contract";
+    | "mincut-contract"
+    | "backtrack-tree"
+    | "thompson-parallel";
   onWord?: string; // бит начинается на этом слове реплики
   params?: Record<string, unknown>;
 }
