@@ -112,7 +112,9 @@ export interface StoryBeat {
     | "counter"
     | "mincut-contract"
     | "backtrack-tree"
-    | "thompson-parallel";
+    | "thompson-parallel"
+    | "implication-graph"
+    | "scc-verdict";
   onWord?: string; // бит начинается на этом слове реплики
   params?: Record<string, unknown>;
 }

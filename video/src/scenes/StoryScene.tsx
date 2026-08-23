@@ -17,6 +17,8 @@ import { TimsortRunsVisual } from "./TimsortRunsVisual";
 import { MincutContractVisual, type MincutContractPhase } from "./MincutContractVisual";
 import { BacktrackTreeVisual } from "./BacktrackTree";
 import { ThompsonParallelVisual } from "./ThompsonParallel";
+import { ImplicationGraphVisual, type ImplicationGraphPhase } from "./ImplicationGraphVisual";
+import { SccVerdictVisual, type SccVerdictPhase } from "./SccVerdictVisual";
 
 /* ──────────────────────────── расписание битов ──────────────────────────── */
 
@@ -109,6 +111,14 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
     }
     if (beat.visual === "backtrack-tree") impact = start + Math.round(dur * 0.78);
     if (beat.visual === "thompson-parallel") impact = start + Math.round(dur * 0.72);
+    if (beat.visual === "implication-graph") {
+      const phase = beat.params?.phase;
+      impact = start + Math.round(dur * (phase === "complete" ? 0.75 : 0.58));
+    }
+    if (beat.visual === "scc-verdict") {
+      const phase = beat.params?.phase;
+      impact = start + Math.round(dur * (phase === "verdict" ? 0.72 : 0.62));
+    }
     return { beat, start, end, impact };
   });
 };
@@ -209,6 +219,16 @@ export const storySfx = (
     }
     if (s.beat.visual === "backtrack-tree") events.push({ frame: s.impact, sound: "slam" });
     if (s.beat.visual === "thompson-parallel") events.push({ frame: s.impact, sound: "ding" });
+    if (s.beat.visual === "implication-graph") {
+      const ph = s.beat.params?.phase;
+      const sound = ph === "complete" ? "ding" : ph === "edges" ? "pop" : "click";
+      events.push({ frame: s.impact, sound });
+    }
+    if (s.beat.visual === "scc-verdict") {
+      const ph = s.beat.params?.phase;
+      const sound = ph === "verdict" ? "slam" : "pop";
+      events.push({ frame: s.impact, sound });
+    }
   }
   return events;
 };
@@ -7842,6 +7862,25 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             impactLocal={impactLocal}
             threads={slot.beat.params?.threads as number | undefined}
             symbols={slot.beat.params?.symbols as number | undefined}
+          />
+        );
+      case "implication-graph":
+        return (
+          <ImplicationGraphVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as ImplicationGraphPhase | undefined) ?? "complete"}
+            variables={slot.beat.params?.variables as number | undefined}
+          />
+        );
+      case "scc-verdict":
+        return (
+          <SccVerdictVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as SccVerdictPhase | undefined) ?? "tarjan"}
           />
         );
       default:
