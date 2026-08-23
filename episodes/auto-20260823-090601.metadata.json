@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "slug": "auto-20260823-090601",
+  "targets": {
+    "youtube": {
+      "title": "Timsort: баг, который формальное доказательство нашло, а Java не смогла починить",
+      "description": "Timsort ломался на специфических массивах ошибкой ArrayIndexOutOfBounds. Исследователи из CWI формально доказали баг — инструмент KeY потребовал два миллиона шагов рассуждений. Патч в Java 11 менял размер стека, но анализ худшего случая показал: инвариант стека всё ещё можно нарушить.",
+      "tags": ["алгоритмы", "математика", "информатика", "timsort", "java", "формальная верификация"],
+      "category_id": "28",
+      "privacy_status": "public",
+      "made_for_kids": false,
+      "contains_synthetic_media": true,
+      "notify_subscribers": false
+    },
+    "instagram": {
+      "caption": "Timsort падал с ArrayIndexOutOfBounds на специфических массивах. Формальное доказательство нашло баг — а патч в Java всё равно не закрыл инвариант стека до конца. #алгоритмы #java #информатика #shorts",
+      "share_to_feed": true
+    }
+  }
+}
