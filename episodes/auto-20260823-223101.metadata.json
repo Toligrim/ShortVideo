@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "slug": "auto-20260823-223101",
+  "targets": {
+    "youtube": {
+      "title": "2-SAT: два литерала превращают логику в граф",
+      "description": "Почему 2-SAT решается за линейное время: граф импликаций, сильные компоненты связности и ловушка переменной с её отрицанием. А три литерала уже ведут в NP-полную 3-SAT.",
+      "tags": [
+        "2-SAT",
+        "SAT",
+        "алгоритмы",
+        "теория графов",
+        "информатика",
+        "математика"
+      ],
+      "category_id": "28",
+      "privacy_status": "public",
+      "made_for_kids": false,
+      "contains_synthetic_media": true,
+      "notify_subscribers": false
+    },
+    "instagram": {
+      "caption": "2-SAT: два литерала — и логика превращается в граф. #математика #информатика #алгоритмы",
+      "share_to_feed": true
+    }
+  }
+}
