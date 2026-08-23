@@ -11,10 +11,7 @@
     {
       "type": "story",
       "heading": "НАТУРАЛЬНЫЕ RUNS",
-      "narration": {
-        "ru": "{Timsort|ти́мсорт} находит в массиве непрерывные участки по возрастанию или убыванию, называет их {runs|раны}, и сливает попарно в стеке. Стек ограничен, но инварианты должны не дать стеку переполниться.",
-        "en": "Timsort finds continuous ascending or descending runs in the array, names them runs, and merges them pairwise in a stack. The stack is limited, but invariants must prevent overflow."
-      },
+      "narration": "{Timsort|ти́мсорт} находит в массиве непрерывные участки по возрастанию или убыванию, называет их {runs|раны}, и сливает попарно в стеке. Стек ограничен, но инварианты должны не дать стеку переполниться.",
       "beats": [
         { "visual": "timsort-runs", "params": { "phase": "runs" } },
         { "visual": "timsort-runs", "params": { "phase": "runs" }, "onWord": "находит" },
