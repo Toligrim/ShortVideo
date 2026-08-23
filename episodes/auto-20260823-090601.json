@@ -1,0 +1,58 @@
+{
+  "id": "auto-20260823-090601",
+  "title": "Timsort: как формальное доказательство нашло баг, который Java не смогла починить",
+  "scenes": [
+    {
+      "type": "hook",
+      "title": "Сортировка может упасть",
+      "subtitle": "Баг в Timsort",
+      "narration": "Ошибка в {Timsort|ти́мсорт} проявлялась на специфическом массиве. Алгоритм падал, и программы падали с ним. {ArrayIndexOutOfBounds|эрей индекс аут ов боундс}."
+    },
+    {
+      "type": "story",
+      "heading": "НАТУРАЛЬНЫЕ RUNS",
+      "narration": {
+        "ru": "{Timsort|ти́мсорт} находит в массиве непрерывные участки по возрастанию или убыванию, называет их {runs|раны}, и сливает попарно в стеке. Стек ограничен, но инварианты должны не дать стеку переполниться.",
+        "en": "Timsort finds continuous ascending or descending runs in the array, names them runs, and merges them pairwise in a stack. The stack is limited, but invariants must prevent overflow."
+      },
+      "beats": [
+        { "visual": "timsort-runs", "params": { "phase": "runs" } },
+        { "visual": "timsort-runs", "params": { "phase": "runs" }, "onWord": "находит" },
+        { "visual": "timsort-runs", "params": { "phase": "merge" }, "onWord": "называет" },
+        { "visual": "timsort-runs", "params": { "phase": "merge" }, "onWord": "сливает" }
+      ]
+    },
+    {
+      "type": "story",
+      "heading": "ФОРМАЛЬНАЯ ПРОВЕРКА",
+      "narration": "Исследователи из {CWI|си-ви-ай} — центра математики и информатики в Амстердаме — доказали баг формально. Их инструмент {KeY|ки} потребовал два миллиона шагов рассуждений, чтобы проверить корректность сортировки. Доказательство не сошлось — баг подтверждён.",
+      "beats": [
+        { "visual": "verdict-scan" },
+        { "visual": "verdict-scan", "onWord": "доказали" },
+        { "visual": "title-slam", "onWord": "два", "params": { "text": "2 000 000", "sub": "шагов проверки" } },
+        { "visual": "verdict-scan", "onWord": "Доказательство" }
+      ]
+    },
+    {
+      "type": "story",
+      "heading": "ИНВАРИАНТ СТЕКА",
+      "narration": "В {Java|джа́ва} одиннадцать исправляли эту ошибку: патч менял размер стека. Но анализ худшего случая показал: проблема глубже — инвариант стека в реализации {Timsort|ти́мсорт} для {Java|джа́ва} можно было нарушить.",
+      "beats": [
+        { "visual": "timsort-runs", "params": { "phase": "invariant" } },
+        { "visual": "timsort-runs", "params": { "phase": "invariant" }, "onWord": "патч" },
+        { "visual": "timsort-runs", "params": { "phase": "invariant" }, "onWord": "анализ" },
+        { "visual": "timsort-runs", "params": { "phase": "invariant" }, "onWord": "инвариант" }
+      ]
+    },
+    {
+      "type": "outro",
+      "title": "Формальная проверка",
+      "bullets": [
+        "тесты не всё находят",
+        "инварианты важны"
+      ],
+      "cta": "Подпишись на алгоритмы",
+      "narration": "Формальная верификация находит то, что пропускают тесты и код-ревью. Подпишись — следующий алгоритм может скрывать ту же ошибку, пока не проверят формально."
+    }
+  ]
+}
