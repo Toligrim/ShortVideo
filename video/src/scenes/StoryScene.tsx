@@ -88,6 +88,7 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
       const phase = beat.params?.phase;
       impact = start + Math.round(dur * (phase === "proof" ? 0.72 : phase === "fair" ? 0.82 : 0.58));
     }
+    if (beat.visual === "union-find") impact = start + Math.round(dur * 0.5);
     return { beat, start, end, impact };
   });
 };
@@ -167,6 +168,7 @@ export const storySfx = (
       const phase = s.beat.params?.phase;
       events.push({ frame: s.impact, sound: phase === "proof" || phase === "fair" ? "ding" : "pop" });
     }
+    if (s.beat.visual === "union-find") events.push({ frame: s.impact, sound: "pop" });
   }
   return events;
 };
@@ -6920,6 +6922,291 @@ const ReservoirSamplingVisual: React.FC<{
   );
 };
 
+/** Union-find: дерево parent pointers, find-подъём и сжатие пути. */
+const UnionFindVisual: React.FC<{
+  local: number;
+  fps: number;
+  impactLocal: number;
+  phase?: "find" | "compress" | "union";
+}> = ({ local, fps, impactLocal, phase = "find" }) => {
+  const enter = spring({ frame: local, fps, config: { damping: 15, mass: 0.8 } });
+  const cx = W / 2;
+
+  const edge = (
+    key: string,
+    from: { x: number; y: number },
+    to: { x: number; y: number },
+    color: string,
+    opacity: number,
+    width = 4,
+  ) => {
+    const dx = to.x - from.x;
+    const dy = to.y - from.y;
+    const length = Math.sqrt(dx * dx + dy * dy);
+    const angle = (Math.atan2(dy, dx) * 180) / Math.PI;
+    return (
+      <div
+        key={key}
+        style={{
+          position: "absolute",
+          left: from.x,
+          top: from.y,
+          width: length,
+          height: width,
+          transformOrigin: "0 50%",
+          transform: `translateY(-50%) rotate(${angle}deg)`,
+          background: color,
+          opacity: enter * opacity,
+          zIndex: 1,
+        }}
+      >
+        <span
+          style={{
+            position: "absolute",
+            right: -2,
+            top: "50%",
+            transform: "translateY(-50%)",
+            color,
+            fontFamily: theme.font,
+            fontSize: 36,
+            lineHeight: 1,
+          }}
+        >
+          ›
+        </span>
+      </div>
+    );
+  };
+
+  const node = (
+    key: string,
+    p: { x: number; y: number },
+    label: string,
+    color: string,
+    opacity = 1,
+    active = false,
+    sub?: string,
+  ) => (
+    <div
+      key={key}
+      style={{
+        position: "absolute",
+        left: p.x - 118,
+        top: p.y - 64,
+        width: 236,
+        height: 128,
+        borderRadius: 26,
+        background: theme.panel,
+        border: `3px solid ${active ? color : theme.panelBorder}`,
+        boxShadow: active ? `0 0 60px ${color}66` : `0 0 30px ${color}22`,
+        opacity: enter * opacity,
+        transform: `translateY(${(1 - enter) * 60}px) scale(${active ? 1 + 0.04 * Math.sin(local / 6) : 1})`,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 8,
+        zIndex: 2,
+      }}
+    >
+      <div style={{ fontFamily: theme.mono, fontSize: 24, color: theme.subtext }}>КОРОБКА</div>
+      <div style={{ fontFamily: theme.font, fontWeight: 800, fontSize: 44, color: theme.text }}>{label}</div>
+      {sub ? <div style={{ fontFamily: theme.mono, fontSize: 20, color }}>{sub}</div> : null}
+    </div>
+  );
+
+  if (phase === "union") {
+    const rootA = { x: cx - 270, y: 520 };
+    const childA = { x: cx - 420, y: 860 };
+    const rootB = { x: cx + 270, y: 520 };
+    const childB = { x: cx + 420, y: 860 };
+    const attachP = smooth(clamp01((local - impactLocal) / 22));
+    const joined = local >= impactLocal;
+    return (
+      <>
+        <div
+          style={{
+            position: "absolute",
+            left: cx,
+            top: 250,
+            transform: "translateX(-50%)",
+            fontFamily: theme.mono,
+            fontSize: 28,
+            letterSpacing: 3,
+            color: theme.subtext,
+            opacity: enter,
+          }}
+        >
+          UNION BY RANK
+        </div>
+        {edge("a-c", rootA, childA, theme.accent, 1, 4)}
+        {edge("b-c", rootB, childB, theme.accent2, 1, 4)}
+        {node("A", rootA, "A", theme.accent, 1, true, "ранг 2")}
+        {node("Ac", childA, "A₁", theme.accent, 1, false)}
+        {node("B", rootB, "B", theme.accent2, 1, !joined, "ранг 1")}
+        {node("Bc", childB, "B₁", theme.accent2, 1, false)}
+        {joined ? edge("attach", rootB, rootA, theme.success, attachP, 5) : null}
+        {joined ? (
+          <div
+            style={{
+              position: "absolute",
+              left: cx,
+              top: 1230,
+              transform: "translateX(-50%)",
+              padding: "16px 30px",
+              borderRadius: 999,
+              background: `${theme.success}18`,
+              border: `2px solid ${theme.success}`,
+              color: theme.success,
+              fontFamily: theme.font,
+              fontWeight: 800,
+              fontSize: 30,
+              opacity: enter,
+            }}
+          >
+            меньшее B — под бо́льшим A
+          </div>
+        ) : null}
+        {joined && attachP > 0.85 ? <PulseRing x={rootA.x} y={rootA.y} triggerFrame={impactLocal + 18} tone="success" size={200} /> : null}
+      </>
+    );
+  }
+
+  const root = { x: cx, y: 380 };
+  const mid = { x: cx - 210, y: 660 };
+  const leaf = { x: cx - 210, y: 940 };
+  const rchild = { x: cx + 210, y: 660 };
+  const rleaf = { x: cx + 210, y: 940 };
+
+  if (phase === "find") {
+    const findP = smooth(clamp01(local / Math.max(impactLocal - 6, 1)));
+    let cp = leaf;
+    if (findP < 0.5)
+      cp = {
+        x: interpolate(findP / 0.5, [0, 1], [leaf.x, mid.x]),
+        y: interpolate(findP / 0.5, [0, 1], [leaf.y, mid.y]),
+      };
+    else
+      cp = {
+        x: interpolate((findP - 0.5) / 0.5, [0, 1], [mid.x, root.x]),
+        y: interpolate((findP - 0.5) / 0.5, [0, 1], [mid.y, root.y]),
+      };
+    const reached = findP > 0.98;
+    const lit = (p: number) => findP >= p;
+    return (
+      <>
+        <div
+          style={{
+            position: "absolute",
+            left: cx,
+            top: 230,
+            transform: "translateX(-50%)",
+            fontFamily: theme.mono,
+            fontSize: 28,
+            letterSpacing: 3,
+            color: theme.subtext,
+            opacity: enter,
+          }}
+        >
+          FIND — ПОДЪЁМ ПО УКАЗАТЕЛЯМ
+        </div>
+        {edge("leaf-mid", leaf, mid, lit(0.5) ? theme.accent : theme.panelBorder, lit(0.5) ? 1 : 0.5)}
+        {edge("mid-root", mid, root, lit(0.5) ? theme.accent : theme.panelBorder, lit(0.5) ? 1 : 0.5)}
+        {edge("rchild-root", rchild, root, theme.panelBorder, 0.5)}
+        {edge("rleaf-rchild", rleaf, rchild, theme.panelBorder, 0.5)}
+        {node("root", root, "ROOT", theme.warning, 1, reached, "верхняя")}
+        {node("mid", mid, "M", theme.accent, 1, lit(0.5))}
+        {node("leaf", leaf, "L", theme.accent, 1, true)}
+        {node("rchild", rchild, "R", theme.accent2, 1, false)}
+        {node("rleaf", rleaf, "R₁", theme.accent2, 1, false)}
+        <div
+          style={{
+            position: "absolute",
+            left: cp.x,
+            top: cp.y,
+            width: 30,
+            height: 30,
+            borderRadius: 15,
+            background: theme.accent,
+            boxShadow: `0 0 30px ${theme.accent}`,
+            transform: "translate(-50%,-50%)",
+            opacity: enter * (1 - smooth(clamp01((local - impactLocal) / 8))),
+          }}
+        />
+        {reached ? <PulseRing x={root.x} y={root.y} triggerFrame={Math.max(0, impactLocal)} tone="warning" size={200} /> : null}
+        <div
+          style={{
+            position: "absolute",
+            left: cx,
+            top: 1230,
+            transform: "translateX(-50%)",
+            fontFamily: theme.font,
+            fontWeight: 800,
+            fontSize: 30,
+            color: theme.subtext,
+            opacity: enter,
+          }}
+        >
+          {reached ? "нашли корень за два шага" : "поднимаемся по запискам"}
+        </div>
+      </>
+    );
+  }
+
+  // compress: переписываем указатели прямо к корню
+  const cp = smooth(clamp01((local - impactLocal) / 24));
+  return (
+    <>
+      <div
+        style={{
+          position: "absolute",
+          left: cx,
+          top: 230,
+          transform: "translateX(-50%)",
+          fontFamily: theme.mono,
+          fontSize: 28,
+          letterSpacing: 3,
+          color: theme.subtext,
+          opacity: enter,
+        }}
+      >
+        СЖАТИЕ ПУТИ
+      </div>
+      {edge("old-lm", leaf, mid, theme.panelBorder, 1 - cp, 4)}
+      {edge("old-mr", mid, root, theme.panelBorder, 1 - cp, 4)}
+      {edge("new-lr", leaf, root, theme.success, cp, 5)}
+      {edge("new-mr", mid, root, theme.success, cp, 5)}
+      {edge("rchild-root", rchild, root, theme.accent2, 0.6)}
+      {edge("rleaf-rchild", rleaf, rchild, theme.accent2, 0.6)}
+      {node("root", root, "ROOT", theme.warning, 1, true, "верхняя")}
+      {node("mid", mid, "M", theme.success, 1, cp > 0.5)}
+      {node("leaf", leaf, "L", theme.success, 1, cp > 0.5)}
+      {node("rchild", rchild, "R", theme.accent2, 1, false)}
+      {node("rleaf", rleaf, "R₁", theme.accent2, 1, false)}
+      <div
+        style={{
+          position: "absolute",
+          left: cx,
+          top: 1230,
+          transform: "translateX(-50%)",
+          padding: "16px 30px",
+          borderRadius: 999,
+          background: `${theme.success}18`,
+          border: `2px solid ${theme.success}`,
+          color: theme.success,
+          fontFamily: theme.mono,
+          fontWeight: 800,
+          fontSize: 30,
+          opacity: enter * cp,
+        }}
+      >
+        все указывают прямо на корень
+      </div>
+      {cp > 0.85 ? <PulseRing x={root.x} y={root.y} triggerFrame={impactLocal + 18} tone="success" size={240} /> : null}
+    </>
+  );
+};
+
 /* ──────────────────────────── сцена-сториборд ──────────────────────────── */
 
 /** Каждая фраза диктора — свой бит с движением камеры между битами. */
@@ -6974,6 +7261,7 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     "busy-beaver": { scale: 0.9, y: -20 },
     "secret-sharing": { scale: 0.9, y: -20 },
     "reservoir-sampling": { scale: 0.9, y: -20 },
+    "union-find": { scale: 0.92, y: -20 },
   };
   const cur = cams[slot.beat.visual] ?? { scale: 1, y: 0 };
   const prev = idx > 0 ? cams[slots[idx - 1].beat.visual] ?? cur : cur;
@@ -7322,6 +7610,15 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             impactLocal={impactLocal}
             phase={(slot.beat.params?.phase as "stream" | "replace" | "survive" | "proof" | "fair" | undefined) ?? "stream"}
             chance={slot.beat.params?.chance as string | undefined}
+          />
+        );
+      case "union-find":
+        return (
+          <UnionFindVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as "find" | "compress" | "union" | undefined) ?? "find"}
           />
         );
       default:
