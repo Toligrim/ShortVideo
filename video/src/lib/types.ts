@@ -107,7 +107,8 @@ export interface StoryBeat {
     | "stable-matching"
     | "busy-beaver"
     | "union-find"
-    | "shuffle-deck";
+    | "shuffle-deck"
+    | "timsort-runs";
   onWord?: string; // бит начинается на этом слове реплики
   params?: Record<string, unknown>;
 }

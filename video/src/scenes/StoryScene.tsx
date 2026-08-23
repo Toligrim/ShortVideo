@@ -12,6 +12,7 @@ import { GpsRelativity } from "./GpsRelativity";
 import { InverseSqrtBits } from "./InverseSqrtBits";
 import { BusyBeaverVisual } from "./BusyBeaverVisual";
 import { SecretSharingVisual } from "./SecretSharingVisual";
+import { TimsortRunsVisual } from "./TimsortRunsVisual";
 
 /* ──────────────────────────── расписание битов ──────────────────────────── */
 
@@ -92,6 +93,10 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
     if (beat.visual === "shuffle-deck") {
       const phase = beat.params?.phase;
       impact = start + Math.round(dur * (phase === "count" ? 0.68 : 0.58));
+    }
+    if (beat.visual === "timsort-runs") {
+      const phase = beat.params?.phase;
+      impact = start + Math.round(dur * (phase === "invariant" ? 0.65 : 0.58));
     }
     return { beat, start, end, impact };
   });
@@ -176,6 +181,10 @@ export const storySfx = (
     if (s.beat.visual === "shuffle-deck") {
       const phase = s.beat.params?.phase;
       events.push({ frame: s.impact, sound: phase === "fair" ? "ding" : phase === "count" ? "slam" : "pop" });
+    }
+    if (s.beat.visual === "timsort-runs") {
+      const phase = s.beat.params?.phase;
+      events.push({ frame: s.impact, sound: phase === "invariant" ? "slam" : "ding" });
     }
   }
   return events;
@@ -7758,6 +7767,15 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             fps={fps}
             impactLocal={impactLocal}
             phase={(slot.beat.params?.phase as "naive" | "fair" | "count" | undefined) ?? "naive"}
+          />
+        );
+      case "timsort-runs":
+        return (
+          <TimsortRunsVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as "runs" | "merge" | "invariant" | undefined) ?? "runs"}
           />
         );
       default:
