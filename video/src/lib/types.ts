@@ -108,7 +108,8 @@ export interface StoryBeat {
     | "busy-beaver"
     | "union-find"
     | "shuffle-deck"
-    | "timsort-runs";
+    | "timsort-runs"
+    | "counter";
   onWord?: string; // бит начинается на этом слове реплики
   params?: Record<string, unknown>;
 }

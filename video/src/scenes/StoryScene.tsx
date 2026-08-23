@@ -12,6 +12,7 @@ import { GpsRelativity } from "./GpsRelativity";
 import { InverseSqrtBits } from "./InverseSqrtBits";
 import { BusyBeaverVisual } from "./BusyBeaverVisual";
 import { SecretSharingVisual } from "./SecretSharingVisual";
+import { CounterVisual, CounterPhase } from "./CounterVisual";
 import { TimsortRunsVisual } from "./TimsortRunsVisual";
 
 /* ──────────────────────────── расписание битов ──────────────────────────── */
@@ -98,6 +99,7 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
       const phase = beat.params?.phase;
       impact = start + Math.round(dur * (phase === "invariant" ? 0.65 : 0.58));
     }
+    if (beat.visual === "counter") impact = start + Math.round(dur * 0.7);
     return { beat, start, end, impact };
   });
 };
@@ -185,6 +187,11 @@ export const storySfx = (
     if (s.beat.visual === "timsort-runs") {
       const phase = s.beat.params?.phase;
       events.push({ frame: s.impact, sound: phase === "invariant" ? "slam" : "ding" });
+    }
+    if (s.beat.visual === "counter") {
+      const ph = s.beat.params?.phase;
+      const sound = ph === "tradeoff" || ph === "logarithm" ? "ding" : ph === "exact" ? "click" : "pop";
+      events.push({ frame: s.impact, sound });
     }
   }
   return events;
@@ -7401,6 +7408,7 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     "reservoir-sampling": { scale: 0.9, y: -20 },
     "union-find": { scale: 0.92, y: -20 },
     "shuffle-deck": { scale: 0.9, y: -20 },
+    counter: { scale: 0.92, y: -20 },
   };
   const cur = cams[slot.beat.visual] ?? { scale: 1, y: 0 };
   const prev = idx > 0 ? cams[slots[idx - 1].beat.visual] ?? cur : cur;
@@ -7776,6 +7784,15 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             fps={fps}
             impactLocal={impactLocal}
             phase={(slot.beat.params?.phase as "runs" | "merge" | "invariant" | undefined) ?? "runs"}
+          />
+        );
+      case "counter":
+        return (
+          <CounterVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as CounterPhase | undefined) ?? "flip"}
           />
         );
       default:
