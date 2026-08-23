@@ -106,7 +106,8 @@ export interface StoryBeat {
     | "merkle-tree"
     | "stable-matching"
     | "busy-beaver"
-    | "union-find";
+    | "union-find"
+    | "shuffle-deck";
   onWord?: string; // бит начинается на этом слове реплики
   params?: Record<string, unknown>;
 }

@@ -89,6 +89,10 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
       impact = start + Math.round(dur * (phase === "proof" ? 0.72 : phase === "fair" ? 0.82 : 0.58));
     }
     if (beat.visual === "union-find") impact = start + Math.round(dur * 0.5);
+    if (beat.visual === "shuffle-deck") {
+      const phase = beat.params?.phase;
+      impact = start + Math.round(dur * (phase === "count" ? 0.68 : 0.58));
+    }
     return { beat, start, end, impact };
   });
 };
@@ -169,6 +173,10 @@ export const storySfx = (
       events.push({ frame: s.impact, sound: phase === "proof" || phase === "fair" ? "ding" : "pop" });
     }
     if (s.beat.visual === "union-find") events.push({ frame: s.impact, sound: "pop" });
+    if (s.beat.visual === "shuffle-deck") {
+      const phase = s.beat.params?.phase;
+      events.push({ frame: s.impact, sound: phase === "fair" ? "ding" : phase === "count" ? "slam" : "pop" });
+    }
   }
   return events;
 };
@@ -7207,6 +7215,127 @@ const UnionFindVisual: React.FC<{
   );
 };
 
+/** Fisher–Yates: независимые обмены дают перекос, сужающийся диапазон — равные пути. */
+const ShuffleDeckVisual: React.FC<{
+  local: number;
+  fps: number;
+  impactLocal: number;
+  phase?: "naive" | "fair" | "count";
+}> = ({ local, fps, impactLocal, phase = "naive" }) => {
+  const enter = spring({ frame: local, fps, config: { damping: 15, mass: 0.8 } });
+  const cx = W / 2;
+  const pulse = local >= impactLocal ? spring({ frame: local - impactLocal, fps, config: { damping: 11, mass: 0.7 } }) : 0;
+  const fixed = phase === "fair" ? Math.min(2, Math.max(0, Math.floor((local - impactLocal) / 12))) : 0;
+  const card = (
+    key: string,
+    label: string,
+    x: number,
+    y: number,
+    color: string,
+    opacity = 1,
+    scale = 1,
+  ) => (
+    <div
+      key={key}
+      style={{
+        position: "absolute",
+        left: x - 72,
+        top: y - 78,
+        width: 144,
+        height: 156,
+        borderRadius: 22,
+        background: `${color}18`,
+        border: `3px solid ${color}`,
+        boxShadow: `0 0 34px ${color}44`,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        color: theme.text,
+        fontFamily: theme.mono,
+        fontSize: 48,
+        fontWeight: 800,
+        opacity: enter * opacity,
+        transform: `scale(${scale}) translateY(${(1 - enter) * 40}px)`,
+      }}
+    >
+      {label}
+    </div>
+  );
+
+  if (phase === "naive") {
+    return (
+      <>
+        <div style={{ position: "absolute", left: cx, top: 260, transform: "translateX(-50%)", fontFamily: theme.mono, fontSize: 28, letterSpacing: 3, color: theme.subtext, opacity: enter }}>
+          НАИВНЫЙ ОБМЕН
+        </div>
+        <div style={{ position: "absolute", left: cx, top: 365, transform: "translateX(-50%)", fontFamily: theme.font, fontSize: 30, color: theme.text, opacity: enter }}>
+          каждый индекс может выбрать любой
+        </div>
+        {card("a", "A", 310, 600, theme.accent)}
+        {card("b", "B", 540, 600, theme.accent2)}
+        {card("c", "C", 770, 600, theme.accent)}
+        <div style={{ position: "absolute", left: cx, top: 830, transform: "translateX(-50%)", fontFamily: theme.mono, fontSize: 54, fontWeight: 800, color: theme.warning, opacity: enter * (0.8 + 0.2 * pulse) }}>
+          3 × 3 × 3 = 27
+        </div>
+        <div style={{ position: "absolute", left: cx, top: 960, transform: "translateX(-50%)", fontFamily: theme.font, fontSize: 32, color: theme.warning, opacity: enter }}>
+          траекторий обменов
+        </div>
+        <div style={{ position: "absolute", left: cx, top: 1160, transform: "translateX(-50%)", padding: "18px 34px", borderRadius: 999, background: `${theme.danger}18`, border: `3px solid ${theme.danger}`, fontFamily: theme.mono, fontSize: 34, fontWeight: 800, color: theme.danger, opacity: enter }}>
+          а порядков: 3! = 6
+        </div>
+        {pulse > 0.1 ? <PulseRing x={cx} y={900} triggerFrame={impactLocal} tone="danger" size={420} /> : null}
+      </>
+    );
+  }
+
+  if (phase === "fair") {
+    const labels = ["A", "B", "C"];
+    return (
+      <>
+        <div style={{ position: "absolute", left: cx, top: 260, transform: "translateX(-50%)", fontFamily: theme.mono, fontSize: 28, letterSpacing: 3, color: theme.subtext, opacity: enter }}>
+          FISHER–YATES
+        </div>
+        <div style={{ position: "absolute", left: cx, top: 365, transform: "translateX(-50%)", fontFamily: theme.font, fontSize: 30, color: theme.text, opacity: enter }}>
+          фиксируем позицию — сужаем выбор
+        </div>
+        {labels.map((label, i) => card(`fair-${label}`, label, 310 + i * 230, 610, i < fixed ? theme.success : i === fixed ? theme.warning : theme.accent2, 1, i < fixed ? 0.96 : 1))}
+        <div style={{ position: "absolute", left: 200, top: 780, width: 680, height: 8, borderRadius: 999, background: `${theme.panelBorder}`, opacity: enter }} />
+        <div style={{ position: "absolute", left: 200, top: 780, width: `${Math.max(0, fixed + 1) * 226}px`, height: 8, borderRadius: 999, background: theme.success, opacity: enter * 0.9 }} />
+        <div style={{ position: "absolute", left: cx, top: 920, transform: "translateX(-50%)", padding: "16px 30px", borderRadius: 999, background: `${theme.accent2}18`, border: `3px solid ${theme.accent2}`, color: theme.accent2, fontFamily: theme.mono, fontSize: 32, fontWeight: 800, opacity: enter }}>
+          выбор: j ∈ [0 … i]
+        </div>
+        <div style={{ position: "absolute", left: cx, top: 1160, transform: "translateX(-50%)", fontFamily: theme.font, fontSize: 32, color: fixed >= 2 ? theme.success : theme.subtext, opacity: enter }}>
+          {fixed >= 2 ? "каждый порядок — один путь" : "правая позиция уже не меняется"}
+        </div>
+        {fixed >= 2 ? <PulseRing x={cx} y={610} triggerFrame={impactLocal + 18} tone="success" size={360} /> : null}
+      </>
+    );
+  }
+
+  const orders = ["ABC", "ACB", "BAC", "BCA", "CAB", "CBA"];
+  return (
+    <>
+      <div style={{ position: "absolute", left: cx, top: 260, transform: "translateX(-50%)", fontFamily: theme.mono, fontSize: 28, letterSpacing: 3, color: theme.subtext, opacity: enter }}>
+        РАВНЫЕ ПУТИ
+      </div>
+      <div style={{ position: "absolute", left: cx, top: 380, transform: "translateX(-50%)", fontFamily: theme.font, fontSize: 32, color: theme.text, opacity: enter }}>
+        3 × 2 × 1 = 6 перестановок
+      </div>
+      <div style={{ position: "absolute", left: 185, top: 550, width: 710, display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 22, opacity: enter }}>
+        {orders.map((order, i) => (
+          <div key={order} style={{ padding: "22px 12px", borderRadius: 18, textAlign: "center", background: `${theme.success}18`, border: `3px solid ${theme.success}99`, color: theme.success, fontFamily: theme.mono, fontSize: 34, fontWeight: 800, transform: `scale(${0.9 + 0.1 * pulse})` }}>
+            {order}
+          </div>
+        ))}
+      </div>
+      <div style={{ position: "absolute", left: cx, top: 1010, transform: "translateX(-50%)", padding: "18px 36px", borderRadius: 999, background: `${theme.success}18`, border: `3px solid ${theme.success}`, color: theme.success, fontFamily: theme.mono, fontSize: 34, fontWeight: 800, opacity: enter }}>
+        каждая — с шансом 1/6
+      </div>
+      {pulse > 0.1 ? <PulseRing x={cx} y={760} triggerFrame={impactLocal} tone="success" size={520} /> : null}
+    </>
+  );
+};
+
 /* ──────────────────────────── сцена-сториборд ──────────────────────────── */
 
 /** Каждая фраза диктора — свой бит с движением камеры между битами. */
@@ -7262,6 +7391,7 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     "secret-sharing": { scale: 0.9, y: -20 },
     "reservoir-sampling": { scale: 0.9, y: -20 },
     "union-find": { scale: 0.92, y: -20 },
+    "shuffle-deck": { scale: 0.9, y: -20 },
   };
   const cur = cams[slot.beat.visual] ?? { scale: 1, y: 0 };
   const prev = idx > 0 ? cams[slots[idx - 1].beat.visual] ?? cur : cur;
@@ -7619,6 +7749,15 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             fps={fps}
             impactLocal={impactLocal}
             phase={(slot.beat.params?.phase as "find" | "compress" | "union" | undefined) ?? "find"}
+          />
+        );
+      case "shuffle-deck":
+        return (
+          <ShuffleDeckVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as "naive" | "fair" | "count" | undefined) ?? "naive"}
           />
         );
       default:
