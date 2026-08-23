@@ -14,6 +14,7 @@ import { BusyBeaverVisual } from "./BusyBeaverVisual";
 import { SecretSharingVisual } from "./SecretSharingVisual";
 import { CounterVisual, CounterPhase } from "./CounterVisual";
 import { TimsortRunsVisual } from "./TimsortRunsVisual";
+import { MincutContractVisual, type MincutContractPhase } from "./MincutContractVisual";
 
 /* ──────────────────────────── расписание битов ──────────────────────────── */
 
@@ -100,6 +101,10 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
       impact = start + Math.round(dur * (phase === "invariant" ? 0.65 : 0.58));
     }
     if (beat.visual === "counter") impact = start + Math.round(dur * 0.7);
+    if (beat.visual === "mincut-contract") {
+      const phase = beat.params?.phase;
+      impact = start + Math.round(dur * (phase === "branch" ? 0.65 : phase === "repeat" ? 0.72 : 0.55));
+    }
     return { beat, start, end, impact };
   });
 };
@@ -191,6 +196,11 @@ export const storySfx = (
     if (s.beat.visual === "counter") {
       const ph = s.beat.params?.phase;
       const sound = ph === "tradeoff" || ph === "logarithm" ? "ding" : ph === "exact" ? "click" : "pop";
+      events.push({ frame: s.impact, sound });
+    }
+    if (s.beat.visual === "mincut-contract") {
+      const ph = s.beat.params?.phase;
+      const sound = ph === "survive" ? "ding" : ph === "branch" ? "slam" : ph === "repeat" ? "whoosh" : "pop";
       events.push({ frame: s.impact, sound });
     }
   }
@@ -7409,6 +7419,7 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     "union-find": { scale: 0.92, y: -20 },
     "shuffle-deck": { scale: 0.9, y: -20 },
     counter: { scale: 0.92, y: -20 },
+    "mincut-contract": { scale: 0.9, y: -20 },
   };
   const cur = cams[slot.beat.visual] ?? { scale: 1, y: 0 };
   const prev = idx > 0 ? cams[slots[idx - 1].beat.visual] ?? cur : cur;
@@ -7793,6 +7804,15 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             fps={fps}
             impactLocal={impactLocal}
             phase={(slot.beat.params?.phase as CounterPhase | undefined) ?? "flip"}
+          />
+        );
+      case "mincut-contract":
+        return (
+          <MincutContractVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as MincutContractPhase | undefined) ?? "contract"}
           />
         );
       default:
