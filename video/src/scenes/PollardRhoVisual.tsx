@@ -324,6 +324,7 @@ export const PollardRhoVisual: React.FC<{
       >
         8051 = 83 × 97
       </div>
+      <Label text="ожидаемо: корень из множителя шагов · память мала" top={1310} opacity={enter} />
       {local >= impactLocal ? <PulseRing x={W / 2} y={810} triggerFrame={impactLocal} tone="success" size={360} /> : null}
     </>
   );
