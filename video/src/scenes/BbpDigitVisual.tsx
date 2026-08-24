@@ -265,7 +265,7 @@ export const BbpDigitVisual: React.FC<{
             opacity: enter,
           }}
         >
-          сумма = 0.308...
+          сумма = 0.13...
         </div>
       </div>
       {/* извлечённый знак */}

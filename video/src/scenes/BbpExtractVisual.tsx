@@ -168,10 +168,10 @@ export const BbpExtractVisual: React.FC<{
 
   if (phase === "remainders") {
     const rows = [
-      { coeff: "4", den: "8k+1", color: theme.accent, mod: "mod 16" },
-      { coeff: "2", den: "8k+4", color: theme.accent2, mod: "mod 16" },
-      { coeff: "1", den: "8k+5", color: theme.success, mod: "mod 16" },
-      { coeff: "1", den: "8k+6", color: theme.warning, mod: "mod 16" },
+      { label: "16^(n−k) mod (8k+1)", color: theme.accent },
+      { label: "16^(n−k) mod (8k+4)", color: theme.accent2 },
+      { label: "16^(n−k) mod (8k+5)", color: theme.success },
+      { label: "16^(n−k) mod (8k+6)", color: theme.warning },
     ];
     const rowH = 130;
     const rowGap = 20;
@@ -186,7 +186,7 @@ export const BbpExtractVisual: React.FC<{
         {rows.map((r, i) => {
           const p = smooth(clamp01((local - i * 6) / 18));
           const y = startY + i * (rowH + rowGap);
-          const remainders = [2, 12, 5, 11];
+          const remainders = ["r₁", "r₂", "r₃", "r₄"];
           return (
             <React.Fragment key={i}>
               {/* ряд: коэффициент / (8k+d) mod 16 = остаток */}
@@ -207,11 +207,8 @@ export const BbpExtractVisual: React.FC<{
                   justifyContent: "center",
                 }}
               >
-                <div style={{ fontFamily: theme.mono, fontSize: 28, color: theme.subtext }}>
-                  {r.coeff} / (8k+{r.den.split("+")[1]})
-                </div>
-                <div style={{ margin: "0 18px", fontFamily: theme.mono, fontSize: 26, color: theme.subtext }}>
-                  {r.mod}
+                <div style={{ fontFamily: theme.mono, fontSize: 22, color: theme.subtext, whiteSpace: "nowrap" }}>
+                  {r.label}
                 </div>
               </div>
               {/* стрелка */}
@@ -344,7 +341,7 @@ export const BbpExtractVisual: React.FC<{
             opacity: enter,
           }}
         >
-          = 0.850...
+          = 0.13...
         </div>
         <div
           style={{
