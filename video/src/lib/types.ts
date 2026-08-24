@@ -116,7 +116,8 @@ export interface StoryBeat {
     | "implication-graph"
     | "scc-verdict"
     | "power-of-two-choices"
-    | "pollard-rho";
+    | "pollard-rho"
+    | "count-min-sketch";
   onWord?: string; // бит начинается на этом слове реплики
   params?: Record<string, unknown>;
 }

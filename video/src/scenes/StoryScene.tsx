@@ -21,6 +21,7 @@ import { ImplicationGraphVisual, type ImplicationGraphPhase } from "./Implicatio
 import { SccVerdictVisual, type SccVerdictPhase } from "./SccVerdictVisual";
 import { PowerOfTwoChoices, type PowerOfTwoPhase } from "./PowerOfTwoChoices";
 import { PollardRhoVisual, type PollardRhoPhase } from "./PollardRhoVisual";
+import { CountMinSketchVisual, type CountMinSketchPhase } from "./CountMinSketchVisual";
 
 /* ──────────────────────────── расписание битов ──────────────────────────── */
 
@@ -125,6 +126,10 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
     if (beat.visual === "pollard-rho") {
       const phase = beat.params?.phase;
       impact = start + Math.round(dur * (phase === "factor" ? 0.72 : 0.6));
+    }
+    if (beat.visual === "count-min-sketch") {
+      const phase = beat.params?.phase;
+      impact = start + Math.round(dur * (phase === "collide" ? 0.62 : phase === "guarantee" ? 0.72 : 0.58));
     }
     return { beat, start, end, impact };
   });
@@ -240,6 +245,11 @@ export const storySfx = (
     if (s.beat.visual === "pollard-rho") {
       const phase = s.beat.params?.phase;
       events.push({ frame: s.impact, sound: phase === "factor" ? "ding" : phase === "collision" ? "slam" : "pop" });
+    }
+    if (s.beat.visual === "count-min-sketch") {
+      const ph = s.beat.params?.phase;
+      const sound = ph === "collide" ? "slam" : ph === "guarantee" ? "ding" : ph === "query" ? "click" : "pop";
+      events.push({ frame: s.impact, sound });
     }
   }
   return events;
@@ -7462,6 +7472,7 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     "thompson-parallel": { scale: 0.88, y: -25 },
     "power-of-two-choices": { scale: 0.9, y: -20 },
     "pollard-rho": { scale: 0.9, y: -20 },
+    "count-min-sketch": { scale: 0.88, y: -20 },
   };
   const cur = cams[slot.beat.visual] ?? { scale: 1, y: 0 };
   const prev = idx > 0 ? cams[slots[idx - 1].beat.visual] ?? cur : cur;
@@ -7913,6 +7924,15 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             fps={fps}
             impactLocal={impactLocal}
             phase={(slot.beat.params?.phase as PollardRhoPhase | undefined) ?? "walk"}
+          />
+        );
+      case "count-min-sketch":
+        return (
+          <CountMinSketchVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as CountMinSketchPhase | undefined) ?? "grid"}
           />
         );
       default:
