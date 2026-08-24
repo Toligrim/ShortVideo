@@ -133,6 +133,7 @@ export const CountMinSketchVisual: React.FC<{
           const val = getCellValue(row, col);
           const target = isTarget(row, col);
           const collision = isCollision(row, col);
+          const empty = !target && !collision && val === 0;
           const cellColor = collision
             ? theme.danger
             : target
@@ -140,6 +141,9 @@ export const CountMinSketchVisual: React.FC<{
               : val > 0
                 ? theme.accent
                 : theme.panelBorder;
+          // Empty cells: keep the dark border hue but lift the digit to subtext
+          // so "0" reads clearly against the dark cell background.
+          const digitColor = empty ? theme.subtext : cellColor;
           const cellBg = collision
             ? `${theme.danger}24`
             : target
@@ -166,7 +170,7 @@ export const CountMinSketchVisual: React.FC<{
                 width: CELL_W,
                 height: CELL_H,
                 borderRadius: 14,
-                border: `3px solid ${cellColor}${target || collision ? "EE" : "66"}`,
+                border: `3px solid ${cellColor}${target || collision ? "EE" : empty ? "99" : "66"}`,
                 background: cellBg,
                 boxShadow: target || collision ? `0 0 35px ${cellColor}55` : "none",
                 display: "flex",
@@ -181,7 +185,7 @@ export const CountMinSketchVisual: React.FC<{
                   fontFamily: theme.mono,
                   fontWeight: 800,
                   fontSize: 36,
-                  color: cellColor,
+                  color: digitColor,
                   textShadow: val > 0 ? `0 0 12px ${cellColor}77` : "none",
                 }}
               >

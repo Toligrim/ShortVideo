@@ -13,7 +13,7 @@ export const SceneHeading: React.FC<{ text: string }> = ({ text }) => {
         position: "absolute",
         left: 60,
         right: 60,
-        top: layout.safeTop,
+        top: layout.safeTop + 45,
         textAlign: "center",
         fontFamily: theme.font,
         fontWeight: 800,
