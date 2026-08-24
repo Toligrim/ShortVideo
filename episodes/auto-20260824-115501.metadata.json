@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "slug": "auto-20260824-115501",
+  "targets": {
+    "youtube": {
+      "title": "Как Sudoku превращается в матрицу 729×324",
+      "description": "Почему судоку — это задача точного покрытия: 729 кандидатных строк, 324 ограничения и Dancing Links.",
+      "tags": [
+        "судоку",
+        "алгоритмы",
+        "математика",
+        "программирование",
+        "Dancing Links"
+      ],
+      "category_id": "28",
+      "privacy_status": "public",
+      "made_for_kids": false,
+      "contains_synthetic_media": true,
+      "notify_subscribers": false
+    },
+    "instagram": {
+      "caption": "Судоку как матрица 729×324: точное покрытие и Dancing Links. #математика #программирование #алгоритмы",
+      "share_to_feed": true
+    }
+  }
+}
