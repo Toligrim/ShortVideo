@@ -22,6 +22,7 @@ import { SccVerdictVisual, type SccVerdictPhase } from "./SccVerdictVisual";
 import { PowerOfTwoChoices, type PowerOfTwoPhase } from "./PowerOfTwoChoices";
 import { PollardRhoVisual, type PollardRhoPhase } from "./PollardRhoVisual";
 import { CountMinSketchVisual, type CountMinSketchPhase } from "./CountMinSketchVisual";
+import { SudokuExactCoverVisual, type SudokuExactCoverPhase } from "./SudokuExactCoverVisual";
 
 /* ──────────────────────────── расписание битов ──────────────────────────── */
 
@@ -130,6 +131,10 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
     if (beat.visual === "count-min-sketch") {
       const phase = beat.params?.phase;
       impact = start + Math.round(dur * (phase === "collide" ? 0.62 : phase === "guarantee" ? 0.72 : 0.58));
+    }
+    if (beat.visual === "sudoku-exact-cover") {
+      const phase = beat.params?.phase;
+      impact = start + Math.round(dur * (phase === "cover" ? 0.6 : phase === "uncover" ? 0.65 : 0.58));
     }
     return { beat, start, end, impact };
   });
@@ -249,6 +254,11 @@ export const storySfx = (
     if (s.beat.visual === "count-min-sketch") {
       const ph = s.beat.params?.phase;
       const sound = ph === "collide" ? "slam" : ph === "guarantee" ? "ding" : ph === "query" ? "click" : "pop";
+      events.push({ frame: s.impact, sound });
+    }
+    if (s.beat.visual === "sudoku-exact-cover") {
+      const ph = s.beat.params?.phase;
+      const sound = ph === "cover" ? "pop" : ph === "uncover" ? "ding" : "click";
       events.push({ frame: s.impact, sound });
     }
   }
@@ -7473,6 +7483,7 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     "power-of-two-choices": { scale: 0.9, y: -20 },
     "pollard-rho": { scale: 0.9, y: -20 },
     "count-min-sketch": { scale: 0.88, y: -20 },
+    "sudoku-exact-cover": { scale: 0.88, y: -22 },
   };
   const cur = cams[slot.beat.visual] ?? { scale: 1, y: 0 };
   const prev = idx > 0 ? cams[slots[idx - 1].beat.visual] ?? cur : cur;
@@ -7933,6 +7944,16 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             fps={fps}
             impactLocal={impactLocal}
             phase={(slot.beat.params?.phase as CountMinSketchPhase | undefined) ?? "grid"}
+          />
+        );
+      case "sudoku-exact-cover":
+        return (
+          <SudokuExactCoverVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as SudokuExactCoverPhase | undefined) ?? "matrix"}
+            highlight={slot.beat.params?.highlight as string | undefined}
           />
         );
       default:

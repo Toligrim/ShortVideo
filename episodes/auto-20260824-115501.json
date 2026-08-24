@@ -1,0 +1,147 @@
+{
+  "id": "auto-20260824-115501",
+  "title": "Как Sudoku превращается в задачу точного покрытия: матрица 729×324 и Dancing Links",
+  "scenes": [
+    {
+      "type": "hook",
+      "title": "Судоку становится матрицей 729×324",
+      "subtitle": "Точное покрытие за 50 секунд",
+      "narration": "Представь сценку: {Sudoku|судо́ку} бурчит таблице: опять хаос! Таблица отвечает: превратим тебя в задачу точного покрытия и наведём порядок!"
+    },
+    {
+      "type": "story",
+      "heading": "729 кандидатов",
+      "narration": "Кандидат выходит: восемьдесят одна клетка умножить на девять цифр равно семьсот двадцать девять кандидатных строк. Я лишь одна из них.",
+      "beats": [
+        {
+          "visual": "sudoku-exact-cover",
+          "onWord": "восемьдесят",
+          "params": { "phase": "matrix", "highlight": "rows" }
+        },
+        {
+          "visual": "sudoku-exact-cover",
+          "onWord": "семьсот",
+          "params": { "phase": "matrix", "highlight": "count" }
+        }
+      ]
+    },
+    {
+      "type": "story",
+      "heading": "324 ограничения",
+      "narration": "Таблица кивает: у меня четыре группы по восемьдесят одному ограничению — клетка, строка, столбец и квадрат. Четырежды восемьдесят один равно триста двадцать четыре столбца.",
+      "beats": [
+        {
+          "visual": "sudoku-exact-cover",
+          "onWord": "четыре",
+          "params": { "phase": "matrix", "highlight": "columns" }
+        },
+        {
+          "visual": "sudoku-exact-cover",
+          "onWord": "клетка",
+          "params": { "phase": "matrix", "highlight": "constraint-cell" }
+        },
+        {
+          "visual": "sudoku-exact-cover",
+          "onWord": "строка",
+          "params": { "phase": "matrix", "highlight": "constraint-row" }
+        },
+        {
+          "visual": "sudoku-exact-cover",
+          "onWord": "столбец",
+          "params": { "phase": "matrix", "highlight": "constraint-col" }
+        },
+        {
+          "visual": "sudoku-exact-cover",
+          "onWord": "квадрат",
+          "params": { "phase": "matrix", "highlight": "constraint-box" }
+        },
+        {
+          "visual": "sudoku-exact-cover",
+          "onWord": "триста",
+          "params": { "phase": "matrix", "highlight": "total" }
+        }
+      ]
+    },
+    {
+      "type": "story",
+      "heading": "Четыре единицы в строке",
+      "narration": "Кандидат хвастается: в моей строке ровно четыре единицы — закрываю клетку, цифру строки, цифру столбца и цифру квадрата. Ни больше ни меньше.",
+      "beats": [
+        {
+          "visual": "sudoku-exact-cover",
+          "onWord": "четыре",
+          "params": { "phase": "matrix", "highlight": "ones" }
+        },
+        {
+          "visual": "sudoku-exact-cover",
+          "onWord": "клетку",
+          "params": { "phase": "matrix", "highlight": "one-cell" }
+        },
+        {
+          "visual": "sudoku-exact-cover",
+          "onWord": "строки",
+          "params": { "phase": "matrix", "highlight": "one-row" }
+        },
+        {
+          "visual": "sudoku-exact-cover",
+          "onWord": "столбца",
+          "params": { "phase": "matrix", "highlight": "one-col" }
+        },
+        {
+          "visual": "sudoku-exact-cover",
+          "onWord": "квадрата",
+          "params": { "phase": "matrix", "highlight": "one-box" }
+        }
+      ]
+    },
+    {
+      "type": "story",
+      "heading": "Алгоритм X и Dancing Links",
+      "narration": "{Algorithm X|а́лгоритм и́кс} шепчет: выберу столбец с минимумом кандидатов, накрою его {cover|ка́вер}, спрятав строки, а при откате верну всё {uncover|анка́вер} через разреженные двусвязные списки.",
+      "beats": [
+        {
+          "visual": "sudoku-exact-cover",
+          "onWord": "выберу",
+          "params": { "phase": "cover", "highlight": "choose" }
+        },
+        {
+          "visual": "sudoku-exact-cover",
+          "onWord": "накрою",
+          "params": { "phase": "cover", "highlight": "cover" }
+        },
+        {
+          "visual": "sudoku-exact-cover",
+          "onWord": "спрятав",
+          "params": { "phase": "cover", "highlight": "hide" }
+        },
+        {
+          "visual": "sudoku-exact-cover",
+          "onWord": "откате",
+          "params": { "phase": "uncover", "highlight": "uncover" }
+        },
+        {
+          "visual": "sudoku-exact-cover",
+          "onWord": "uncover",
+          "params": { "phase": "uncover", "highlight": "restore" }
+        },
+        {
+          "visual": "sudoku-exact-cover",
+          "onWord": "списки",
+          "params": { "phase": "uncover", "highlight": "links" }
+        }
+      ]
+    },
+    {
+      "type": "outro",
+      "title": "Итого",
+      "bullets": [
+        "Судоку = матрица 729×324",
+        "4 ограничения на кандидата",
+        "Dancing Links: cover/uncover O(1)",
+        "Любая головоломка — то же"
+      ],
+      "cta": "Подпишись — дальше новые головоломки",
+      "narration": "Итого: судоку — это матрица семьсот двадцать девять на триста двадцать четыре с четырьмя единицами в строке, а {Dancing Links|дэ́нсинг линкс} танцует покрытием. Подпишись — дальше покажу другие головоломки этим танцем."
+    }
+  ]
+}

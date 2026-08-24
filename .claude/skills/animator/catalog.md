@@ -308,3 +308,14 @@ Phases: `grid` / `insert` / `collide` / `query` / `guarantee`
 | visual | Что происходит | params |
 |---|---|---|
 | `count-min-sketch` | Сетка счётчиков: 3 ряда × 6 ячеек, хеш-стрелки в ячейки, коллизия раздувает счётчик, запрос минимума, гарантия never undercount | `phase`: `grid` / `insert` / `collide` / `query` / `guarantee` |
+
+## `sudoku-exact-cover`
+
+Visual: `sudoku-exact-cover`
+Phases: `matrix` / `cover` / `uncover`
+Highlights (`highlight`): `rows` / `count` / `columns` / `constraint-cell` / `constraint-row` / `constraint-col` / `constraint-box` / `total` / `ones` / `one-cell` / `one-row` / `one-col` / `one-box` / `choose` / `cover` / `hide` / `uncover` / `restore` / `links`
+Когда использовать: любой сюжет про сведение Sudoku (или другой головоломки) к задаче точного покрытия и алгоритм X / Dancing Links. `phase: matrix` — момент «матрица 729×324 и её четыре группы по 81» (candidate rows vs cell/row/col/box столбцы, вид миниатюрной матрицы с бейджами 729 и 324); `highlight: rows` — подсветить строки-кандидаты, `highlight: columns` — столбцы-ограничения, `highlight: constraint-*` — конкретную группу 81, `highlight: ones` / `one-*` — четыре единицы кандидата (по одной в каждой группе); `phase: cover` — момент «выбираем столбец с минимумом и накрываем его» (вертикальная линия, выбор МИНИМУМ, бейдж COVER); `highlight: hide` — момент скрытия строк с 1 в столбце; `phase: uncover` — момент отката и восстановления связей (двунаправленные стрелки L–X–R); `highlight: restore` — строки возвращаются, `highlight: links` — O(1) перелинковка двусвязных списков.
+
+| visual | Что происходит | params |
+|---|---|---|
+| `sudoku-exact-cover` | Матрица точного покрытия 729×324: миниатюра с 4 цветными группами по 81, фазы накрытия и восстановления Dancing Links через двусвязные списки | `phase`: `matrix` / `cover` / `uncover`, `highlight`: `rows`/`count`/`columns`/`constraint-*`/`ones`/`one-*`/`choose`/`cover`/`hide`/`uncover`/`restore`/`links` |
