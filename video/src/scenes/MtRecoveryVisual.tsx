@@ -169,7 +169,7 @@ export const MtRecoveryVisual: React.FC<{
             обратимые сдвиги + исключающее ИЛИ
           </div>
         </div>
-        <div style={{ ...chipStyle, color: theme.warning, border: `2px solid ${theme.warning}`, background: `${theme.warning}18`, opacity: hit ? pop : enter * 0.45 }}>
+        <div style={{ ...chipStyle, color: theme.warning, border: `2px solid ${theme.warning}`, background: `${theme.warning}18`, opacity: enter }}>
           биты возвращаются на места
         </div>
         {hit ? <PulseRing x={W / 2} y={590} triggerFrame={hitFrame} tone="warning" size={520} /> : null}
@@ -214,7 +214,7 @@ export const MtRecoveryVisual: React.FC<{
           следующее число до вызова
         </div>
       </div>
-      <div style={{ ...chipStyle, color: theme.success, border: `2px solid ${theme.success}`, background: `${theme.success}18`, opacity: hit ? pop : enter * 0.45 }}>
+      <div style={{ ...chipStyle, color: theme.success, border: `2px solid ${theme.success}`, background: `${theme.success}18`, opacity: enter }}>
         случайность разоблачена
       </div>
       {hit ? <PulseRing x={W / 2} y={590} triggerFrame={hitFrame} tone="success" size={520} /> : null}
