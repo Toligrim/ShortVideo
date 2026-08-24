@@ -115,7 +115,8 @@ export interface StoryBeat {
     | "thompson-parallel"
     | "implication-graph"
     | "scc-verdict"
-    | "power-of-two-choices";
+    | "power-of-two-choices"
+    | "pollard-rho";
   onWord?: string; // бит начинается на этом слове реплики
   params?: Record<string, unknown>;
 }

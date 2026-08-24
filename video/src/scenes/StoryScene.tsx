@@ -20,6 +20,7 @@ import { ThompsonParallelVisual } from "./ThompsonParallel";
 import { ImplicationGraphVisual, type ImplicationGraphPhase } from "./ImplicationGraphVisual";
 import { SccVerdictVisual, type SccVerdictPhase } from "./SccVerdictVisual";
 import { PowerOfTwoChoices, type PowerOfTwoPhase } from "./PowerOfTwoChoices";
+import { PollardRhoVisual, type PollardRhoPhase } from "./PollardRhoVisual";
 
 /* ──────────────────────────── расписание битов ──────────────────────────── */
 
@@ -121,6 +122,10 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
       impact = start + Math.round(dur * (phase === "verdict" ? 0.72 : 0.62));
     }
     if (beat.visual === "power-of-two-choices") impact = start + Math.round(dur * 0.6);
+    if (beat.visual === "pollard-rho") {
+      const phase = beat.params?.phase;
+      impact = start + Math.round(dur * (phase === "factor" ? 0.72 : 0.6));
+    }
     return { beat, start, end, impact };
   });
 };
@@ -232,6 +237,10 @@ export const storySfx = (
       events.push({ frame: s.impact, sound });
     }
     if (s.beat.visual === "power-of-two-choices") events.push({ frame: s.impact, sound: "pop" });
+    if (s.beat.visual === "pollard-rho") {
+      const phase = s.beat.params?.phase;
+      events.push({ frame: s.impact, sound: phase === "factor" ? "ding" : phase === "collision" ? "slam" : "pop" });
+    }
   }
   return events;
 };
@@ -7452,6 +7461,7 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     "backtrack-tree": { scale: 0.86, y: -30 },
     "thompson-parallel": { scale: 0.88, y: -25 },
     "power-of-two-choices": { scale: 0.9, y: -20 },
+    "pollard-rho": { scale: 0.9, y: -20 },
   };
   const cur = cams[slot.beat.visual] ?? { scale: 1, y: 0 };
   const prev = idx > 0 ? cams[slots[idx - 1].beat.visual] ?? cur : cur;
@@ -7894,6 +7904,15 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             fps={fps}
             impactLocal={impactLocal}
             phase={(slot.beat.params?.phase as PowerOfTwoPhase | undefined) ?? "one"}
+          />
+        );
+      case "pollard-rho":
+        return (
+          <PollardRhoVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as PollardRhoPhase | undefined) ?? "walk"}
           />
         );
       default:
