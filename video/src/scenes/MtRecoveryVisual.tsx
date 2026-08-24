@@ -36,7 +36,7 @@ const panelStyle: React.CSSProperties = {
 const chipStyle: React.CSSProperties = {
   position: "absolute",
   left: W / 2,
-  top: 980,
+  top: 900,
   transform: "translateX(-50%)",
   padding: "16px 30px",
   borderRadius: 999,
