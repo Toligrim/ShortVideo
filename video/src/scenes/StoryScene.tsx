@@ -11,6 +11,7 @@ import { OrbitFftGroups } from "./OrbitFftGroups";
 import { GpsRelativity } from "./GpsRelativity";
 import { InverseSqrtBits } from "./InverseSqrtBits";
 import { BusyBeaverVisual } from "./BusyBeaverVisual";
+import { MtRecoveryVisual, type MtRecoveryPhase } from "./MtRecoveryVisual";
 import { SecretSharingVisual } from "./SecretSharingVisual";
 import { CounterVisual, CounterPhase } from "./CounterVisual";
 import { TimsortRunsVisual } from "./TimsortRunsVisual";
@@ -81,6 +82,7 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
     if (beat.visual === "hamming-word") impact = start + Math.round(dur * 0.58);
     if (beat.visual === "hamming-syndrome") impact = start + Math.round(dur * 0.64);
     if (beat.visual === "gps-relativity") impact = start + Math.round(dur * 0.62);
+    if (beat.visual === "mt-recovery") impact = start + Math.round(dur * 0.55);
     if (beat.visual === "orbit-fft-groups") {
       const phase = beat.params?.phase;
       impact = start + Math.round(dur * (phase === "orbit" ? 0.68 : 0.58));
@@ -200,6 +202,9 @@ export const storySfx = (
       const ph = s.beat.params?.phase;
       const sound = ph === "factory" ? "click" : ph === "balance" ? "ding" : "pop";
       events.push({ frame: s.impact, sound });
+    }
+    if (s.beat.visual === "mt-recovery") {
+      events.push({ frame: s.impact, sound: "ding" });
     }
     if (s.beat.visual === "orbit-fft-groups") {
       const ph = s.beat.params?.phase;
@@ -7484,6 +7489,7 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     "hamming-word": { scale: 0.9, y: -25 },
     "hamming-syndrome": { scale: 0.88, y: -25 },
     "gps-relativity": { scale: 0.9, y: -20 },
+    "mt-recovery": { scale: 0.92, y: -20 },
     "cuckoo-table": { scale: 0.9, y: -30 },
     "cuckoo-cycle": { scale: 0.88, y: -30 },
     "cuckoo-stash": { scale: 0.9, y: -20 },
@@ -7764,6 +7770,15 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             fps={fps}
             impactLocal={impactLocal}
             phase={(slot.beat.params?.phase as "orbit" | "speed" | "gravity" | "balance" | "factory" | "correction" | undefined) ?? "orbit"}
+          />
+        );
+      case "mt-recovery":
+        return (
+          <MtRecoveryVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as MtRecoveryPhase | undefined) ?? "outputs"}
           />
         );
       case "orbit-fft-groups":

@@ -101,6 +101,7 @@ export interface StoryBeat {
     | "cuckoo-cycle"
     | "cuckoo-stash"
     | "secret-sharing"
+    | "mt-recovery"
     | "reservoir-sampling"
     | "inverse-sqrt-bits"
     | "merkle-tree"
