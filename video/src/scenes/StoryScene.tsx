@@ -24,6 +24,8 @@ import { PollardRhoVisual, type PollardRhoPhase } from "./PollardRhoVisual";
 import { CountMinSketchVisual, type CountMinSketchPhase } from "./CountMinSketchVisual";
 import { SudokuExactCoverVisual, type SudokuExactCoverPhase } from "./SudokuExactCoverVisual";
 import { AmdahlSpeedupVisual, type AmdahlSpeedupPhase } from "./AmdahlSpeedupVisual";
+import { BbpDigitVisual, type BbpDigitPhase } from "./BbpDigitVisual";
+import { BbpExtractVisual, type BbpExtractPhase } from "./BbpExtractVisual";
 
 /* ──────────────────────────── расписание битов ──────────────────────────── */
 
@@ -138,6 +140,11 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
       impact = start + Math.round(dur * (phase === "cover" ? 0.6 : phase === "uncover" ? 0.65 : 0.58));
     }
     if (beat.visual === "amdahl-speedup") impact = start + Math.round(dur * 0.6);
+    if (beat.visual === "bbp-digit") impact = start + Math.round(dur * 0.58);
+    if (beat.visual === "bbp-extract") {
+      const phase = beat.params?.phase;
+      impact = start + Math.round(dur * (phase === "digit" ? 0.72 : phase === "remainders" ? 0.62 : 0.55));
+    }
     return { beat, start, end, impact };
   });
 };
@@ -264,6 +271,15 @@ export const storySfx = (
       events.push({ frame: s.impact, sound });
     }
     if (s.beat.visual === "amdahl-speedup") events.push({ frame: s.impact, sound: "pop" });
+    if (s.beat.visual === "bbp-digit") {
+      const ph = s.beat.params?.phase;
+      events.push({ frame: s.impact, sound: ph === "extract" ? "ding" : "pop" });
+    }
+    if (s.beat.visual === "bbp-extract") {
+      const ph = s.beat.params?.phase;
+      const sound = ph === "digit" ? "ding" : ph === "remainders" ? "pop" : "pop";
+      events.push({ frame: s.impact, sound });
+    }
   }
   return events;
 };
@@ -7968,6 +7984,27 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             impactLocal={impactLocal}
             phase={(slot.beat.params?.phase as AmdahlSpeedupPhase | undefined) ?? "workers"}
             serial={slot.beat.params?.serial as number | undefined}
+          />
+        );
+      case "bbp-digit":
+        return (
+          <BbpDigitVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as BbpDigitPhase | undefined) ?? "formula"}
+            position={slot.beat.params?.position as number | undefined}
+            hexDigit={slot.beat.params?.hexDigit as string | undefined}
+          />
+        );
+      case "bbp-extract":
+        return (
+          <BbpExtractVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as BbpExtractPhase | undefined) ?? "series"}
+            position={slot.beat.params?.position as number | undefined}
           />
         );
       default:

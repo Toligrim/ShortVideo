@@ -119,7 +119,9 @@ export interface StoryBeat {
     | "pollard-rho"
       | "count-min-sketch"
       | "sudoku-exact-cover"
-      | "amdahl-speedup";
+      | "amdahl-speedup"
+      | "bbp-digit"
+      | "bbp-extract";
   onWord?: string; // бит начинается на этом слове реплики
   params?: Record<string, unknown>;
 }
