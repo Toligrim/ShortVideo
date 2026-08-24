@@ -23,6 +23,7 @@ import { PowerOfTwoChoices, type PowerOfTwoPhase } from "./PowerOfTwoChoices";
 import { PollardRhoVisual, type PollardRhoPhase } from "./PollardRhoVisual";
 import { CountMinSketchVisual, type CountMinSketchPhase } from "./CountMinSketchVisual";
 import { SudokuExactCoverVisual, type SudokuExactCoverPhase } from "./SudokuExactCoverVisual";
+import { AmdahlSpeedupVisual, type AmdahlSpeedupPhase } from "./AmdahlSpeedupVisual";
 
 /* ──────────────────────────── расписание битов ──────────────────────────── */
 
@@ -136,6 +137,7 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
       const phase = beat.params?.phase;
       impact = start + Math.round(dur * (phase === "cover" ? 0.6 : phase === "uncover" ? 0.65 : 0.58));
     }
+    if (beat.visual === "amdahl-speedup") impact = start + Math.round(dur * 0.6);
     return { beat, start, end, impact };
   });
 };
@@ -261,6 +263,7 @@ export const storySfx = (
       const sound = ph === "cover" ? "pop" : ph === "uncover" ? "ding" : "click";
       events.push({ frame: s.impact, sound });
     }
+    if (s.beat.visual === "amdahl-speedup") events.push({ frame: s.impact, sound: "pop" });
   }
   return events;
 };
@@ -7484,6 +7487,7 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     "pollard-rho": { scale: 0.9, y: -20 },
     "count-min-sketch": { scale: 0.88, y: -20 },
     "sudoku-exact-cover": { scale: 0.88, y: -22 },
+    "amdahl-speedup": { scale: 0.9, y: -20 },
   };
   const cur = cams[slot.beat.visual] ?? { scale: 1, y: 0 };
   const prev = idx > 0 ? cams[slots[idx - 1].beat.visual] ?? cur : cur;
@@ -7954,6 +7958,16 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             impactLocal={impactLocal}
             phase={(slot.beat.params?.phase as SudokuExactCoverPhase | undefined) ?? "matrix"}
             highlight={slot.beat.params?.highlight as string | undefined}
+          />
+        );
+      case "amdahl-speedup":
+        return (
+          <AmdahlSpeedupVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as AmdahlSpeedupPhase | undefined) ?? "workers"}
+            serial={slot.beat.params?.serial as number | undefined}
           />
         );
       default:

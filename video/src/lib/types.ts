@@ -117,8 +117,9 @@ export interface StoryBeat {
     | "scc-verdict"
     | "power-of-two-choices"
     | "pollard-rho"
-    | "count-min-sketch"
-    | "sudoku-exact-cover";
+      | "count-min-sketch"
+      | "sudoku-exact-cover"
+      | "amdahl-speedup";
   onWord?: string; // бит начинается на этом слове реплики
   params?: Record<string, unknown>;
 }
