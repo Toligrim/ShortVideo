@@ -114,7 +114,8 @@ export interface StoryBeat {
     | "backtrack-tree"
     | "thompson-parallel"
     | "implication-graph"
-    | "scc-verdict";
+    | "scc-verdict"
+    | "power-of-two-choices";
   onWord?: string; // бит начинается на этом слове реплики
   params?: Record<string, unknown>;
 }

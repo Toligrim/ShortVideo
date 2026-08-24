@@ -19,6 +19,7 @@ import { BacktrackTreeVisual } from "./BacktrackTree";
 import { ThompsonParallelVisual } from "./ThompsonParallel";
 import { ImplicationGraphVisual, type ImplicationGraphPhase } from "./ImplicationGraphVisual";
 import { SccVerdictVisual, type SccVerdictPhase } from "./SccVerdictVisual";
+import { PowerOfTwoChoices, type PowerOfTwoPhase } from "./PowerOfTwoChoices";
 
 /* ──────────────────────────── расписание битов ──────────────────────────── */
 
@@ -119,6 +120,7 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
       const phase = beat.params?.phase;
       impact = start + Math.round(dur * (phase === "verdict" ? 0.72 : 0.62));
     }
+    if (beat.visual === "power-of-two-choices") impact = start + Math.round(dur * 0.6);
     return { beat, start, end, impact };
   });
 };
@@ -229,6 +231,7 @@ export const storySfx = (
       const sound = ph === "verdict" ? "slam" : "pop";
       events.push({ frame: s.impact, sound });
     }
+    if (s.beat.visual === "power-of-two-choices") events.push({ frame: s.impact, sound: "pop" });
   }
   return events;
 };
@@ -7448,6 +7451,7 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     "mincut-contract": { scale: 0.9, y: -20 },
     "backtrack-tree": { scale: 0.86, y: -30 },
     "thompson-parallel": { scale: 0.88, y: -25 },
+    "power-of-two-choices": { scale: 0.9, y: -20 },
   };
   const cur = cams[slot.beat.visual] ?? { scale: 1, y: 0 };
   const prev = idx > 0 ? cams[slots[idx - 1].beat.visual] ?? cur : cur;
@@ -7881,6 +7885,15 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             fps={fps}
             impactLocal={impactLocal}
             phase={(slot.beat.params?.phase as SccVerdictPhase | undefined) ?? "tarjan"}
+          />
+        );
+      case "power-of-two-choices":
+        return (
+          <PowerOfTwoChoices
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as PowerOfTwoPhase | undefined) ?? "one"}
           />
         );
       default:
