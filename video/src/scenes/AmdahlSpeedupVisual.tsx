@@ -23,22 +23,31 @@ const titleStyle: React.CSSProperties = {
   whiteSpace: "nowrap",
 };
 
-const chip = (
-  text: string,
-  color: string,
-  extra?: React.CSSProperties
-): React.CSSProperties => ({
-  padding: "12px 26px",
-  borderRadius: 999,
-  background: `${color}18`,
-  border: `2px solid ${color}`,
-  color,
-  fontFamily: theme.font,
-  fontWeight: 800,
-  fontSize: 30,
-  whiteSpace: "nowrap",
-  ...extra,
-});
+const Chip: React.FC<{
+  text: string;
+  color: string;
+  style?: React.CSSProperties;
+  extra?: React.CSSProperties;
+}> = ({ text, color, style, extra }) => (
+  <div
+    style={{
+      position: "absolute",
+      padding: "12px 26px",
+      borderRadius: 999,
+      background: `${color}18`,
+      border: `2px solid ${color}`,
+      color,
+      fontFamily: theme.font,
+      fontWeight: 800,
+      fontSize: 30,
+      whiteSpace: "nowrap",
+      ...extra,
+      ...style,
+    }}
+  >
+    {text}
+  </div>
+);
 
 /** Закон Амдала: разделение serial/parallel, формула ускорения и предел насыщения. */
 export const AmdahlSpeedupVisual: React.FC<{
@@ -77,15 +86,21 @@ export const AmdahlSpeedupVisual: React.FC<{
             border: `3px solid ${theme.danger}`,
             opacity: enter,
             transform: `translateY(${(1 - enter) * 60}px)`,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
+          }}
+        />
+        {/* подпись серийной части — вынесена наружу, под узкий сегмент */}
+        <div
+          style={{
+            position: "absolute",
+            left: barX + serialW / 2,
+            top: barY + 160,
+            transform: "translate(-50%, 0)",
             fontFamily: theme.font,
             fontWeight: 800,
             fontSize: 26,
             color: theme.danger,
-            textAlign: "center",
-            padding: 8,
+            whiteSpace: "nowrap",
+            opacity: enter,
           }}
         >
           {Math.round(serial * 100)}% серийная
@@ -135,7 +150,7 @@ export const AmdahlSpeedupVisual: React.FC<{
             style={{
               position: "absolute",
               left: parW / 2,
-              top: 132,
+              top: 158,
               transform: "translate(-50%, 0)",
               fontFamily: theme.font,
               fontWeight: 800,
@@ -148,36 +163,39 @@ export const AmdahlSpeedupVisual: React.FC<{
           </div>
         </div>
         {/* один поток под серийной частью */}
-        <div
+        <Chip
+          text="1 нить"
+          color={theme.danger}
           style={{
-            position: "absolute",
             left: barX + serialW / 2,
             top: barY + 230,
             transform: "translate(-50%, 0)",
-            ...chip("1 нить", theme.danger, { opacity: enter }),
           }}
+          extra={{ opacity: enter }}
         />
         {/* много потоков под параллельной частью */}
-        <div
+        <Chip
+          text={`${workerCount} нитей`}
+          color={theme.accent}
           style={{
-            position: "absolute",
             left: barX + serialW + parW / 2,
             top: barY + 230,
             transform: "translate(-50%, 0)",
-            ...chip(`${workerCount} нитей`, theme.accent, { opacity: enter }),
           }}
+          extra={{ opacity: enter }}
         />
-        <div
+        <Chip
+          text="5% — только в одну нитку, не размножить"
+          color={theme.danger}
           style={{
-            position: "absolute",
             left: W / 2,
             top: barY + 360,
             transform: "translateX(-50%)",
-            ...chip("5% — только в одну нитку, не размножить", theme.danger, {
-              opacity: hit ? pop : enter * 0.4,
-              boxShadow: hit ? `0 0 45px ${theme.danger}55` : "none",
-              fontSize: 28,
-            }),
+          }}
+          extra={{
+            opacity: hit ? pop : enter * 0.4,
+            boxShadow: hit ? `0 0 45px ${theme.danger}55` : "none",
+            fontSize: 28,
           }}
         />
         {hit ? (
@@ -231,23 +249,17 @@ export const AmdahlSpeedupVisual: React.FC<{
             {sub}
           </div>
         </div>
-        <div
-          style={{
-            position: "absolute",
-            left: W / 2,
-            top: 940,
-            transform: "translateX(-50%)",
-            ...chip("(1 − p) — серийная доля", theme.danger, { opacity: enter }),
-          }}
+        <Chip
+          text="(1 − p) — серийная доля"
+          color={theme.danger}
+          style={{ left: W / 2, top: 940, transform: "translateX(-50%)" }}
+          extra={{ opacity: enter }}
         />
-        <div
-          style={{
-            position: "absolute",
-            left: W / 2,
-            top: 1030,
-            transform: "translateX(-50%)",
-            ...chip("p / n — параллельная, делённая на ядра", theme.accent, { opacity: enter }),
-          }}
+        <Chip
+          text="p / n — параллельная, делённая на ядра"
+          color={theme.accent}
+          style={{ left: W / 2, top: 1030, transform: "translateX(-50%)" }}
+          extra={{ opacity: enter }}
         />
         {hit ? <PulseRing x={W / 2} y={710} triggerFrame={impactLocal} size={520} /> : null}
       </>
@@ -272,19 +284,12 @@ export const AmdahlSpeedupVisual: React.FC<{
   return (
     <>
       <div style={{ ...titleStyle, opacity: enter }}>ПРЕДЕЛ НАСЫЩЕНИЯ</div>
-      <div
-        style={{
-          position: "absolute",
-          left: W / 2,
-          top: 360,
-          transform: "translateX(-50%)",
-          ...chip(
-            `предел ≈ ${limit.toFixed(0)}×  (1 / ${serial.toFixed(2)})`,
-            theme.warning,
-            { opacity: enter }
-          ),
-        }}
-      />
+        <Chip
+          text={`предел ≈ ${limit.toFixed(0)}×  (1 / ${serial.toFixed(2)})`}
+          color={theme.warning}
+          style={{ left: W / 2, top: 360, transform: "translateX(-50%)" }}
+          extra={{ opacity: enter }}
+        />
       <svg
         width={W}
         height={layout.height}
@@ -315,23 +320,17 @@ export const AmdahlSpeedupVisual: React.FC<{
       <div style={{ position: "absolute", left: sx(100) - 24, top: yBottom + 14, fontFamily: theme.mono, fontSize: 26, color: theme.subtext }}>100</div>
       <div style={{ position: "absolute", left: xRight - 50, top: yBottom + 14, fontFamily: theme.mono, fontSize: 26, color: theme.subtext }}>1000 ядер</div>
       <div style={{ position: "absolute", left: 60, top: limitY - 18, fontFamily: theme.mono, fontSize: 26, color: theme.warning }}>≈{limit.toFixed(0)}×</div>
-      <div
-        style={{
-          position: "absolute",
-          left: sx(100),
-          top: sy(n100) - 70,
-          transform: "translateX(-50%)",
-          ...chip("100 ядер ≈ 16.8×", theme.success, { opacity: enter, fontSize: 26 }),
-        }}
+      <Chip
+        text="100 ядер ≈ 16.8×"
+        color={theme.success}
+        style={{ left: sx(100), top: sy(n100) - 70, transform: "translateX(-50%)" }}
+        extra={{ opacity: enter, fontSize: 26 }}
       />
-      <div
-        style={{
-          position: "absolute",
-          left: sx(1000),
-          top: sy(n1000) - 70,
-          transform: "translateX(-50%)",
-          ...chip("1000 ядер ≈ 19.6×", theme.accent2, { opacity: enter, fontSize: 26 }),
-        }}
+      <Chip
+        text="1000 ядер ≈ 19.6×"
+        color={theme.accent2}
+        style={{ left: sx(1000), top: sy(n1000) - 70, transform: "translateX(-50%)" }}
+        extra={{ opacity: enter, fontSize: 26 }}
       />
       {hit ? <PulseRing x={sx(1000)} y={sy(n1000)} triggerFrame={impactLocal} tone="accent2" size={220} /> : null}
     </>

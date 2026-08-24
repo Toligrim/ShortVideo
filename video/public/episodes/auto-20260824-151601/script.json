@@ -33,7 +33,7 @@
         },
         {
           "visual": "amdahl-speedup",
-          "onWord": "процентов",
+          "onWord": "Остальные",
           "params": { "phase": "formula", "serial": 0.05 }
         }
       ]
