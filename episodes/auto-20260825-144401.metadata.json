@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "slug": "auto-20260825-144401",
+  "targets": {
+    "youtube": {
+      "title": "Одна строка — и суффиксный автомат знает все подстроки",
+      "description": "Как суффиксный автомат сжимает все подстроки строки в линейную структуру.",
+      "tags": ["суффиксный автомат", "алгоритмы", "структуры данных", "информатика", "shorts"],
+      "category_id": "28",
+      "privacy_status": "public",
+      "made_for_kids": false,
+      "contains_synthetic_media": true,
+      "notify_subscribers": false
+    },
+    "instagram": {
+      "caption": "Суффиксный автомат: все подстроки — в линейной структуре. #алгоритмы #информатика #shortvideo",
+      "share_to_feed": true
+    }
+  }
+}
