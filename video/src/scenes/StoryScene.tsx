@@ -31,6 +31,8 @@ import { MedianOfMediansVisual, type MedianOfMediansPhase } from "./MedianOfMedi
 import { GrayCodeVisual, type GrayCodePhase } from "./GrayCodeVisual";
 import { Utf8BoundaryVisual, type Utf8BoundaryPhase } from "./Utf8BoundaryVisual";
 import { ConsistentHashRingVisual, type ConsistentHashPhase } from "./ConsistentHashRingVisual";
+import { TrieGrowthVisual } from "./TrieGrowthVisual";
+import { SuffixAutomatonVisual, type SuffixAutomatonPhase } from "./SuffixAutomatonVisual";
 
 /* ──────────────────────────── расписание битов ──────────────────────────── */
 
@@ -158,6 +160,11 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
     if (beat.visual === "gray-code") impact = start + Math.round(dur * 0.6);
     if (beat.visual === "utf8-boundary") impact = start + Math.round(dur * 0.62);
     if (beat.visual === "consistent-hash-ring") impact = start + Math.round(dur * 0.62);
+    if (beat.visual === "trie-growth") impact = start + Math.round(dur * 0.78);
+    if (beat.visual === "suffix-automaton") {
+      const phase = beat.params?.phase;
+      impact = start + Math.round(dur * (phase === "merge" ? 0.65 : phase === "query" ? 0.72 : phase === "bound" ? 0.68 : 0.58));
+    }
     return { beat, start, end, impact };
   });
 };
@@ -305,6 +312,12 @@ export const storySfx = (
     if (s.beat.visual === "utf8-boundary") {
       const ph = s.beat.params?.phase;
       const sound = ph === "broken" ? "pop" : ph === "resync" ? "ding" : "whoosh";
+      events.push({ frame: s.impact, sound });
+    }
+    if (s.beat.visual === "trie-growth") events.push({ frame: s.impact, sound: "slam" });
+    if (s.beat.visual === "suffix-automaton") {
+      const ph = s.beat.params?.phase;
+      const sound = ph === "merge" ? "ding" : ph === "query" ? "click" : ph === "bound" ? "pop" : "whoosh";
       events.push({ frame: s.impact, sound });
     }
   }
@@ -8081,6 +8094,24 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             fps={fps}
             impactLocal={impactLocal}
             phase={(slot.beat.params?.phase as ConsistentHashPhase | undefined) ?? "ring"}
+          />
+        );
+      case "trie-growth":
+        return (
+          <TrieGrowthVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+          />
+        );
+      case "suffix-automaton":
+        return (
+          <SuffixAutomatonVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as SuffixAutomatonPhase | undefined) ?? "growth"}
+            n={slot.beat.params?.n as number | undefined}
           />
         );
       default:
