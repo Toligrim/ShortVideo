@@ -29,10 +29,12 @@ export const layout = {
   height: 1920,
   safeTop: 150,
   safeBottom: 1500, // ниже — только субтитры (420px снизу свободны от смысла)
-  karaokeY: 1510,
+  karaokeY: 1390,
 } as const;
 
 export const FPS = 30;
 // Тишина до и после реплики внутри сцены (сек)
 export const LEAD_SEC = 0.2;
 export const TAIL_SEC = 0.55;
+// Длина кросс-фейда между сценами в TransitionSeries (кадры)
+export const TRANSITION_FRAMES = 10;

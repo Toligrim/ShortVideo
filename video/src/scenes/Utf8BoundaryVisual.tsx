@@ -324,7 +324,7 @@ export const Utf8BoundaryVisual: React.FC<{
         style={{
           position: "absolute",
           left: cx,
-          top: 1280,
+          top: 1100,
           transform: "translateX(-50%)",
           display: "flex",
           gap: 24,
@@ -349,7 +349,7 @@ export const Utf8BoundaryVisual: React.FC<{
         style={{
           position: "absolute",
           left: cx,
-          top: 1380,
+          top: 1180,
           transform: `translateX(-50%) scale(${highlightResync ? resyncPop : 0.94})`,
           opacity: highlightResync ? resyncPop : enter * 0.9,
           padding: "14px 26px",
