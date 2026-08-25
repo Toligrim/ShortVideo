@@ -12,8 +12,8 @@
       "heading": "Кубики с пометкой длины",
       "narration": "Представь кубики с табличкой: «три клетки». Если край порван — следующая деталь читает пометку и движется дальше. Без паники. {RFC|ар эф си}.",
       "beats": [
-        { "visual": "ancient-code", "onWord": "кубики", "params": { "mode": "hexagram" } },
-        { "visual": "ancient-code", "onWord": "читает", "params": { "mode": "hexagram" } }
+        { "visual": "utf8-boundary", "onWord": "кубики", "params": { "phase": "stream" } },
+        { "visual": "utf8-boundary", "onWord": "порван", "params": { "phase": "broken" } }
       ]
     },
     {
