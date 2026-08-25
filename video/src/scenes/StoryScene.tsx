@@ -70,7 +70,7 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
     if (beat.visual === "hash-table") impact = start + Math.round(dur * 0.62);
     if (beat.visual === "minimal-perfect-hash") {
       const phase = beat.params?.phase;
-      impact = start + Math.round(dur * (phase === "lower-bound" || phase === "near-optimal" ? 0.68 : 0.6));
+      impact = start + Math.round(dur * (phase === "assign" ? 0.24 : phase === "lower-bound" || phase === "near-optimal" ? 0.32 : 0.58));
     }
     if (beat.visual === "collision-compare") impact = start + 18;
     if (beat.visual === "heap-graph") impact = start + 18;
@@ -1358,8 +1358,8 @@ const MinimalPerfectHashVisual: React.FC<{
           <div style={{ position: "absolute", left: 105, top: 365, width: 690, height: 18, borderRadius: 999, background: theme.panelBorder }}>
             <div style={{ width: `${isNear ? 97 : 89}%`, height: "100%", borderRadius: 999, background: isNear ? theme.accent2 : theme.success, transform: `scaleX(${Math.max(0.2, reveal)})`, transformOrigin: "left" }} />
           </div>
-          <div style={{ position: "absolute", left: 0, right: 0, top: 425, textAlign: "center", fontFamily: theme.font, fontWeight: 800, fontSize: 28, color: isNear ? theme.accent2 : theme.success }}>
-            {isNear ? "практически у нижней границы" : "ниже нельзя по информации"}
+          <div style={{ position: "absolute", left: 0, right: 0, top: 425, textAlign: "center", fontFamily: theme.font, fontWeight: 800, fontSize: isNear ? 25 : 28, color: isNear ? theme.accent2 : theme.success }}>
+            {isNear ? "1,56 → 1,444 · 1,489" : "ниже нельзя по информации"}
           </div>
         </>, isNear ? theme.accent2 : theme.success)
       ) : (
