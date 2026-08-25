@@ -39,7 +39,7 @@ const BYTES: { hex: string; label: string; type: "ascii" | "start" | "cont" | "b
 const BYTE_W = 72;
 const BYTE_GAP = 6;
 const ROW_GAP = 28;
-const ROW_Y_START = 380;
+const ROW_Y_START = 470;
 const COLS = 10;
 
 const byteColor = (type: string) => {
@@ -120,7 +120,7 @@ export const Utf8BoundaryVisual: React.FC<{
         style={{
           position: "absolute",
           left: cx,
-          top: 260,
+          top: 285,
           transform: "translateX(-50%)",
           ...mono,
           fontSize: 28,
@@ -130,13 +130,13 @@ export const Utf8BoundaryVisual: React.FC<{
       >
         {phase === "stream" && "ПОТОК БАЙТОВ UTF-8"}
         {phase === "broken" && "ПОВРЕЖДЁННЫЙ БАЙТ"}
-        {phase === "resync" && "СИНХРОНИЗАЦИЯ → НОВАЯ ГРАНИЦА"}
+        {phase === "resync" && "СИНХРОНИЗАЦИЯ"}
       </div>
       <div
         style={{
           position: "absolute",
           left: cx,
-          top: 320,
+          top: 345,
           transform: "translateX(-50%)",
           fontFamily: theme.font,
           fontSize: 24,
@@ -258,18 +258,25 @@ export const Utf8BoundaryVisual: React.FC<{
         const row = Math.floor(a.idx / COLS);
         const col = a.idx % COLS;
         const x = cx - (COLS * (BYTE_W + BYTE_GAP)) / 2 + col * (BYTE_W + BYTE_GAP) + BYTE_W / 2;
-        const y = ROW_Y_START + row * (130 + ROW_GAP) - 30;
         const isNext = a.idx === nextIdx;
         const color = isNext ? theme.success : BYTES[a.idx].type === "broken" ? theme.danger : theme.warning;
-        // resync phase: push red badge up, green badge down to avoid overlap
-        const verticalOffset = highlightResync ? (isNext ? 18 : -18) : 0;
+        // adjacent-column annotation pairs (idx N, N+1) are wider than one byte
+        // column apart — stagger and nudge so pills never touch each other
+        const stagger = annotations.length > 1 ? (i % 2 === 0 ? -1 : 1) : 0;
+        const horizontalOffset = stagger * 35;
+        // row 0 has a clear gutter above it (below the subtitle line); any
+        // later row does NOT have a gutter above (the previous row's cells
+        // are right there) but has ample clear space below its own cells —
+        // placing pills above row>0 collided with the row above's byte label
+        const rowTop = ROW_Y_START + row * (130 + ROW_GAP);
+        const top = row === 0 ? rowTop - 65 + stagger * 20 : rowTop + 180 + stagger * 30;
         return (
           <div
             key={`ann-${i}`}
             style={{
               position: "absolute",
-              left: x,
-              top: y - 38 + verticalOffset,
+              left: x + horizontalOffset,
+              top,
               transform: "translateX(-50%)",
               padding: "6px 14px",
               borderRadius: 999,
