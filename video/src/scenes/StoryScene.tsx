@@ -68,6 +68,10 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
     if (beat.visual === "title-slam") impact = start + 8;
     if (beat.visual === "password-leak") impact = start + Math.round(dur * 0.4);
     if (beat.visual === "hash-table") impact = start + Math.round(dur * 0.62);
+    if (beat.visual === "minimal-perfect-hash") {
+      const phase = beat.params?.phase;
+      impact = start + Math.round(dur * (phase === "lower-bound" || phase === "near-optimal" ? 0.68 : 0.6));
+    }
     if (beat.visual === "collision-compare") impact = start + 18;
     if (beat.visual === "heap-graph") impact = start + 18;
     if (beat.visual === "gc-sweep") impact = start + Math.round(dur * 0.56);
@@ -196,6 +200,10 @@ export const storySfx = (
     if (s.beat.visual === "title-slam") events.push({ frame: s.impact, sound: "slam" });
     if (s.beat.visual === "password-leak") events.push({ frame: s.impact, sound: "click" });
     if (s.beat.visual === "hash-table") events.push({ frame: s.impact, sound: "click" });
+    if (s.beat.visual === "minimal-perfect-hash") {
+      const phase = s.beat.params?.phase;
+      events.push({ frame: s.impact, sound: phase === "lower-bound" || phase === "near-optimal" ? "ding" : "pop" });
+    }
     if (s.beat.visual === "collision-compare") events.push({ frame: s.impact, sound: "pop" });
     if (s.beat.visual === "heap-graph") events.push({ frame: s.impact, sound: "pop" });
     if (s.beat.visual === "gc-sweep") events.push({ frame: s.impact, sound: "click" });
@@ -1250,6 +1258,137 @@ const HashTableVisual: React.FC<{
       >
         индекс {selected}
       </div>
+    </>
+  );
+};
+
+/** MPHF: заранее известные ключи раскладываются в ровно n слотов и ужимаются почти до предела информации. */
+type MinimalPerfectHashPhase = "static" | "assign" | "lower-bound" | "near-optimal";
+
+const MinimalPerfectHashVisual: React.FC<{
+  local: number;
+  fps: number;
+  impactLocal: number;
+  phase?: MinimalPerfectHashPhase;
+}> = ({ local, fps, impactLocal, phase = "static" }) => {
+  const enter = spring({ frame: local, fps, config: { damping: 15, mass: 0.8 } });
+  const reveal = spring({ frame: local - impactLocal, fps, config: { damping: 12, mass: 0.72 } });
+  const keys = ["ключ A", "ключ B", "ключ C", "ключ D"];
+  const slots = ["0", "1", "2", "3"];
+  const assignment = ["2", "0", "3", "1"];
+  const isBound = phase === "lower-bound";
+  const isNear = phase === "near-optimal";
+  const title = isBound ? "ПРЕДЕЛ ИНФОРМАЦИИ" : isNear ? "ПРАКТИКА РЯДОМ С ПРЕДЕЛОМ" : phase === "assign" ? "ФУНКЦИЯ РАСКЛАДЫВАЕТ" : "НАБОР ИЗВЕСТЕН ЗАРАНЕЕ";
+  const badge = isBound ? "МЕНЬШЕ НЕВОЗМОЖНО" : isNear ? "ПОЧТИ ИДЕАЛЬНО" : phase === "assign" ? "ОДИН КЛЮЧ → ОДИН ИНДЕКС" : "СТАТИЧНЫЙ НАБОР";
+  const panel = (left: number, top: number, width: number, height: number, children: React.ReactNode, color: string = theme.accent) => (
+    <div
+      style={{
+        position: "absolute",
+        left,
+        top,
+        width,
+        height,
+        borderRadius: 28,
+        background: theme.panel,
+        border: `3px solid ${color}88`,
+        boxShadow: `0 0 58px ${color}20`,
+        opacity: enter,
+        transform: `translateY(${(1 - enter) * 70}px)`,
+      }}
+    >
+      {children}
+    </div>
+  );
+  const pill = (label: string, left: number, top: number, color: string, active = false) => (
+    <div
+      style={{
+        position: "absolute",
+        left,
+        top,
+        width: 220,
+        height: 62,
+        borderRadius: 16,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: active ? `${color}24` : `${theme.panelBorder}18`,
+        border: `2px solid ${active ? color : theme.panelBorder}`,
+        color: active ? theme.text : theme.subtext,
+        fontFamily: theme.mono,
+        fontWeight: 800,
+        fontSize: 25,
+        opacity: enter * (active ? Math.max(0.35, reveal) : 1),
+        transform: `scale(${active ? 1 + 0.04 * Math.sin((local - impactLocal) / 6) : 1})`,
+      }}
+    >
+      {label}
+    </div>
+  );
+
+  return (
+    <>
+      <div
+        style={{
+          position: "absolute",
+          left: W / 2,
+          top: 260,
+          transform: "translateX(-50%)",
+          fontFamily: theme.mono,
+          fontWeight: 800,
+          fontSize: 29,
+          letterSpacing: 2,
+          color: isBound || isNear ? theme.success : theme.accent,
+          opacity: enter,
+          whiteSpace: "nowrap",
+        }}
+      >
+        {title}
+      </div>
+      {isBound || isNear ? (
+        panel(90, 455, 900, 570, <>
+          <div style={{ position: "absolute", left: 0, right: 0, top: 34, textAlign: "center", fontFamily: theme.font, fontWeight: 800, fontSize: 31, color: theme.subtext }}>
+            {isNear ? "описание функции" : "теоретический минимум"}
+          </div>
+          <div style={{ position: "absolute", left: 0, right: 0, top: 118, textAlign: "center", fontFamily: theme.font, fontWeight: 900, fontSize: 108, color: theme.success, textShadow: `0 0 36px ${theme.success}55`, opacity: enter * Math.max(0.3, reveal) }}>
+            {isNear ? "1,56" : "1,44"}
+          </div>
+          <div style={{ position: "absolute", left: 0, right: 0, top: 278, textAlign: "center", fontFamily: theme.mono, fontWeight: 800, fontSize: 29, color: theme.text }}>
+            БИТА НА КЛЮЧ
+          </div>
+          <div style={{ position: "absolute", left: 105, top: 365, width: 690, height: 18, borderRadius: 999, background: theme.panelBorder }}>
+            <div style={{ width: `${isNear ? 97 : 89}%`, height: "100%", borderRadius: 999, background: isNear ? theme.accent2 : theme.success, transform: `scaleX(${Math.max(0.2, reveal)})`, transformOrigin: "left" }} />
+          </div>
+          <div style={{ position: "absolute", left: 0, right: 0, top: 425, textAlign: "center", fontFamily: theme.font, fontWeight: 800, fontSize: 28, color: isNear ? theme.accent2 : theme.success }}>
+            {isNear ? "практически у нижней границы" : "ниже нельзя по информации"}
+          </div>
+        </>, isNear ? theme.accent2 : theme.success)
+      ) : (
+        <>
+          {panel(70, 455, 300, 640, <>
+            <div style={{ textAlign: "center", paddingTop: 32, fontFamily: theme.mono, fontSize: 26, fontWeight: 800, color: theme.accent }}>КЛЮЧИ</div>
+            {keys.map((key, i) => pill(key, 40, 106 + i * 116, theme.accent, phase === "assign" && local >= impactLocal && i === 0))}
+          </>, theme.accent)}
+          <div style={{ position: "absolute", left: 392, top: 700, fontFamily: theme.font, fontWeight: 900, fontSize: 62, color: phase === "assign" ? theme.success : theme.subtext, opacity: enter }}>
+            {phase === "assign" ? "→" : "?"}
+          </div>
+          {panel(500, 455, 510, 640, <>
+            <div style={{ textAlign: "center", paddingTop: 32, fontFamily: theme.mono, fontSize: 26, fontWeight: 800, color: phase === "assign" ? theme.success : theme.accent2 }}>СЛОТЫ 0…n−1</div>
+            {slots.map((slot, i) => {
+              const active = phase === "assign" && local >= impactLocal;
+              return (
+                <div key={slot} style={{ position: "absolute", left: 45 + (i % 2) * 235, top: 108 + Math.floor(i / 2) * 178, width: 200, height: 126, borderRadius: 20, border: `3px solid ${active ? theme.success : theme.panelBorder}`, background: active ? `${theme.success}18` : `${theme.panelBorder}12`, opacity: enter, textAlign: "center", boxShadow: active ? `0 0 32px ${theme.success}44` : "none" }}>
+                  <div style={{ fontFamily: theme.mono, fontSize: 27, color: active ? theme.success : theme.subtext, paddingTop: 18 }}>[{slot}]</div>
+                  <div style={{ fontFamily: theme.font, fontWeight: 800, fontSize: 25, color: active ? theme.text : theme.panelBorder, paddingTop: 18 }}>{active ? `ключ ${assignment[i]}` : "свободно"}</div>
+                </div>
+              );
+            })}
+          </>, phase === "assign" ? theme.success : theme.accent2)}
+        </>
+      )}
+      <div style={{ position: "absolute", left: W / 2, top: 1235, transform: "translateX(-50%)", padding: "16px 30px", borderRadius: 999, border: `3px solid ${isBound || isNear ? theme.success : phase === "assign" ? theme.success : theme.accent}99`, background: `${isBound || isNear ? theme.success : phase === "assign" ? theme.success : theme.accent}18`, color: isBound || isNear ? theme.success : phase === "assign" ? theme.success : theme.accent, fontFamily: theme.mono, fontWeight: 800, fontSize: 27, opacity: enter, whiteSpace: "nowrap" }}>
+        {badge}
+      </div>
+      {local >= impactLocal ? <PulseRing x={W / 2} y={isBound || isNear ? 760 : 800} triggerFrame={impactLocal} tone={isBound || isNear ? "success" : phase === "assign" ? "success" : "accent"} size={isBound || isNear ? 520 : 420} /> : null}
     </>
   );
 };
@@ -7523,6 +7662,7 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     "title-slam": { scale: 1.0, y: 0 },
     "password-leak": { scale: 1.05, y: -30 },
     "hash-table": { scale: 0.98, y: -20 },
+    "minimal-perfect-hash": { scale: 0.9, y: -20 },
     "collision-compare": { scale: 0.9, y: -20 },
     "heap-graph": { scale: 0.86, y: -20 },
     "gc-sweep": { scale: 0.9, y: -30 },
@@ -7621,6 +7761,15 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             hash={slot.beat.params?.hash as string | undefined}
             index={slot.beat.params?.index as number | undefined}
             value={slot.beat.params?.value as string | undefined}
+          />
+        );
+      case "minimal-perfect-hash":
+        return (
+          <MinimalPerfectHashVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as MinimalPerfectHashPhase | undefined) ?? "static"}
           />
         );
       case "collision-compare":

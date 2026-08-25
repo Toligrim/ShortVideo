@@ -72,6 +72,7 @@ export interface StoryBeat {
     | "title-slam"
     | "password-leak"
     | "hash-table"
+    | "minimal-perfect-hash"
     | "collision-compare"
     | "heap-graph"
     | "gc-sweep"
