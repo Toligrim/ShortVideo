@@ -30,6 +30,7 @@ import { BbpExtractVisual, type BbpExtractPhase } from "./BbpExtractVisual";
 import { MedianOfMediansVisual, type MedianOfMediansPhase } from "./MedianOfMediansVisual";
 import { GrayCodeVisual, type GrayCodePhase } from "./GrayCodeVisual";
 import { Utf8BoundaryVisual, type Utf8BoundaryPhase } from "./Utf8BoundaryVisual";
+import { ConsistentHashRingVisual, type ConsistentHashPhase } from "./ConsistentHashRingVisual";
 
 /* ──────────────────────────── расписание битов ──────────────────────────── */
 
@@ -156,6 +157,7 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
     }
     if (beat.visual === "gray-code") impact = start + Math.round(dur * 0.6);
     if (beat.visual === "utf8-boundary") impact = start + Math.round(dur * 0.62);
+    if (beat.visual === "consistent-hash-ring") impact = start + Math.round(dur * 0.62);
     return { beat, start, end, impact };
   });
 };
@@ -7531,6 +7533,7 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     "sudoku-exact-cover": { scale: 0.88, y: -22 },
     "amdahl-speedup": { scale: 0.9, y: -20 },
     "gray-code": { scale: 0.92, y: -10 },
+    "consistent-hash-ring": { scale: 0.9, y: -20 },
   };
   const cur = cams[slot.beat.visual] ?? { scale: 1, y: 0 };
   const prev = idx > 0 ? cams[slots[idx - 1].beat.visual] ?? cur : cur;
@@ -8069,6 +8072,15 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             fps={fps}
             impactLocal={impactLocal}
             phase={(slot.beat.params?.phase as Utf8BoundaryPhase | undefined) ?? "stream"}
+          />
+        );
+      case "consistent-hash-ring":
+        return (
+          <ConsistentHashRingVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as ConsistentHashPhase | undefined) ?? "ring"}
           />
         );
       default:

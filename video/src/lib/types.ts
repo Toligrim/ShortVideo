@@ -125,7 +125,8 @@ export interface StoryBeat {
       | "bbp-extract"
       | "median-of-medians"
       | "gray-code"
-      | "utf8-boundary";
+      | "utf8-boundary"
+      | "consistent-hash-ring";
   onWord?: string; // бит начинается на этом слове реплики
   params?: Record<string, unknown>;
 }
