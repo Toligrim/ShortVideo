@@ -54,10 +54,13 @@ export const TrieGrowthVisual: React.FC<{
     if (p <= 0) continue;
 
     const x = startX + s * colGap;
-    // корень общий, цепочка идёт вниз
+    // корень общий (рисуется отдельно, ниже, на своей строке y = startY),
+    // цепочка каждого суффикса идёт на одну строку ниже него, вниз —
+    // d=0 больше НЕ делит строку с корнем (раньше оба сидели на y=startY,
+    // и колонка с x близким к cx визуально сливалась с корнем в один кружок)
     for (let d = 0; d < suffixLen; d++) {
       totalNodes++;
-      const y = startY + d * rowGap;
+      const y = startY + (d + 1) * rowGap;
       const isBottom = d === suffixLen - 1;
       const color = isBottom ? theme.accent2 : theme.accent;
 
@@ -80,42 +83,22 @@ export const TrieGrowthVisual: React.FC<{
         />
       );
 
-      // ребро к предыдущему узлу
-      if (d === 0) {
-        // от корня
-        edges.push(
-          <div
-            key={`e-${s}-${d}`}
-            style={{
-              position: "absolute",
-              left: cx,
-              top: startY - nodeR * 2 - 20,
-              width: 3,
-              height: rowGap - nodeR,
-              background: `${theme.accent}66`,
-              opacity: p * enter * 0.6,
-              transformOrigin: "0 0",
-              transform: `translateX(${x - cx}px)`,
-            }}
-          />
-        );
-      } else {
-        const prevY = startY + (d - 1) * rowGap;
-        edges.push(
-          <div
-            key={`e-${s}-${d}`}
-            style={{
-              position: "absolute",
-              left: x,
-              top: prevY + nodeR,
-              width: 3,
-              height: rowGap - nodeR * 2,
-              background: `${theme.accent2}66`,
-              opacity: p * enter * 0.6,
-            }}
-          />
-        );
-      }
+      // ребро к предыдущему узлу (для d=0 предыдущий узел — сам корень на y=startY)
+      const prevY = d === 0 ? startY : startY + d * rowGap;
+      edges.push(
+        <div
+          key={`e-${s}-${d}`}
+          style={{
+            position: "absolute",
+            left: x,
+            top: prevY + nodeR,
+            width: 3,
+            height: rowGap - nodeR * 2,
+            background: `${theme.accent2}66`,
+            opacity: p * enter * 0.6,
+          }}
+        />
+      );
     }
   }
 
@@ -198,7 +181,10 @@ export const TrieGrowthVisual: React.FC<{
             style={{
               position: "absolute",
               left: startX + s * colGap,
-              top: startY + (suffixes - s) * rowGap + 10,
+              // последний узел колонки теперь на y = startY + suffixLen*rowGap
+              // (на одну строку ниже, чем раньше, — см. правку корня выше);
+              // подпись должна уйти под него, а не на 10px под центр
+              top: startY + (suffixes - s) * rowGap + nodeR + 14,
               transform: `translateX(-50%) scale(${p})`,
               ...mono,
               fontSize: 16,
