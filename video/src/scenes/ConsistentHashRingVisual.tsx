@@ -302,8 +302,8 @@ export const ConsistentHashRingVisual: React.FC<{
       ) : null}
       {phase === "virtual" ? (
         <>
-          <Caption text="много позиций одного сервера · нагрузка ровнее" color={theme.accent2} />
-          <Badge text="ОДИН СЕРВЕР = МНОГО ТОЧЕК" color={theme.accent2} opacity={enter} />
+          <Caption text="много позиций одного сервера · нагрузка ровнее" color={theme.accent2} top={1180} />
+          <Badge text="ОДИН СЕРВЕР = МНОГО ТОЧЕК" color={theme.accent2} top={1270} opacity={enter} />
         </>
       ) : null}
     </>
