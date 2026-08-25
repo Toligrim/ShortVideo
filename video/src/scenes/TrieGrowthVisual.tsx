@@ -216,7 +216,7 @@ export const TrieGrowthVisual: React.FC<{
         style={{
           position: "absolute",
           left: cx,
-          top: 1300,
+          top: 1080,
           transform: "translateX(-50%)",
           textAlign: "center",
           opacity: enter,
@@ -239,12 +239,12 @@ export const TrieGrowthVisual: React.FC<{
       {/* бейдж на импакте */}
       {done ? (
         <>
-          <PulseRing x={cx} y={1340} triggerFrame={impactLocal} tone="danger" size={280} />
+          <PulseRing x={cx} y={1150} triggerFrame={impactLocal} tone="danger" size={280} />
           <div
             style={{
               position: "absolute",
               left: cx,
-              top: 1460,
+              top: 1240,
               transform: `translateX(-50%) scale(${badgeP})`,
               opacity: badgeP,
               display: "flex",
