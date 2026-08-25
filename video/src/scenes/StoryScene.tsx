@@ -33,6 +33,8 @@ import { Utf8BoundaryVisual, type Utf8BoundaryPhase } from "./Utf8BoundaryVisual
 import { ConsistentHashRingVisual, type ConsistentHashPhase } from "./ConsistentHashRingVisual";
 import { TrieGrowthVisual } from "./TrieGrowthVisual";
 import { SuffixAutomatonVisual, type SuffixAutomatonPhase } from "./SuffixAutomatonVisual";
+import { BwtMatrixVisual, type BwtMatrixPhase } from "./BwtMatrixVisual";
+import { BwtInvertVisual, type BwtInvertPhase } from "./BwtInvertVisual";
 
 /* ──────────────────────────── расписание битов ──────────────────────────── */
 
@@ -164,6 +166,14 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
     if (beat.visual === "suffix-automaton") {
       const phase = beat.params?.phase;
       impact = start + Math.round(dur * (phase === "merge" ? 0.65 : phase === "query" ? 0.72 : phase === "bound" ? 0.68 : 0.58));
+    }
+    if (beat.visual === "bwt-matrix") {
+      const phase = beat.params?.phase;
+      impact = start + Math.round(dur * (phase === "column" ? 0.68 : phase === "sorted" ? 0.62 : 0.58));
+    }
+    if (beat.visual === "bwt-invert") {
+      const phase = beat.params?.phase;
+      impact = start + Math.round(dur * (phase === "runs" ? 0.72 : 0.62));
     }
     return { beat, start, end, impact };
   });
@@ -319,6 +329,15 @@ export const storySfx = (
       const ph = s.beat.params?.phase;
       const sound = ph === "merge" ? "ding" : ph === "query" ? "click" : ph === "bound" ? "pop" : "whoosh";
       events.push({ frame: s.impact, sound });
+    }
+    if (s.beat.visual === "bwt-matrix") {
+      const ph = s.beat.params?.phase;
+      const sound = ph === "column" ? "ding" : ph === "sorted" ? "pop" : "click";
+      events.push({ frame: s.impact, sound });
+    }
+    if (s.beat.visual === "bwt-invert") {
+      const ph = s.beat.params?.phase;
+      events.push({ frame: s.impact, sound: ph === "runs" ? "ding" : "pop" });
     }
   }
   return events;
@@ -7547,6 +7566,8 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     "amdahl-speedup": { scale: 0.9, y: -20 },
     "gray-code": { scale: 0.92, y: -10 },
     "consistent-hash-ring": { scale: 0.9, y: -20 },
+    "bwt-matrix": { scale: 0.88, y: -20 },
+    "bwt-invert": { scale: 0.9, y: -20 },
   };
   const cur = cams[slot.beat.visual] ?? { scale: 1, y: 0 };
   const prev = idx > 0 ? cams[slots[idx - 1].beat.visual] ?? cur : cur;
@@ -8112,6 +8133,24 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             impactLocal={impactLocal}
             phase={(slot.beat.params?.phase as SuffixAutomatonPhase | undefined) ?? "growth"}
             n={slot.beat.params?.n as number | undefined}
+          />
+        );
+      case "bwt-matrix":
+        return (
+          <BwtMatrixVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as BwtMatrixPhase | undefined) ?? "rotations"}
+          />
+        );
+      case "bwt-invert":
+        return (
+          <BwtInvertVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as BwtInvertPhase | undefined) ?? "invert"}
           />
         );
       default:

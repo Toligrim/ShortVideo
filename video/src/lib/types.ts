@@ -128,7 +128,9 @@ export interface StoryBeat {
       | "utf8-boundary"
       | "consistent-hash-ring"
       | "trie-growth"
-      | "suffix-automaton";
+      | "suffix-automaton"
+      | "bwt-matrix"
+      | "bwt-invert";
   onWord?: string; // бит начинается на этом слове реплики
   params?: Record<string, unknown>;
 }
