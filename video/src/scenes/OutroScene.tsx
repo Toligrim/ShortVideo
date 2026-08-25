@@ -1,6 +1,6 @@
 import React from "react";
 import { interpolate, spring, useCurrentFrame, useVideoConfig } from "remotion";
-import { layout, theme } from "../lib/theme";
+import { TRANSITION_FRAMES, layout, theme } from "../lib/theme";
 import { PulseRing } from "../lib/Motion";
 import type { OutroScene as OutroProps } from "../lib/types";
 
@@ -8,7 +8,10 @@ import type { OutroScene as OutroProps } from "../lib/types";
 export const OutroScene: React.FC<{ scene: OutroProps; frames: number }> = ({ scene, frames }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
-  const titleS = spring({ frame: frame - 4, fps, config: { damping: 13 } });
+  // старт входа отложен на TRANSITION_FRAMES: раньше заголовок начинал
+  // проявляться ещё во время кросс-фейда и накладывался на субтитр уходящей
+  // сцены (та тоже могла быть видна до конца перехода)
+  const titleS = spring({ frame: frame - TRANSITION_FRAMES - 4, fps, config: { damping: 13 } });
   const ctaFrom = Math.min(Math.round(frames * 0.55), frames - 30);
   const pulse = 1 + 0.035 * Math.sin(((frame - ctaFrom) / fps) * Math.PI * 2.2);
   return (
@@ -42,7 +45,7 @@ export const OutroScene: React.FC<{ scene: OutroProps; frames: number }> = ({ sc
         }}
       >
         {(scene.bullets ?? []).map((b, i) => {
-          const s = spring({ frame: frame - 16 - i * 9, fps, config: { damping: 14 } });
+          const s = spring({ frame: frame - TRANSITION_FRAMES - 16 - i * 9, fps, config: { damping: 14 } });
           return (
             <div
               key={i}

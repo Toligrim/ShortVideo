@@ -30,16 +30,31 @@ const buildLines = (words: Word[]): Line[] => {
   return lines;
 };
 
+// Насколько дольше обычного (0.05с) может держаться последняя строка сцены —
+// но не позже cutoffT: иначе она доживает до кросс-фейда TransitionSeries и
+// накладывается на уже проявляющийся заголовок следующей сцены (аутро и др.).
+const LAST_LINE_LINGER_SEC = 1.0;
+
 /** Караоке-субтитры: показывается активная строка, произнесённые слова подсвечены. */
-export const Karaoke: React.FC<{ words: Word[] }> = ({ words }) => {
+export const Karaoke: React.FC<{ words: Word[]; sceneFrames: number; cutoffFrames: number }> = ({
+  words,
+  sceneFrames,
+  cutoffFrames,
+}) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const t = frame / fps - LEAD_SEC; // сек от начала аудио сцены
   const lines = buildLines(words);
+  // момент (в тех же координатах t), после которого сцена уже входит в
+  // кросс-фейд со следующей — субтитры должны погаснуть до него
+  const cutoffT = (sceneFrames - cutoffFrames) / fps - LEAD_SEC;
 
   const active = lines.find(
     (l, i) =>
-      t < l.words[l.words.length - 1].end + (i === lines.length - 1 ? 999 : 0.05) &&
+      t <
+        (i === lines.length - 1
+          ? Math.min(l.words[l.words.length - 1].end + LAST_LINE_LINGER_SEC, cutoffT)
+          : l.words[l.words.length - 1].end + 0.05) &&
       t >= l.words[0].start - (i === 0 ? 999 : 0.05)
   );
   if (!active) return null;

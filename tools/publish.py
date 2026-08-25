@@ -12,6 +12,7 @@ import argparse
 import json
 from pathlib import Path
 import re
+import subprocess
 import sys
 from typing import Any
 
@@ -39,6 +40,35 @@ from telegram_bot import TelegramError
 
 def _config(args: argparse.Namespace) -> PublishingConfig:
     return PublishingConfig.from_environment(state_dir=getattr(args, "state_dir", None))
+
+
+def _check_overlaps(slug: str) -> None:
+    """Fail closed on overlapping on-screen text before a human ever sees it.
+
+    Deliberately not an LLM judgment call: episode auto-20260825-080101
+    (2026-08-25) reached a Telegram approval card with mashed, unreadable text
+    because the critic step had been silently delegated to a free model that
+    certified the broken frames as clean. `check-overlaps.cjs` measures real
+    getBoundingClientRect() boxes in the rendered DOM at the same frames the
+    critic checklist samples — no model is involved, so no model's blind spot
+    can wave it through. A missing script fails closed too, on purpose.
+    """
+    video_dir = Path(__file__).resolve().parent.parent / "video"
+    script = video_dir / "scripts" / "check-overlaps.cjs"
+    if not script.exists():
+        raise ReviewError(f"overlap checker missing: {script}")
+    result = subprocess.run(
+        ["node", "scripts/check-overlaps.cjs", slug],
+        cwd=str(video_dir),
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout or "").strip()
+        raise ReviewError(
+            f"overlap check failed for {slug!r} — fix the layout before review "
+            f"(exit {result.returncode}):\n{detail}"
+        )
 
 
 _STATUS_URL_RE = re.compile(r"https?://[^\s'\"<>]+", re.IGNORECASE)
@@ -237,6 +267,7 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 print(f"OK: {output['slug']} metadata_sha256={output['metadata_sha256']}")
         elif args.command == "review":
+            _check_overlaps(args.slug)
             review = prepare_review(
                 slug=args.slug,
                 video_path=args.video,

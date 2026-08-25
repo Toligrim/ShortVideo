@@ -10,18 +10,19 @@ import {
 import { TransitionSeries, linearTiming } from "@remotion/transitions";
 import { slide } from "@remotion/transitions/slide";
 import { fade } from "@remotion/transitions/fade";
-import { FPS, LEAD_SEC, layout, theme } from "./lib/theme";
+import { FPS, LEAD_SEC, TRANSITION_FRAMES, layout, theme } from "./lib/theme";
 import { sceneFrames } from "./lib/timeline";
 import { fakeMeta } from "./lib/fakeWords";
 import { sceneSfx, SFX_VOLUME } from "./lib/sfx";
 
-export const TRANSITION_FRAMES = 10;
+export { TRANSITION_FRAMES };
 
 export const episodeFrames = (metas: SceneMeta[]): number =>
   metas.reduce((acc, m) => acc + sceneFrames(m), 0) -
   TRANSITION_FRAMES * Math.max(0, metas.length - 1);
 import type { Episode, Scene, SceneMeta } from "./lib/types";
 import { Karaoke } from "./lib/Karaoke";
+import { OverlapProbe } from "./lib/OverlapProbe";
 import { Particles, SceneContainer } from "./lib/Motion";
 import { HookScene } from "./scenes/HookScene";
 import { DiagramScene, diagramImpacts } from "./scenes/DiagramScene";
@@ -142,7 +143,13 @@ const EpisodeComp: React.FC<EpisodeProps> = ({ episodeId, episode, metas }) => {
         <SceneContainer frames={frames[i]} impacts={sceneImpacts(scene, metas[i], frames[i])}>
           <SceneRenderer scene={scene} meta={metas[i]} frames={frames[i]} />
         </SceneContainer>
-        {scene.type !== "hook" ? <Karaoke words={metas[i].words} /> : null}
+        {scene.type !== "hook" ? (
+          <Karaoke
+            words={metas[i].words}
+            sceneFrames={frames[i]}
+            cutoffFrames={i < episode.scenes.length - 1 ? TRANSITION_FRAMES : 0}
+          />
+        ) : null}
       </TransitionSeries.Sequence>
     );
   });
@@ -152,6 +159,7 @@ const EpisodeComp: React.FC<EpisodeProps> = ({ episodeId, episode, metas }) => {
       <Background />
       <Audio loop src={staticFile("music/bed.wav")} volume={musicVolume} />
       <TransitionSeries>{items}</TransitionSeries>
+      <OverlapProbe />
     </AbsoluteFill>
   );
 };
@@ -171,7 +179,10 @@ const PreviewComp: React.FC<PreviewProps> = ({ scene }) => {
       <SceneContainer frames={frames} impacts={sceneImpacts(scene, meta, frames)}>
         <SceneRenderer scene={scene} meta={meta} frames={frames} />
       </SceneContainer>
-      {scene.type !== "hook" ? <Karaoke words={meta.words} /> : null}
+      {scene.type !== "hook" ? (
+        <Karaoke words={meta.words} sceneFrames={frames} cutoffFrames={0} />
+      ) : null}
+      <OverlapProbe />
     </AbsoluteFill>
   );
 };
