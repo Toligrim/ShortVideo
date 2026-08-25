@@ -204,8 +204,8 @@ export const BwtInvertVisual: React.FC<{
       {/* headers L / F */}
       <div style={{ position: "absolute", left: colLeftL + cell / 2 - 20, top: top - 50, fontFamily: theme.mono, fontSize: 26, fontWeight: 800, color: theme.accent2, opacity: enter }}>L</div>
       <div style={{ position: "absolute", left: colLeftF + cell / 2 - 20, top: top - 50, fontFamily: theme.mono, fontSize: 26, fontWeight: 800, color: theme.accent, opacity: enter }}>F</div>
-      <div style={{ position: "absolute", left: colLeftL + cell / 2 - 20, top: top - 28, fontFamily: theme.mono, fontSize: 16, color: theme.subtext, opacity: enter * 0.7 }}>последний</div>
-      <div style={{ position: "absolute", left: colLeftF + cell / 2 - 20, top: top - 28, fontFamily: theme.mono, fontSize: 16, color: theme.subtext, opacity: enter * 0.7 }}>первый</div>
+      <div style={{ position: "absolute", left: colLeftL + cell / 2 - 20, top: top - 78, fontFamily: theme.mono, fontSize: 16, color: theme.subtext, opacity: enter * 0.7 }}>последний</div>
+      <div style={{ position: "absolute", left: colLeftF + cell / 2 - 20, top: top - 78, fontFamily: theme.mono, fontSize: 16, color: theme.subtext, opacity: enter * 0.7 }}>первый</div>
 
       {/* columns */}
       {Array.from({ length: n }).map((_, i) => {
