@@ -27,6 +27,7 @@ import { SudokuExactCoverVisual, type SudokuExactCoverPhase } from "./SudokuExac
 import { AmdahlSpeedupVisual, type AmdahlSpeedupPhase } from "./AmdahlSpeedupVisual";
 import { BbpDigitVisual, type BbpDigitPhase } from "./BbpDigitVisual";
 import { BbpExtractVisual, type BbpExtractPhase } from "./BbpExtractVisual";
+import { MedianOfMediansVisual, type MedianOfMediansPhase } from "./MedianOfMediansVisual";
 
 /* ──────────────────────────── расписание битов ──────────────────────────── */
 
@@ -146,6 +147,10 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
     if (beat.visual === "bbp-extract") {
       const phase = beat.params?.phase;
       impact = start + Math.round(dur * (phase === "digit" ? 0.72 : phase === "remainders" ? 0.62 : 0.55));
+    }
+    if (beat.visual === "median-of-medians") {
+      const phase = beat.params?.phase;
+      impact = start + Math.round(dur * (phase === "pivot" ? 0.68 : phase === "partition" ? 0.72 : 0.58));
     }
     return { beat, start, end, impact };
   });
@@ -283,6 +288,11 @@ export const storySfx = (
     if (s.beat.visual === "bbp-extract") {
       const ph = s.beat.params?.phase;
       const sound = ph === "digit" ? "ding" : ph === "remainders" ? "pop" : "pop";
+      events.push({ frame: s.impact, sound });
+    }
+    if (s.beat.visual === "median-of-medians") {
+      const ph = s.beat.params?.phase;
+      const sound = ph === "pivot" ? "ding" : ph === "partition" ? "slam" : "pop";
       events.push({ frame: s.impact, sound });
     }
   }
@@ -8020,6 +8030,15 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             impactLocal={impactLocal}
             phase={(slot.beat.params?.phase as BbpExtractPhase | undefined) ?? "series"}
             position={slot.beat.params?.position as number | undefined}
+          />
+        );
+      case "median-of-medians":
+        return (
+          <MedianOfMediansVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as MedianOfMediansPhase | undefined) ?? "groups"}
           />
         );
       default:

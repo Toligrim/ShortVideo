@@ -122,7 +122,8 @@ export interface StoryBeat {
       | "sudoku-exact-cover"
       | "amdahl-speedup"
       | "bbp-digit"
-      | "bbp-extract";
+      | "bbp-extract"
+      | "median-of-medians";
   onWord?: string; // бит начинается на этом слове реплики
   params?: Record<string, unknown>;
 }
