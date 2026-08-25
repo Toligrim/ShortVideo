@@ -10,7 +10,7 @@ const W = layout.width;
 export type BwtInvertPhase = "invert" | "runs";
 
 // Data for BANANA$
-const sorted = ["$BANANA", "A$BANAN", "ANA$BAN", "ANANA$B", "BANANA$", "NANA$BA", "NA$BANA"];
+const sorted = ["$BANANA", "A$BANAN", "ANA$BAN", "ANANA$B", "BANANA$", "NA$BANA", "NANA$BA"];
 const L = sorted.map((r) => r[6]).join(""); // ANNB$AA
 const F = sorted.map((r) => r[0]).join(""); // $AAABNNN? let's compute: sorted F chars: $, A, A, A, B, N, N => $AAABNN? actually sorted: $BANANA(F $), A$BANAN(F A), ANA$BAN(F A), ANANA$B(F A), BANANA$(F B), NANA$BA(F N), NA$BANA(F N) => $AAABNN
 const LF = F; // use F for display

@@ -14,8 +14,8 @@ const N = S.length;
 
 // unsorted rotations: row i = S.slice(i)+S.slice(0,i)
 const rotations: string[] = Array.from({ length: N }, (_, i) => S.slice(i) + S.slice(0, i));
-// sorted indices (lexicographically, $ < letters): [$BANANA, A$BANAN, ANA$BAN, ANANA$B, BANANA$, NANA$BA, NA$BANA]
-const sortedIdx = [6, 5, 3, 1, 0, 2, 4];
+// sorted indices (lexicographically, $ < letters): [$BANANA, A$BANAN, ANA$BAN, ANANA$B, BANANA$, NA$BANA, NANA$BA]
+const sortedIdx = [6, 5, 3, 1, 0, 4, 2];
 const sorted: string[] = sortedIdx.map((i) => rotations[i]);
 // L = last column of sorted
 const L = sorted.map((r) => r[N - 1]).join(""); // ANNB$AA
