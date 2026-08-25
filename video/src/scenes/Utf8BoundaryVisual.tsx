@@ -261,13 +261,15 @@ export const Utf8BoundaryVisual: React.FC<{
         const y = ROW_Y_START + row * (130 + ROW_GAP) - 30;
         const isNext = a.idx === nextIdx;
         const color = isNext ? theme.success : BYTES[a.idx].type === "broken" ? theme.danger : theme.warning;
+        // resync phase: push red badge up, green badge down to avoid overlap
+        const verticalOffset = highlightResync ? (isNext ? 18 : -18) : 0;
         return (
           <div
             key={`ann-${i}`}
             style={{
               position: "absolute",
               left: x,
-              top: y - 38,
+              top: y - 38 + verticalOffset,
               transform: "translateX(-50%)",
               padding: "6px 14px",
               borderRadius: 999,
