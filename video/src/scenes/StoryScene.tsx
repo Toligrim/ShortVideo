@@ -28,6 +28,7 @@ import { AmdahlSpeedupVisual, type AmdahlSpeedupPhase } from "./AmdahlSpeedupVis
 import { BbpDigitVisual, type BbpDigitPhase } from "./BbpDigitVisual";
 import { BbpExtractVisual, type BbpExtractPhase } from "./BbpExtractVisual";
 import { MedianOfMediansVisual, type MedianOfMediansPhase } from "./MedianOfMediansVisual";
+import { GrayCodeVisual, type GrayCodePhase } from "./GrayCodeVisual";
 
 /* ──────────────────────────── расписание битов ──────────────────────────── */
 
@@ -152,6 +153,7 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
       const phase = beat.params?.phase;
       impact = start + Math.round(dur * (phase === "pivot" ? 0.68 : phase === "partition" ? 0.72 : 0.58));
     }
+    if (beat.visual === "gray-code") impact = start + Math.round(dur * 0.6);
     return { beat, start, end, impact };
   });
 };
@@ -295,6 +297,7 @@ export const storySfx = (
       const sound = ph === "pivot" ? "ding" : ph === "partition" ? "slam" : "pop";
       events.push({ frame: s.impact, sound });
     }
+    if (s.beat.visual === "gray-code") events.push({ frame: s.impact, sound: "pop" });
   }
   return events;
 };
@@ -7520,6 +7523,7 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     "count-min-sketch": { scale: 0.88, y: -20 },
     "sudoku-exact-cover": { scale: 0.88, y: -22 },
     "amdahl-speedup": { scale: 0.9, y: -20 },
+    "gray-code": { scale: 0.92, y: -10 },
   };
   const cur = cams[slot.beat.visual] ?? { scale: 1, y: 0 };
   const prev = idx > 0 ? cams[slots[idx - 1].beat.visual] ?? cur : cur;
@@ -8039,6 +8043,16 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             fps={fps}
             impactLocal={impactLocal}
             phase={(slot.beat.params?.phase as MedianOfMediansPhase | undefined) ?? "groups"}
+          />
+        );
+      case "gray-code":
+        return (
+          <GrayCodeVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as GrayCodePhase | undefined) ?? "disk"}
+            value={slot.beat.params?.value as number | undefined}
           />
         );
       default:

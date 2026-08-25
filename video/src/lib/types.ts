@@ -123,7 +123,8 @@ export interface StoryBeat {
       | "amdahl-speedup"
       | "bbp-digit"
       | "bbp-extract"
-      | "median-of-medians";
+      | "median-of-medians"
+      | "gray-code";
   onWord?: string; // бит начинается на этом слове реплики
   params?: Record<string, unknown>;
 }
