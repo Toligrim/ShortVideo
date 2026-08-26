@@ -90,6 +90,7 @@ export interface StoryBeat {
     | "hll-estimate"
     | "bloom-bitarray"
     | "bloom-probe"
+    | "xor-filter"
     | "coin-pair"
     | "bit-extractor"
     | "rule-110"

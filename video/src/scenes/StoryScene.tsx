@@ -89,6 +89,10 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
     if (beat.visual === "hll-estimate") impact = start + Math.round(dur * 0.58);
     if (beat.visual === "bloom-bitarray") impact = start + Math.round(dur * 0.72);
     if (beat.visual === "bloom-probe") impact = start + Math.round(dur * 0.55);
+    if (beat.visual === "xor-filter") {
+      const phase = beat.params?.phase;
+      impact = start + Math.round(dur * (phase === "scale" ? 0.58 : phase === "probe" ? 0.62 : phase === "verify" ? 0.64 : phase === "peel" ? 0.6 : phase === "assign" ? 0.58 : 0.55));
+    }
     if (beat.visual === "coin-pair") impact = start + Math.round(dur * 0.65);
     if (beat.visual === "bit-extractor") impact = start + Math.round(dur * 0.75);
     if (beat.visual === "rule-110") impact = start + Math.round(dur * 0.6);
@@ -239,6 +243,11 @@ export const storySfx = (
     if (s.beat.visual === "hll-estimate") events.push({ frame: s.impact, sound: "pop" });
     if (s.beat.visual === "bloom-bitarray") events.push({ frame: s.impact, sound: "ding" });
     if (s.beat.visual === "bloom-probe") events.push({ frame: s.impact, sound: "pop" });
+    if (s.beat.visual === "xor-filter") {
+      const phase = s.beat.params?.phase;
+      const sound = phase === "scale" || phase === "limits" || phase === "stats" ? "ding" : phase === "peel" ? "slam" : phase === "stack" || phase === "reverse" ? "whoosh" : phase === "verify" || phase === "write-once" ? "pop" : "click";
+      events.push({ frame: s.impact, sound });
+    }
     if (s.beat.visual === "coin-pair") events.push({ frame: s.impact, sound: "pop" });
     if (s.beat.visual === "bit-extractor") events.push({ frame: s.impact, sound: "pop" });
     if (s.beat.visual === "rule-110") events.push({ frame: s.impact, sound: "click" });
@@ -397,6 +406,634 @@ export const storyImpacts = (scene: StoryProps, words: Word[], frames: number): 
 /* ──────────────────────────── визуалы битов ──────────────────────────── */
 
 const W = layout.width;
+
+type XorFilterPhase =
+  | "scale"
+  | "probe"
+  | "verify"
+  | "peel"
+  | "stack"
+  | "reverse"
+  | "assign"
+  | "write-once"
+  | "limits"
+  | "stats";
+
+/** Буквальный Xor-фильтр: три доли, три чтения, XOR с fingerprint и peeling. */
+const XorFilterVisual: React.FC<{
+  local: number;
+  fps: number;
+  impactLocal: number;
+  phase?: XorFilterPhase;
+}> = ({ local, fps, impactLocal, phase = "probe" }) => {
+  const enter = spring({ frame: local, fps, config: { damping: 15, mass: 0.8 } });
+  const reveal = spring({ frame: Math.max(0, local - impactLocal), fps, config: { damping: 12, mass: 0.7 } });
+  const mono: React.CSSProperties = { fontFamily: theme.mono, fontWeight: 800, letterSpacing: 2 };
+  const phaseTitle: Record<XorFilterPhase, string> = {
+    scale: "XOR FILTER · КОМПАКТНО",
+    probe: "ЗАПРОС · ТРИ ДОЛИ · ТРИ ЧТЕНИЯ",
+    verify: "XOR-ПРОВЕРКА · FINGERPRINT",
+    peel: "ТРЁХДОЛЬНЫЙ ГИПЕРГРАФ · PEEL",
+    stack: "PEELING → STACK",
+    reverse: "STACK → ОБРАТНЫЙ ПОРЯДОК",
+    assign: "ОБРАТНАЯ ЗАПИСЬ",
+    "write-once": "ТАБЛИЦА · ОДНА ЗАПИСЬ",
+    limits: "ГРАНИЦЫ Xor-ФИЛЬТРА",
+    stats: "ТЕСТ · ДЕСЯТЬ МИЛЛИОНОВ КЛЮЧЕЙ",
+  };
+  const header = (
+    <div
+      style={{
+        position: "absolute",
+        left: W / 2,
+        top: 245,
+        transform: "translateX(-50%)",
+        display: "flex",
+        alignItems: "center",
+        gap: 12,
+        color: theme.subtext,
+        fontSize: 25,
+        whiteSpace: "nowrap",
+        opacity: enter,
+        ...mono,
+      }}
+    >
+      <IconGlyph name="layers" size={30} color={theme.accent2} strokeWidth={1.8} />
+      <span>{phaseTitle[phase]}</span>
+    </div>
+  );
+  const panel = (color: string): React.CSSProperties => ({
+    borderRadius: 24,
+    background: `${theme.panel}E8`,
+    border: `3px solid ${color}66`,
+    boxShadow: `0 0 42px ${color}20`,
+  });
+
+  if (phase === "scale") {
+    const packP = smooth(clamp01((local - 8) / 24));
+    return (
+      <>
+        {header}
+        <div
+          style={{
+            position: "absolute",
+            left: W / 2,
+            top: 390,
+            transform: `translateX(-50%) scale(${0.82 + enter * 0.18})`,
+            textAlign: "center",
+            opacity: enter,
+          }}
+        >
+          <div style={{ fontFamily: theme.mono, fontSize: 102, fontWeight: 800, color: theme.accent, textShadow: `0 0 35px ${theme.accent}66` }}>
+            10 000 000
+          </div>
+          <div style={{ ...mono, marginTop: 16, fontSize: 30, color: theme.text }}>КЛЮЧЕЙ</div>
+        </div>
+        <div
+          style={{
+            position: "absolute",
+            left: W / 2,
+            top: 650,
+            transform: "translateX(-50%)",
+            ...mono,
+            fontSize: 28,
+            color: theme.subtext,
+            opacity: enter,
+          }}
+        >
+          КЛЮЧИ  →  БИТОВАЯ ТАБЛИЦА
+        </div>
+        <div
+          style={{
+            position: "absolute",
+            left: 106,
+            top: 735,
+            width: 868,
+            height: 100,
+            display: "flex",
+            gap: 8,
+            alignItems: "center",
+            justifyContent: "center",
+            opacity: enter,
+          }}
+        >
+          {Array.from({ length: 18 }).map((_, i) => {
+            const cellP = smooth(clamp01((packP - i * 0.025) / 0.72));
+            const color = i % 3 === 0 ? theme.accent2 : theme.accent;
+            return (
+              <div
+                key={i}
+                style={{
+                  width: 40,
+                  height: 82,
+                  borderRadius: 12,
+                  border: `3px solid ${color}${cellP > 0.5 ? "CC" : "55"}`,
+                  background: `${color}${cellP > 0.5 ? "26" : "0A"}`,
+                  color: cellP > 0.5 ? color : theme.subtext,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontFamily: theme.mono,
+                  fontSize: 22,
+                  opacity: 0.35 + cellP * 0.65,
+                  transform: `translateY(${(1 - cellP) * 35}px) scale(${0.82 + cellP * 0.18})`,
+                  boxShadow: cellP > 0.5 ? `0 0 22px ${color}44` : "none",
+                }}
+              >
+                {i % 2}
+              </div>
+            );
+          })}
+        </div>
+        <div
+          style={{
+            position: "absolute",
+            left: W / 2,
+            top: 930,
+            transform: "translateX(-50%)",
+            padding: "20px 40px",
+            borderRadius: 999,
+            background: `${theme.success}18`,
+            border: `3px solid ${theme.success}99`,
+            color: theme.success,
+            fontFamily: theme.font,
+            fontSize: 44,
+            fontWeight: 800,
+            whiteSpace: "nowrap",
+            opacity: enter * (0.35 + packP * 0.65),
+            boxShadow: `0 0 40px ${theme.success}33`,
+          }}
+        >
+          9,8 БИТА / КЛЮЧ
+        </div>
+      </>
+    );
+  }
+
+  if (phase === "probe") {
+    const columns = [
+      { part: "ДОЛЯ 0", hash: "h0", index: "12", value: "A7", color: theme.accent },
+      { part: "ДОЛЯ 1", hash: "h1", index: "04", value: "3C", color: theme.accent2 },
+      { part: "ДОЛЯ 2", hash: "h2", index: "27", value: "D1", color: theme.success },
+    ];
+    return (
+      <>
+        {header}
+        <div
+          style={{
+            position: "absolute",
+            left: W / 2 - 155,
+            top: 345,
+            width: 310,
+            height: 82,
+            borderRadius: 22,
+            background: theme.panel,
+            border: `3px solid ${theme.warning}99`,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 14,
+            color: theme.text,
+            fontFamily: theme.font,
+            fontSize: 30,
+            fontWeight: 800,
+            opacity: enter,
+            boxShadow: `0 0 38px ${theme.warning}22`,
+          }}
+        >
+          <IconGlyph name="search" size={30} color={theme.warning} strokeWidth={1.8} />
+          QUERY
+        </div>
+        <div
+          style={{
+            position: "absolute",
+            left: 52,
+            right: 52,
+            top: 560,
+            display: "flex",
+            justifyContent: "space-between",
+            gap: 24,
+          }}
+        >
+          {columns.map((column, i) => {
+            const colP = spring({ frame: Math.max(0, local - i * 7), fps, config: { damping: 14, mass: 0.75 } });
+            return (
+              <div
+                key={column.part}
+                style={{
+                  width: 300,
+                  height: 565,
+                  ...panel(column.color),
+                  opacity: enter * colP,
+                  transform: `translateY(${(1 - colP) * 45}px)`,
+                }}
+              >
+                <div style={{ ...mono, textAlign: "center", marginTop: 34, fontSize: 25, color: column.color }}>{column.part}</div>
+                <div
+                  style={{
+                    margin: "50px auto 0",
+                    width: 188,
+                    height: 78,
+                    borderRadius: 18,
+                    border: `2px solid ${column.color}99`,
+                    background: `${column.color}18`,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 10,
+                    color: theme.text,
+                    fontFamily: theme.mono,
+                    fontSize: 31,
+                    fontWeight: 800,
+                  }}
+                >
+                  <IconGlyph name="hash" size={28} color={column.color} strokeWidth={1.8} />
+                  {column.hash}
+                </div>
+                <div style={{ textAlign: "center", color: column.color, fontSize: 42, marginTop: 26, opacity: colP }}>↓</div>
+                <div
+                  style={{
+                    margin: "18px auto 0",
+                    width: 214,
+                    height: 150,
+                    borderRadius: 22,
+                    border: `4px solid ${column.color}`,
+                    background: `${column.color}20`,
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 8,
+                    color: theme.text,
+                    boxShadow: `0 0 ${20 + colP * 28}px ${column.color}44`,
+                  }}
+                >
+                  <div style={{ ...mono, fontSize: 22, color: theme.subtext }}>ЯЧЕЙКА {column.index}</div>
+                  <div style={{ fontFamily: theme.mono, fontSize: 52, fontWeight: 800, color: column.color }}>{column.value}</div>
+                </div>
+                <div style={{ textAlign: "center", marginTop: 28, color: theme.subtext, fontFamily: theme.mono, fontSize: 19 }}>ОДНО ЧТЕНИЕ</div>
+              </div>
+            );
+          })}
+        </div>
+        <div
+          style={{
+            position: "absolute",
+            left: W / 2,
+            top: 1190,
+            transform: "translateX(-50%)",
+            padding: "16px 34px",
+            borderRadius: 999,
+            background: `${theme.accent}16`,
+            border: `2px solid ${theme.accent}88`,
+            color: theme.accent,
+            ...mono,
+            fontSize: 26,
+            whiteSpace: "nowrap",
+            opacity: enter,
+          }}
+        >
+          h0 + h1 + h2  →  3 ЧТЕНИЯ
+        </div>
+        <PulseRing x={W / 2} y={955} triggerFrame={impactLocal} tone="accent" size={180} />
+      </>
+    );
+  }
+
+  if (phase === "verify") {
+    const values = [
+      { hash: "h0", value: "A7", color: theme.accent },
+      { hash: "h1", value: "3C", color: theme.accent2 },
+      { hash: "h2", value: "D1", color: theme.success },
+    ];
+    return (
+      <>
+        {header}
+        <div style={{ position: "absolute", left: 92, right: 92, top: 470, display: "flex", justifyContent: "space-between", gap: 26, opacity: enter }}>
+          {values.map((item) => (
+            <div key={item.hash} style={{ width: 250, height: 145, ...panel(item.color), display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12 }}>
+              <div style={{ ...mono, fontSize: 22, color: item.color }}>{item.hash}</div>
+              <div style={{ fontFamily: theme.mono, fontSize: 48, fontWeight: 800, color: theme.text }}>{item.value}</div>
+            </div>
+          ))}
+        </div>
+        <div
+          style={{
+            position: "absolute",
+            left: W / 2,
+            top: 735,
+            transform: `translateX(-50%) scale(${0.7 + reveal * 0.3})`,
+            padding: "26px 46px",
+            borderRadius: 26,
+            background: `${theme.accent2}18`,
+            border: `3px solid ${theme.accent2}AA`,
+            color: theme.text,
+            fontFamily: theme.mono,
+            fontSize: 48,
+            fontWeight: 800,
+            whiteSpace: "nowrap",
+            opacity: enter * reveal,
+            boxShadow: `0 0 44px ${theme.accent2}33`,
+          }}
+        >
+          A7  ⊕  3C  ⊕  D1  =  4A
+        </div>
+        <div
+          style={{
+            position: "absolute",
+            left: W / 2 - 285,
+            top: 995,
+            width: 570,
+            height: 132,
+            borderRadius: 24,
+            background: `${theme.warning}14`,
+            border: `3px solid ${theme.warning}99`,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 14,
+            color: theme.warning,
+            fontFamily: theme.mono,
+            fontSize: 29,
+            fontWeight: 800,
+            opacity: enter * reveal,
+          }}
+        >
+          <IconGlyph name="fingerprint-pattern" size={42} color={theme.warning} strokeWidth={1.8} />
+          FINGERPRINT  4A
+        </div>
+        <div
+          style={{
+            position: "absolute",
+            left: W / 2,
+            top: 1185,
+            transform: `translateX(-50%) scale(${0.7 + reveal * 0.3})`,
+            padding: "14px 30px",
+            borderRadius: 999,
+            background: `${theme.success}18`,
+            border: `2px solid ${theme.success}`,
+            color: theme.success,
+            fontFamily: theme.font,
+            fontSize: 30,
+            fontWeight: 800,
+            opacity: enter * reveal,
+            whiteSpace: "nowrap",
+          }}
+        >
+          XOR = FINGERPRINT  ✓
+        </div>
+        <PulseRing x={W / 2} y={815} triggerFrame={impactLocal} tone="success" size={190} />
+      </>
+    );
+  }
+
+  if (phase === "peel") {
+    const partX = [150, 470, 790];
+    const rowYs = [120, 300, 480];
+    const peelP = smooth(clamp01((local - impactLocal) / 18));
+    return (
+      <>
+        {header}
+        <div style={{ position: "absolute", left: 70, top: 395, width: 940, display: "flex", justifyContent: "space-around", ...mono, fontSize: 23, color: theme.subtext, opacity: enter }}>
+          <span>ДОЛЯ 0</span><span>ДОЛЯ 1</span><span>ДОЛЯ 2</span>
+        </div>
+        <div style={{ position: "absolute", left: 70, top: 430, width: 940, height: 620, opacity: enter }}>
+          <svg width="940" height="620" viewBox="0 0 940 620" style={{ position: "absolute", inset: 0, overflow: "visible" }}>
+            {rowYs.map((y, row) => {
+              const color = row === 0 ? theme.warning : row === 1 ? theme.accent2 : theme.accent;
+              const rowOpacity = row === 0 ? 1 - peelP * 0.78 : 0.72;
+              return (
+                <g key={row} opacity={rowOpacity}>
+                  <path d={`M ${partX[0]} ${y} Q ${partX[1]} ${y - 62} ${partX[2]} ${y}`} fill="none" stroke={color} strokeWidth="7" strokeLinecap="round" opacity="0.75" />
+                  <path d={`M ${partX[0]} ${y} L ${partX[2]} ${y}`} fill="none" stroke={color} strokeWidth="2" strokeDasharray="10 14" opacity="0.85" />
+                </g>
+              );
+            })}
+          </svg>
+          {rowYs.map((y, row) =>
+            partX.map((x, part) => {
+              const color = part === 0 ? theme.accent : part === 1 ? theme.accent2 : theme.success;
+              const singleton = row === 0 && part === 0;
+              return (
+                <div
+                  key={`${row}-${part}`}
+                  style={{
+                    position: "absolute",
+                    left: x,
+                    top: y,
+                    width: 94,
+                    height: 94,
+                    borderRadius: "50%",
+                    transform: `translate(-50%, -50%) translateX(${singleton ? -peelP * 75 : 0}px) scale(${singleton ? 1 + peelP * 0.12 : 1})`,
+                    border: `4px solid ${singleton ? theme.warning : color}`,
+                    background: `${singleton ? theme.warning : color}22`,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: singleton ? theme.warning : theme.text,
+                    fontFamily: theme.mono,
+                    fontSize: 30,
+                    fontWeight: 800,
+                    opacity: enter * (singleton ? 1 - peelP * 0.35 : 1),
+                    boxShadow: singleton ? `0 0 ${25 + peelP * 25}px ${theme.warning}66` : `0 0 20px ${color}24`,
+                  }}
+                >
+                  v{row}{part}
+                </div>
+              );
+            })
+          )}
+        </div>
+        <div
+          style={{
+            position: "absolute",
+            left: 80,
+            top: 1100,
+            width: 920,
+            textAlign: "center",
+            color: theme.warning,
+            ...mono,
+            fontSize: 28,
+            opacity: enter * (0.35 + peelP * 0.65),
+          }}
+        >
+          ВЕРШИНА С ОДНИМ КЛЮЧОМ  →  СНЯТЬ
+        </div>
+        <PulseRing x={70 + partX[0]} y={430 + rowYs[0]} triggerFrame={impactLocal} tone="warning" size={150} />
+      </>
+    );
+  }
+
+  if (phase === "stack") {
+    const stackP = spring({ frame: Math.max(0, local - impactLocal), fps, config: { damping: 13, mass: 0.8 } });
+    const order = ["K₃", "K₁", "K₂"];
+    return (
+      <>
+        {header}
+        <div style={{ position: "absolute", left: 105, top: 470, width: 350, height: 540, ...panel(theme.warning), opacity: enter }}>
+          <div style={{ ...mono, textAlign: "center", marginTop: 36, color: theme.warning, fontSize: 24 }}>СНЯТЫЕ КЛЮЧИ</div>
+          <div style={{ position: "absolute", left: 56, right: 56, top: 120, display: "flex", flexDirection: "column", gap: 22 }}>
+            {order.map((key, i) => (
+              <div key={key} style={{ height: 76, borderRadius: 18, background: `${theme.warning}16`, border: `2px solid ${theme.warning}88`, display: "flex", alignItems: "center", justifyContent: "center", color: theme.warning, fontFamily: theme.mono, fontSize: 34, fontWeight: 800, opacity: enter, transform: `translateY(${(1 - stackP) * (i + 1) * 18}px)` }}>
+                {key}
+              </div>
+            ))}
+          </div>
+        </div>
+        <div style={{ position: "absolute", left: 474, top: 690, color: theme.accent2, fontFamily: theme.mono, fontSize: 56, fontWeight: 800, opacity: enter * stackP }}>→</div>
+        <div style={{ position: "absolute", left: 632, top: 430, width: 340, height: 620, borderRadius: 28, border: `4px solid ${theme.accent2}99`, background: `${theme.accent2}0E`, opacity: enter, boxShadow: `0 0 50px ${theme.accent2}24` }}>
+          <div style={{ ...mono, textAlign: "center", marginTop: 34, color: theme.accent2, fontSize: 30 }}>STACK</div>
+          <div style={{ position: "absolute", left: 48, right: 48, bottom: 48, display: "flex", flexDirection: "column-reverse", gap: 14 }}>
+            {order.map((key, i) => (
+              <div key={key} style={{ height: 78, borderRadius: 18, background: `${theme.accent2}22`, border: `3px solid ${theme.accent2}`, display: "flex", alignItems: "center", justifyContent: "center", color: theme.text, fontFamily: theme.mono, fontSize: 35, fontWeight: 800, opacity: enter * stackP, transform: `translateY(${(1 - stackP) * 45}px)` }}>
+                {key}
+              </div>
+            ))}
+          </div>
+        </div>
+        <div style={{ position: "absolute", left: W / 2, top: 1130, transform: "translateX(-50%)", color: theme.text, ...mono, fontSize: 26, opacity: enter * stackP, whiteSpace: "nowrap" }}>ПОРЯДОК СОХРАНЁН В СТЕКЕ</div>
+        <PulseRing x={802} y={840} triggerFrame={impactLocal} tone="accent2" size={160} />
+      </>
+    );
+  }
+
+  if (phase === "reverse") {
+    const reverseP = spring({ frame: Math.max(0, local - impactLocal), fps, config: { damping: 13, mass: 0.8 } });
+    const stackKeys = ["K₃", "K₁", "K₂"];
+    const forwardKeys = ["K₂", "K₁", "K₃"];
+    return (
+      <>
+        {header}
+        <div style={{ position: "absolute", left: 104, top: 470, width: 310, height: 530, borderRadius: 26, border: `3px solid ${theme.accent2}88`, background: `${theme.accent2}12`, opacity: enter }}>
+          <div style={{ ...mono, textAlign: "center", marginTop: 32, color: theme.accent2, fontSize: 26 }}>STACK</div>
+          <div style={{ position: "absolute", left: 50, right: 50, bottom: 42, display: "flex", flexDirection: "column", gap: 14 }}>
+            {stackKeys.map((key) => <div key={key} style={{ height: 74, borderRadius: 16, background: `${theme.accent2}20`, border: `2px solid ${theme.accent2}`, display: "flex", alignItems: "center", justifyContent: "center", color: theme.text, fontFamily: theme.mono, fontSize: 34, fontWeight: 800 }}>{key}</div>)}
+          </div>
+        </div>
+        <div style={{ position: "absolute", left: 450, top: 675, display: "flex", flexDirection: "column", alignItems: "center", gap: 14, color: theme.warning, opacity: enter * reverseP }}>
+          <IconGlyph name="refresh-cw" size={62} color={theme.warning} strokeWidth={1.8} />
+          <span style={{ ...mono, fontSize: 22 }}>REVERSE</span>
+        </div>
+        <div style={{ position: "absolute", left: 650, top: 610, width: 350, height: 220, ...panel(theme.success), opacity: enter * reverseP, transform: `translateX(${(1 - reverseP) * 80}px)` }}>
+          <div style={{ ...mono, textAlign: "center", marginTop: 30, color: theme.success, fontSize: 24 }}>ОБРАТНО</div>
+          <div style={{ margin: "44px 24px 0", display: "flex", justifyContent: "space-between", color: theme.text, fontFamily: theme.mono, fontSize: 34, fontWeight: 800 }}>{forwardKeys.map((key) => <span key={key}>{key}</span>)}</div>
+        </div>
+        <div style={{ position: "absolute", left: W / 2, top: 1110, transform: "translateX(-50%)", color: theme.success, ...mono, fontSize: 29, opacity: enter * reverseP, whiteSpace: "nowrap" }}>СНАЧАЛА ПОСЛЕДНИЙ СНЯТЫЙ КЛЮЧ</div>
+        <PulseRing x={805} y={720} triggerFrame={impactLocal} tone="success" size={150} />
+      </>
+    );
+  }
+
+  if (phase === "assign") {
+    const assignedP = spring({ frame: Math.max(0, local - impactLocal), fps, config: { damping: 12, mass: 0.7 } });
+    const columns = [
+      { label: "ДОЛЯ 0", fixed: "A7", color: theme.accent },
+      { label: "ДОЛЯ 1", fixed: "D1", color: theme.accent2 },
+      { label: "ДОЛЯ 2", fixed: "3C", color: theme.success },
+    ];
+    return (
+      <>
+        {header}
+        <div style={{ position: "absolute", left: W / 2 - 136, top: 350, width: 272, height: 78, borderRadius: 20, background: `${theme.warning}16`, border: `3px solid ${theme.warning}99`, display: "flex", alignItems: "center", justifyContent: "center", gap: 12, color: theme.warning, fontFamily: theme.mono, fontSize: 31, fontWeight: 800, opacity: enter }}>
+          K₁  →  СВОБОДНАЯ
+        </div>
+        <div style={{ position: "absolute", left: 48, right: 48, top: 500, display: "flex", justifyContent: "space-between", gap: 24 }}>
+          {columns.map((column, i) => (
+            <div key={column.label} style={{ width: 300, height: 270, ...panel(column.color), opacity: enter }}>
+              <div style={{ ...mono, textAlign: "center", marginTop: 28, color: column.color, fontSize: 23 }}>{column.label}</div>
+              <div style={{ margin: "38px auto 0", width: 206, height: 92, borderRadius: 18, border: `3px solid ${i === 1 ? theme.warning : column.color}`, background: `${i === 1 ? theme.warning : column.color}18`, display: "flex", alignItems: "center", justifyContent: "center", color: i === 1 ? theme.warning : theme.text, fontFamily: theme.mono, fontSize: 40, fontWeight: 800, boxShadow: i === 1 ? `0 0 ${30 + assignedP * 24}px ${theme.warning}66` : "none" }}>
+                {i === 1 ? (assignedP > 0.48 ? "D1" : "··") : column.fixed}
+              </div>
+              <div style={{ textAlign: "center", marginTop: 23, color: i === 1 ? theme.warning : theme.subtext, fontFamily: theme.mono, fontSize: 20 }}>{i === 1 ? "ЦЕЛЕВАЯ" : "ЗАНЯТА"}</div>
+            </div>
+          ))}
+        </div>
+        <div style={{ position: "absolute", left: W / 2, top: 900, transform: `translateX(-50%) scale(${0.82 + assignedP * 0.18})`, padding: "26px 42px", borderRadius: 24, background: `${theme.accent2}18`, border: `3px solid ${theme.accent2}99`, color: theme.text, fontFamily: theme.mono, fontSize: 39, fontWeight: 800, whiteSpace: "nowrap", opacity: enter * (0.3 + assignedP * 0.7) }}>
+          A7  ⊕  {assignedP > 0.48 ? "D1" : "??"}  ⊕  3C  =  4A
+        </div>
+        <div style={{ position: "absolute", left: W / 2, top: 1075, transform: "translateX(-50%)", color: theme.accent2, ...mono, fontSize: 27, opacity: enter * assignedP, whiteSpace: "nowrap" }}>ЗНАЧЕНИЕ ВЫБРАНО ПОД НУЖНЫЙ FINGERPRINT</div>
+        <PulseRing x={540} y={685} triggerFrame={impactLocal} tone="warning" size={155} />
+      </>
+    );
+  }
+
+  if (phase === "write-once") {
+    const writeP = spring({ frame: Math.max(0, local - impactLocal), fps, config: { damping: 12, mass: 0.75 } });
+    const cells = [
+      { id: "A₁", color: theme.accent },
+      { id: "B₄", color: theme.accent2 },
+      { id: "C₇", color: theme.success },
+    ];
+    return (
+      <>
+        {header}
+        <div style={{ position: "absolute", left: 72, right: 72, top: 510, display: "flex", justifyContent: "space-between", gap: 24 }}>
+          {cells.map((cell, i) => (
+            <div key={cell.id} style={{ width: 286, height: 330, ...panel(cell.color), opacity: enter, transform: `translateY(${(1 - writeP) * 35}px)` }}>
+              <div style={{ ...mono, textAlign: "center", marginTop: 31, color: cell.color, fontSize: 28 }}>{cell.id}</div>
+              <div style={{ margin: "40px auto 0", width: 160, height: 105, borderRadius: 18, border: `4px solid ${cell.color}`, background: `${cell.color}20`, display: "flex", alignItems: "center", justifyContent: "center", color: cell.color, fontFamily: theme.mono, fontSize: 48, fontWeight: 800, boxShadow: `0 0 ${25 + writeP * 25}px ${cell.color}44` }}>1×</div>
+              <div style={{ textAlign: "center", marginTop: 28, color: theme.subtext, ...mono, fontSize: 20 }}>МЕНЯЕТСЯ</div>
+            </div>
+          ))}
+        </div>
+        <div style={{ position: "absolute", left: W / 2, top: 995, transform: `translateX(-50%) scale(${0.8 + writeP * 0.2})`, padding: "18px 34px", borderRadius: 999, background: `${theme.success}18`, border: `3px solid ${theme.success}`, color: theme.success, fontFamily: theme.font, fontSize: 32, fontWeight: 800, opacity: enter * writeP, whiteSpace: "nowrap" }}>КАЖДАЯ ЯЧЕЙКА  →  РОВНО ОДИН РАЗ</div>
+        <PulseRing x={W / 2} y={750} triggerFrame={impactLocal} tone="success" size={170} />
+      </>
+    );
+  }
+
+  if (phase === "limits") {
+    const limitP = spring({ frame: Math.max(0, local - impactLocal), fps, config: { damping: 13, mass: 0.8 } });
+    return (
+      <>
+        {header}
+        <div style={{ position: "absolute", left: W / 2 - 210, top: 350, width: 420, height: 82, borderRadius: 999, background: `${theme.accent2}18`, border: `3px solid ${theme.accent2}`, display: "flex", alignItems: "center", justifyContent: "center", gap: 13, color: theme.accent2, fontFamily: theme.mono, fontSize: 30, fontWeight: 800, opacity: enter }}>
+          <IconGlyph name="lock-keyhole" size={32} color={theme.accent2} strokeWidth={1.8} />
+          IMMUTABLE
+        </div>
+        <div style={{ position: "absolute", left: 76, top: 520, width: 420, height: 480, ...panel(theme.success), opacity: enter }}>
+          <div style={{ ...mono, textAlign: "center", marginTop: 35, color: theme.success, fontSize: 25 }}>KEY ∈ SET</div>
+          <div style={{ margin: "58px auto 0", width: 180, height: 105, borderRadius: 20, background: `${theme.success}18`, border: `3px solid ${theme.success}`, display: "flex", alignItems: "center", justifyContent: "center", color: theme.success, fontFamily: theme.mono, fontSize: 34, fontWeight: 800 }}>XOR = FP</div>
+          <div style={{ textAlign: "center", marginTop: 40, color: theme.success, fontFamily: theme.font, fontSize: 31, fontWeight: 800 }}>NO FALSE NEGATIVE</div>
+          <div style={{ textAlign: "center", marginTop: 14, color: theme.subtext, fontFamily: theme.mono, fontSize: 20 }}>ключ множества</div>
+        </div>
+        <div style={{ position: "absolute", right: 76, top: 520, width: 420, height: 480, ...panel(theme.warning), opacity: enter }}>
+          <div style={{ ...mono, textAlign: "center", marginTop: 35, color: theme.warning, fontSize: 25 }}>FOREIGN KEY</div>
+          <div style={{ margin: "58px auto 0", width: 240, height: 105, borderRadius: 20, background: `${theme.warning}18`, border: `3px solid ${theme.warning}`, display: "flex", alignItems: "center", justifyContent: "center", color: theme.warning, fontFamily: theme.mono, fontSize: 32, fontWeight: 800, transform: `scale(${0.85 + limitP * 0.15})` }}>XOR = FP?</div>
+          <div style={{ textAlign: "center", marginTop: 40, color: theme.warning, fontFamily: theme.font, fontSize: 30, fontWeight: 800 }}>FALSE POSITIVE</div>
+          <div style={{ textAlign: "center", marginTop: 14, color: theme.subtext, fontFamily: theme.mono, fontSize: 20 }}>совпадение возможно</div>
+        </div>
+        <div style={{ position: "absolute", left: W / 2, top: 1080, transform: "translateX(-50%)", color: theme.accent2, ...mono, fontSize: 26, opacity: enter * (0.35 + limitP * 0.65), whiteSpace: "nowrap" }}>UPDATE  →  REBUILD</div>
+        <PulseRing x={790} y={760} triggerFrame={impactLocal} tone="warning" size={160} />
+      </>
+    );
+  }
+
+  if (phase === "stats") {
+    const statP = spring({ frame: Math.max(0, local - impactLocal), fps, config: { damping: 13, mass: 0.8 } });
+    return (
+      <>
+        {header}
+        <div style={{ position: "absolute", left: W / 2 - 330, top: 385, width: 660, height: 220, ...panel(theme.accent), textAlign: "center", opacity: enter, transform: `scale(${0.88 + statP * 0.12})` }}>
+          <div style={{ marginTop: 35, color: theme.accent, fontFamily: theme.mono, fontSize: 86, fontWeight: 800, textShadow: `0 0 32px ${theme.accent}55` }}>10 000 000</div>
+          <div style={{ ...mono, marginTop: 12, color: theme.text, fontSize: 25 }}>КЛЮЧЕЙ В ТЕСТЕ</div>
+        </div>
+        <div style={{ position: "absolute", left: 86, top: 745, width: 410, height: 230, ...panel(theme.accent2), textAlign: "center", opacity: enter * statP, transform: `translateY(${(1 - statP) * 35}px)` }}>
+          <div style={{ marginTop: 50, color: theme.accent2, fontFamily: theme.mono, fontSize: 49, fontWeight: 800 }}>9,8</div>
+          <div style={{ ...mono, marginTop: 18, color: theme.text, fontSize: 24 }}>BITS / KEY</div>
+        </div>
+        <div style={{ position: "absolute", right: 86, top: 745, width: 410, height: 230, ...panel(theme.warning), textAlign: "center", opacity: enter * statP, transform: `translateY(${(1 - statP) * 35}px)` }}>
+          <div style={{ marginTop: 50, color: theme.warning, fontFamily: theme.mono, fontSize: 49, fontWeight: 800 }}>0,389%</div>
+          <div style={{ ...mono, marginTop: 18, color: theme.text, fontSize: 24 }}>FPP</div>
+        </div>
+        <div style={{ position: "absolute", left: W / 2, top: 1085, transform: "translateX(-50%)", color: theme.subtext, ...mono, fontSize: 24, opacity: enter * statP, whiteSpace: "nowrap" }}>ВОСЬМИБИТНЫЙ ВАРИАНТ</div>
+        <PulseRing x={W / 2} y={500} triggerFrame={impactLocal} tone="accent" size={190} />
+      </>
+    );
+  }
+
+  return null;
+};
 
 /** Браузер + рука-курсор, кликающая по ссылке. */
 const BrowserClick: React.FC<{ local: number; dur: number; impactLocal: number; fps: number; url?: string }> = ({
@@ -8051,6 +8688,7 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     "hll-estimate": { scale: 0.92, y: -20 },
     "bloom-bitarray": { scale: 0.88, y: -30 },
     "bloom-probe": { scale: 0.88, y: -20 },
+    "xor-filter": { scale: 0.86, y: -25 },
     "coin-pair": { scale: 0.96, y: -10 },
     "bit-extractor": { scale: 0.92, y: -20 },
     "debruijn-cycle": { scale: 0.92, y: -20 },
@@ -8281,6 +8919,15 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             probeBits={slot.beat.params?.probeBits as number[] | undefined}
             result={(slot.beat.params?.result as "maybe" | "no" | undefined) ?? "no"}
             fileName={slot.beat.params?.fileName as string | undefined}
+          />
+        );
+      case "xor-filter":
+        return (
+          <XorFilterVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as XorFilterPhase | undefined) ?? "probe"}
           />
         );
       case "coin-pair":
