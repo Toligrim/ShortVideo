@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "slug": "auto-20260826-182501",
+  "targets": {
+    "youtube": {
+      "title": "Иксор-фильтр: три чтения, компактнее Блума",
+      "description": "Как иксор-фильтр проверяет ключ тремя чтениями и почему в тесте на десяти миллионах ключей занимает 9,8 бита на ключ.",
+      "tags": [
+        "иксор-фильтр",
+        "Xor filter",
+        "фильтры принадлежности",
+        "структуры данных",
+        "хеширование",
+        "алгоритмы",
+        "информатика",
+        "shorts"
+      ],
+      "category_id": "28",
+      "privacy_status": "public",
+      "made_for_kids": false,
+      "contains_synthetic_media": true,
+      "notify_subscribers": false
+    },
+    "instagram": {
+      "caption": "Иксор-фильтр: три чтения и 9,8 бита на ключ. Компактность без false negative. #алгоритмы #информатика #shortvideo",
+      "share_to_feed": true
+    }
+  }
+}
