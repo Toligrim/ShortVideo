@@ -131,7 +131,8 @@ export interface StoryBeat {
       | "trie-growth"
       | "suffix-automaton"
       | "bwt-matrix"
-      | "bwt-invert";
+      | "bwt-invert"
+      | "quic-migration";
   onWord?: string; // бит начинается на этом слове реплики
   params?: Record<string, unknown>;
 }

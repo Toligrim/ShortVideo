@@ -179,6 +179,7 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
       const phase = beat.params?.phase;
       impact = start + Math.round(dur * (phase === "runs" ? 0.72 : 0.62));
     }
+    if (beat.visual === "quic-migration") impact = start + Math.round(dur * 0.62);
     return { beat, start, end, impact };
   });
 };
@@ -346,6 +347,10 @@ export const storySfx = (
     if (s.beat.visual === "bwt-invert") {
       const ph = s.beat.params?.phase;
       events.push({ frame: s.impact, sound: ph === "runs" ? "ding" : "pop" });
+    }
+    if (s.beat.visual === "quic-migration") {
+      const ph = s.beat.params?.phase;
+      events.push({ frame: s.impact, sound: ph === "validate" ? "ding" : ph === "migrate" ? "pop" : "click" });
     }
   }
   return events;
@@ -7637,6 +7642,345 @@ const ShuffleDeckVisual: React.FC<{
   );
 };
 
+/** QUIC connection migration: старый Wi-Fi-путь, новый мобильный путь, тот же CID и проверка пути. */
+export type QuicMigrationPhase = "wifi" | "migrate" | "validate";
+
+export const QuicMigrationVisual: React.FC<{
+  local: number;
+  fps: number;
+  impactLocal: number;
+  phase?: QuicMigrationPhase;
+}> = ({ local, fps, impactLocal, phase = "migrate" }) => {
+  const enter = spring({ frame: local, fps, config: { damping: 15, mass: 0.8 } });
+  const hit = local >= impactLocal;
+  const pop = hit ? spring({ frame: local - impactLocal, fps, config: { damping: 11, mass: 0.7 } }) : 0;
+  const cx = W / 2;
+  const phoneX = 210;
+  const serverX = 870;
+  const phoneY = 820;
+  const serverY = 820;
+  const wifiY = 680;
+  const mobileY = 960;
+  const pathLeft = 340;
+  const pathRight = 740;
+  const pathW = pathRight - pathLeft;
+  // IP transition
+  const ipSwitch = phase === "migrate" || phase === "validate" ? 1 : 0;
+  const oldOpacity = phase === "wifi" ? 1 : phase === "migrate" ? 0.35 : 0.32;
+  const newOpacity = phase === "wifi" ? 0.32 : 1;
+  const oldColor = phase === "wifi" ? theme.accent : theme.danger;
+  const newColor = theme.success;
+  const challengeP = hit && phase === "validate" ? clamp01((local - impactLocal) / 18) : 0;
+  const responseP = hit && phase === "validate" ? clamp01((local - impactLocal - 12) / 18) : 0;
+  const challengeX = interpolate(challengeP, [0, 1], [pathRight - 20, pathLeft + 20]);
+  const responseX = interpolate(responseP, [0, 1], [pathLeft + 20, pathRight - 20]);
+  return (
+    <>
+      <div
+        style={{
+          position: "absolute",
+          left: cx,
+          top: 300,
+          transform: "translateX(-50%)",
+          fontFamily: theme.mono,
+          fontSize: 26,
+          letterSpacing: 3,
+          color: theme.subtext,
+          opacity: enter,
+          textAlign: "center",
+        }}
+      >
+        {phase === "wifi" ? "СТАРАЯ СЕТЬ · ОДИН ИДЕНТИФИКАТОР" : phase === "migrate" ? "СМЕНА СЕТИ · ТОТ ЖЕ CID" : "ПРОВЕРКА ПУТИ · ТЫ ЛИ ЭТО"}
+      </div>
+      {/* CID badge center top */}
+      <div
+        style={{
+          position: "absolute",
+          left: cx,
+          top: 380,
+          transform: `translateX(-50%) scale(${0.92 + 0.08 * enter})`,
+          padding: "14px 28px",
+          borderRadius: 18,
+          background: `${theme.accent}18`,
+          border: `3px solid ${theme.accent}`,
+          boxShadow: `0 0 28px ${theme.accent}33`,
+          opacity: enter,
+          display: "flex",
+          alignItems: "center",
+          gap: 12,
+        }}
+      >
+        <IconGlyph name="fingerprint-pattern" size={34} color={theme.accent} strokeWidth={1.8} />
+        <span style={{ fontFamily: theme.mono, fontSize: 30, fontWeight: 800, color: theme.text }}>CID 7A·3F</span>
+        <span style={{ fontFamily: theme.mono, fontSize: 18, color: theme.accent }}>SAME</span>
+      </div>
+      <div
+        style={{
+          position: "absolute",
+          left: cx,
+          top: 455,
+          transform: "translateX(-50%)",
+          fontFamily: theme.font,
+          fontSize: 22,
+          color: theme.subtext,
+          opacity: enter * 0.9,
+        }}
+      >
+        не зависит от IP и порта
+      </div>
+      {/* Phone */}
+      <div
+        style={{
+          position: "absolute",
+          left: phoneX - 110,
+          top: phoneY - 110,
+          width: 220,
+          height: 220,
+          borderRadius: 28,
+          background: theme.panel,
+          border: `3px solid ${ipSwitch ? theme.success : theme.accent}99`,
+          boxShadow: `0 0 40px ${ipSwitch ? theme.success : theme.accent}22`,
+          opacity: enter,
+          transform: `translateY(${(1 - enter) * 40}px) scale(${1 + 0.02 * Math.sin(local / 9)})`,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 8,
+        }}
+      >
+        <IconGlyph name="smartphone" size={56} color={ipSwitch ? theme.success : theme.accent} strokeWidth={1.7} />
+        <div style={{ fontFamily: theme.font, fontWeight: 800, fontSize: 28, color: theme.text }}>Телефон</div>
+        <div
+          style={{
+            padding: "4px 10px",
+            borderRadius: 999,
+            background: `${ipSwitch ? theme.success : theme.accent}18`,
+            border: `2px solid ${ipSwitch ? theme.success : theme.accent}88`,
+            fontFamily: theme.mono,
+            fontSize: 16,
+            fontWeight: 800,
+            color: ipSwitch ? theme.success : theme.accent,
+          }}
+        >
+          {ipSwitch ? "37.214.5.9" : "192.168.1.5"}
+        </div>
+      </div>
+      {/* IP switch arrow */}
+      {phase !== "wifi" ? (
+        <div
+          style={{
+            position: "absolute",
+            left: phoneX + 100,
+            top: phoneY + 55,
+            fontFamily: theme.mono,
+            fontSize: 16,
+            color: theme.success,
+            opacity: enter * 0.9,
+            display: "flex",
+            alignItems: "center",
+            gap: 4,
+          }}
+        >
+          <span style={{ fontSize: 18 }}>→</span> новый адрес
+        </div>
+      ) : null}
+      {/* Server */}
+      <div
+        style={{
+          position: "absolute",
+          left: serverX - 110,
+          top: serverY - 110,
+          width: 220,
+          height: 220,
+          borderRadius: 28,
+          background: theme.panel,
+          border: `3px solid ${theme.accent2}99`,
+          boxShadow: `0 0 40px ${theme.accent2}22`,
+          opacity: enter,
+          transform: `translateY(${(1 - enter) * 40}px) scale(${1 + 0.02 * Math.sin(local / 9 + 1)})`,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 8,
+        }}
+      >
+        <IconGlyph name="server" size={56} color={theme.accent2} strokeWidth={1.7} />
+        <div style={{ fontFamily: theme.font, fontWeight: 800, fontSize: 28, color: theme.text }}>Сервер</div>
+        <div style={{ fontFamily: theme.mono, fontSize: 14, color: theme.subtext }}>CID помнит</div>
+      </div>
+      {/* Old Wi-Fi path */}
+      <div
+        style={{
+          position: "absolute",
+          left: pathLeft,
+          top: wifiY,
+          width: pathW,
+          height: 4,
+          background: oldColor,
+          opacity: enter * oldOpacity,
+          borderRadius: 2,
+          ...(phase !== "wifi" ? { background: `repeating-linear-gradient(90deg, ${oldColor} 0 14px, transparent 14px 22px)` } : {}),
+        }}
+      />
+      {phase !== "wifi" ? (
+        <div
+          style={{
+            position: "absolute",
+            left: pathLeft + pathW / 2 - 40,
+            top: wifiY - 14,
+            width: 80,
+            height: 4,
+            background: theme.danger,
+            transform: "rotate(18deg)",
+            opacity: enter,
+            borderRadius: 2,
+          }}
+        />
+      ) : null}
+      {phase !== "wifi" ? (
+        <div
+          style={{
+            position: "absolute",
+            left: pathLeft + pathW / 2 - 40,
+            top: wifiY + 10,
+            width: 80,
+            height: 4,
+            background: theme.danger,
+            transform: "rotate(-18deg)",
+            opacity: enter,
+            borderRadius: 2,
+          }}
+        />
+      ) : null}
+      <div
+        style={{
+          position: "absolute",
+          left: pathLeft + pathW / 2,
+          top: wifiY - 38,
+          transform: "translateX(-50%)",
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          padding: "6px 14px",
+          borderRadius: 999,
+          background: `${oldColor}18`,
+          border: `2px solid ${oldColor}88`,
+          opacity: enter * (phase === "wifi" ? 1 : 0.7),
+        }}
+      >
+        <IconGlyph name="wifi" size={20} color={oldColor} strokeWidth={2} />
+        <span style={{ fontFamily: theme.mono, fontSize: 18, fontWeight: 800, color: oldColor }}>Wi-Fi</span>
+        {phase !== "wifi" ? <span style={{ fontFamily: theme.font, fontSize: 16, color: theme.danger }}>обрыв</span> : null}
+      </div>
+      {/* New mobile path */}
+      <div
+        style={{
+          position: "absolute",
+          left: pathLeft,
+          top: mobileY,
+          width: pathW,
+          height: 4,
+          background: newColor,
+          opacity: enter * newOpacity,
+          borderRadius: 2,
+          boxShadow: phase !== "wifi" ? `0 0 18px ${newColor}77` : "none",
+        }}
+      />
+      <div
+        style={{
+          position: "absolute",
+          left: pathLeft + pathW / 2,
+          top: mobileY + 12,
+          transform: "translateX(-50%)",
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          padding: "6px 14px",
+          borderRadius: 999,
+          background: `${newColor}18`,
+          border: `2px solid ${newColor}88`,
+          opacity: enter * newOpacity,
+        }}
+      >
+        <IconGlyph name="signal" size={20} color={newColor} strokeWidth={2} />
+        <span style={{ fontFamily: theme.mono, fontSize: 18, fontWeight: 800, color: newColor }}>4G</span>
+        <span style={{ fontFamily: theme.font, fontSize: 16, color: newColor }}>{phase !== "wifi" ? "активен" : "готов"}</span>
+      </div>
+      {/* Packets on new path when validate */}
+      {phase === "validate" ? (
+        <>
+          <div
+            style={{
+              position: "absolute",
+              left: challengeX,
+              top: mobileY - 18,
+              transform: "translate(-50%, -50%)",
+              padding: "6px 12px",
+              borderRadius: 999,
+              background: theme.warning,
+              color: "#1A1200",
+              fontFamily: theme.mono,
+              fontSize: 14,
+              fontWeight: 800,
+              opacity: challengeP > 0 && challengeP < 1 ? 1 : 0,
+              boxShadow: `0 0 16px ${theme.warning}AA`,
+              whiteSpace: "nowrap",
+            }}
+          >
+            CHALLENGE
+          </div>
+          <div
+            style={{
+              position: "absolute",
+              left: responseX,
+              top: mobileY + 18,
+              transform: "translate(-50%, -50%)",
+              padding: "6px 12px",
+              borderRadius: 999,
+              background: theme.success,
+              color: "#06140A",
+              fontFamily: theme.mono,
+              fontSize: 14,
+              fontWeight: 800,
+              opacity: responseP > 0 && responseP < 1 ? 1 : 0,
+              boxShadow: `0 0 16px ${theme.success}AA`,
+              whiteSpace: "nowrap",
+            }}
+          >
+            RESPONSE
+          </div>
+        </>
+      ) : null}
+      {/* Bottom badge */}
+      <div
+        style={{
+          position: "absolute",
+          left: cx,
+          top: 1190,
+          transform: `translateX(-50%) scale(${hit ? 0.96 + 0.04 * pop : 0.96})`,
+          padding: "14px 28px",
+          borderRadius: 999,
+          background: phase === "validate" && hit ? `${theme.success}18` : `${theme.panel}DD`,
+          border: `2px solid ${phase === "validate" && hit ? theme.success : theme.panelBorder}`,
+          color: phase === "validate" && hit ? theme.success : theme.subtext,
+          fontFamily: theme.font,
+          fontWeight: 800,
+          fontSize: 26,
+          opacity: enter,
+          whiteSpace: "nowrap",
+          boxShadow: phase === "validate" && hit ? `0 0 28px ${theme.success}44` : "none",
+        }}
+      >
+        {phase === "wifi" ? "CID живёт поверх IP" : phase === "migrate" ? "тот же CID — новый путь" : hit ? "проверка пройдена · соединение живо" : "проверка пути…"}
+      </div>
+      {phase === "validate" && hit ? <PulseRing x={cx} y={mobileY} triggerFrame={impactLocal} tone="success" size={280} /> : null}
+      {phase === "migrate" && hit ? <PulseRing x={pathLeft + pathW / 2} y={mobileY} triggerFrame={impactLocal} tone="success" size={220} /> : null}
+    </>
+  );
+};
+
 /* ──────────────────────────── сцена-сториборд ──────────────────────────── */
 
 /** Каждая фраза диктора — свой бит с движением камеры между битами. */
@@ -7708,6 +8052,7 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     "consistent-hash-ring": { scale: 0.9, y: -20 },
     "bwt-matrix": { scale: 0.88, y: -20 },
     "bwt-invert": { scale: 0.9, y: -20 },
+    "quic-migration": { scale: 0.9, y: -20 },
   };
   const cur = cams[slot.beat.visual] ?? { scale: 1, y: 0 };
   const prev = idx > 0 ? cams[slots[idx - 1].beat.visual] ?? cur : cur;
@@ -8300,6 +8645,15 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             fps={fps}
             impactLocal={impactLocal}
             phase={(slot.beat.params?.phase as BwtInvertPhase | undefined) ?? "invert"}
+          />
+        );
+      case "quic-migration":
+        return (
+          <QuicMigrationVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as QuicMigrationPhase | undefined) ?? "migrate"}
           />
         );
       default:
