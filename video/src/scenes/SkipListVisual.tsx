@@ -333,14 +333,22 @@ const CoinPhase: React.FC<{ local: number }> = ({ local }) => {
   const MAX_LIFT = 3; // максимум до уровня L3 ⇒ высота до 4
   // детерминированный flip: seed только от (узел, шаг), без кадра ⇒ стабильно между кадрами
   const flipHeads = (i: number, j: number) => random(`coinflip-${i}-${j}`) < 0.5;
-  const heightOf = (i: number) => {
+  // честная раскладка монетки: узел бросает, пока не выпадет РЕШКА (стоп)
+  // либо не достигнет потолка высоты MAX_LIFT+1.
+  const towerInfo = (i: number) => {
+    const flips = Array.from({ length: MAX_LIFT }, (_, idx) => flipHeads(i, idx + 1));
     let h = 1;
-    for (let j = 1; j <= MAX_LIFT; j++) {
-      if (flipHeads(i, j)) h = j + 1;
-      else break;
+    let capped = true;
+    for (let j = 0; j < MAX_LIFT; j++) {
+      if (flips[j]) h = j + 2;
+      else {
+        capped = false;
+        break;
+      }
     }
-    return h;
+    return { h, capped };
   };
+  const heightOf = (i: number) => towerInfo(i).h;
   // раскладка уровней, выведенная именно из исходов монетки
   const coinLevels: number[][] = Array.from({ length: MAX_LIFT + 1 }, (_, L) =>
     Array.from({ length: N }, (_, i) => i).filter((i) => L < heightOf(i))
@@ -353,17 +361,19 @@ const CoinPhase: React.FC<{ local: number }> = ({ local }) => {
       </div>
       <SkipTowers revealTop={3} levels={coinLevels} />
       {Array.from({ length: N }).map((_, i) => {
-        const h = heightOf(i);
+        const info = towerInfo(i);
+        const h = info.h;
         if (h < 1) return null;
         const topCellTop = yOf(h - 1) - CELL_H / 2;
         const flip = interpolate(local % 18, [0, 9, 18], [0, 180, 360]) % 360;
         // стек монет над башней: снизу вверх — орлы (добавили уровни),
-        // самая верхняя — решка, остановившая рост
-        return Array.from({ length: h }).map((_, k) => {
-          const isStop = k === h - 1;
-          const emoji = isStop ? "Р" : "О";
+        // выше — либо РЕШКА (честный стоп), либо ЛИМИТ (башню остановили по потолку)
+        const coins: { emoji: string; tone: string; cap: boolean }[] = [];
+        for (let j = 0; j < h - 1; j++) coins.push({ emoji: "О", tone: theme.warning, cap: false });
+        if (info.capped) coins.push({ emoji: "ЛИМИТ", tone: theme.subtext, cap: true });
+        else coins.push({ emoji: "Р", tone: theme.danger, cap: false });
+        return coins.map((c, k) => {
           const cy = topCellTop - 34 - k * 50;
-          const tone = isStop ? theme.danger : theme.warning;
           return (
             <div
               key={`coin-${i}-${k}`}
@@ -374,27 +384,28 @@ const CoinPhase: React.FC<{ local: number }> = ({ local }) => {
                 width: 52,
                 height: 52,
                 borderRadius: 26,
-                background: tone,
-                border: `3px solid ${tone}`,
+                background: c.tone,
+                border: `3px solid ${c.tone}`,
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
                 fontFamily: theme.mono,
                 fontWeight: 800,
-                fontSize: 26,
-                color: "#3A2A00",
+                fontSize: c.cap ? 14 : 26,
+                color: c.cap ? theme.text : "#3A2A00",
                 transform: `rotateY(${k % 2 ? flip : 360 - flip}deg) translateY(${4 * Math.sin(local / 7 + i + k)})`,
-                boxShadow: `0 0 26px ${tone}77`,
+                boxShadow: `0 0 26px ${c.tone}77`,
                 zIndex: 4,
               }}
             >
-              {emoji}
+              {c.emoji}
             </div>
           );
         });
       })}
-      <Badge text="ОРЁЛ → ещё уровень · РЕШКА → стоп" color={theme.warning} top={1430} left={W / 2 - 320} />
-      <div style={{ position: "absolute", left: W / 2, top: 1500, transform: "translateX(-50%)", fontFamily: theme.font, fontWeight: 800, fontSize: 26, color: theme.subtext }}>
+      <Badge text="ОРЁЛ → уровень · РЕШКА → стоп · ЛИМИТ — потолок" color={theme.warning} top={1430} left={W / 2 - 320} />
+      {/* сводка высот — в безопасной зоне (y<1500), ниже башен, выше бейджа */}
+      <div style={{ position: "absolute", left: W / 2, top: 1392, transform: "translateX(-50%)", fontFamily: theme.font, fontWeight: 800, fontSize: 26, color: theme.subtext }}>
         {`высоты по монетке: ${heights.join(", ")} уровня`}
       </div>
     </>
@@ -475,7 +486,14 @@ const SearchPhase: React.FC<{ local: number; dur: number; impactLocal: number }>
 const InsertPhase: React.FC<{ local: number; dur: number; impactLocal: number }> = ({ local, dur, impactLocal }) => {
   const p = smooth(clamp01(local / Math.max(1, dur - 10)));
   const newIdx = 3.5; // между D(3) и E(4)
-  const newTop = 1; // высота 2 уровня (0 и 1) по монетке
+  // высота P детерминирована одним броском монетки: ОРЁЛ → +уровень (L0+L1),
+  // РЕШКА → стоп (только L0). max newTop=1 держит split-подавление L0/L1 честным.
+  const pHeads = random("insertflip-P") < 0.5;
+  const newTop = pHeads ? 1 : 0;
+  const pTone = pHeads ? theme.warning : theme.danger;
+  const pEmoji = pHeads ? "О" : "Р";
+  const pCoinTop = yOf(newTop) - CELL_H / 2 - 34;
+  const pFlip = interpolate(local % 18, [0, 9, 18], [0, 180, 360]) % 360;
   const appear = spring(local, 120, 14);
   const placed = local >= impactLocal;
   void appear;
@@ -485,12 +503,13 @@ const InsertPhase: React.FC<{ local: number; dur: number; impactLocal: number }>
       <div style={{ position: "absolute", left: W / 2, top: 250, transform: "translateX(-50%)", fontFamily: theme.mono, fontWeight: 800, fontSize: 29, letterSpacing: 2, color: theme.subtext }}>
         ВСТАВКА: МОНЕТКА ВМЕСТО ВРАЩЕНИЙ
       </div>
-      {/* подавляем исходный коннектор D→E на L0/L1, чтобы вшить P без z-fighting */}
+      {/* подавляем исходный коннектор D→E на тех уровнях, где появляется P (newTop),
+          чтобы вшить P без z-fighting и не оставить дубликат D→E */}
       <SkipTowers
         revealTop={3}
         suppress={[
           { from: 3, to: 4, level: 0 },
-          { from: 3, to: 4, level: 1 },
+          ...(newTop >= 1 ? [{ from: 3, to: 4, level: 1 }] : []),
         ]}
       />
       {/* башня нового узла */}
@@ -544,6 +563,31 @@ const InsertPhase: React.FC<{ local: number; dur: number; impactLocal: number }>
           </div>
         ) : null
       )}
+      {/* видимая монетка над P: ОРЁЛ добавил уровень, РЕШКА остановила рост */}
+      <div
+        style={{
+          position: "absolute",
+          left: nx - 26,
+          top: pCoinTop,
+          width: 52,
+          height: 52,
+          borderRadius: 26,
+          background: pTone,
+          border: `3px solid ${pTone}`,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontFamily: theme.mono,
+          fontWeight: 800,
+          fontSize: 26,
+          color: "#3A2A00",
+          transform: `rotateY(${pFlip}deg) translateY(${4 * Math.sin(local / 7)})`,
+          boxShadow: `0 0 26px ${pTone}77`,
+          zIndex: 4,
+        }}
+      >
+        {pEmoji}
+      </div>
       {placed ? <PulseRing x={nx} y={yOf(0)} triggerFrame={impactLocal} tone="success" size={170} /> : null}
       <Badge text="высота — монеткой · никаких вращений" color={theme.success} top={1430} left={W / 2 - 300} />
     </>
