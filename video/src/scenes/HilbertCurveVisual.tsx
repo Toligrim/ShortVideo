@@ -13,6 +13,9 @@ const STEP = 98;
 const GRID = N * STEP;
 const LEFT = (W - GRID) / 2;
 const TOP = 470;
+// бейдж выносим в свободную полосу между заголовком (низ ~383) и сеткой
+// (верх 470), чтобы он гарантированно не пересекался с караоке (karaokeY=1390)
+const BADGE_TOP = TOP - 78;
 
 const smooth = (t: number) => t * t * (3 - 2 * t);
 const clamp01 = (t: number) => Math.min(1, Math.max(0, t));
@@ -162,7 +165,7 @@ export const HilbertCurveVisual: React.FC<{
         {hit ? (
           <>
             <PulseRing x={W / 2} y={TOP + GRID / 2} triggerFrame={impactLocal} tone="success" size={GRID} />
-            <Badge text="НИ ОДНОГО ПРОПУСКА" color={theme.success} top={TOP + GRID + 90} />
+            <Badge text="НИ ОДНОГО ПРОПУСКА" color={theme.success} top={BADGE_TOP} />
           </>
         ) : null}
       </>
@@ -193,7 +196,7 @@ export const HilbertCurveVisual: React.FC<{
         </svg>
         {hit ? <PulseRing x={(pa.x + pb.x) / 2} y={(pa.y + pb.y) / 2} triggerFrame={impactLocal} tone="success" size={CELL * 2} /> : null}
         <Caption text="близкие точки остаются близкими" top={TOP + GRID + 30} color={theme.subtext} />
-        {hit ? <Badge text="ЛОКАЛЬНОСТЬ СОХРАНЕНА" color={theme.success} top={TOP + GRID + 90} /> : null}
+        {hit ? <Badge text="ЛОКАЛЬНОСТЬ СОХРАНЕНА" color={theme.success} top={BADGE_TOP} /> : null}
       </>
     );
   }
@@ -258,7 +261,7 @@ export const HilbertCurveVisual: React.FC<{
       {hit ? (
         <>
           <PulseRing x={wcenter.x} y={wcenter.y} triggerFrame={impactLocal} tone="warning" size={STEP * 2} />
-          <Badge text="O(log n) · БЕЗ РАЗМЕРА КЭША" color={theme.warning} top={TOP + GRID + 90} />
+          <Badge text="O(log n) · БЕЗ РАЗМЕРА КЭША" color={theme.warning} top={BADGE_TOP} />
         </>
       ) : null}
     </>
