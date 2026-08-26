@@ -1,0 +1,62 @@
+{
+  "id": "auto-20260826-050002",
+  "title": "QUIC: почему смена Wi-Fi на мобильную сеть не рвёт видео",
+  "scenes": [
+    {
+      "type": "story",
+      "heading": "Испытание на парковке",
+      "narration": "Ты выходишь с {Wi-Fi|вай-фай} на улицу, связь рвётся, а видео не замирает. Это испытание на парковке, и {QUIC|квик} его проходит — смотри как.",
+      "beats": [
+        { "visual": "quic-migration", "onWord": "Wi-Fi", "params": { "phase": "wifi" } },
+        { "visual": "quic-migration", "onWord": "QUIC", "params": { "phase": "migrate" } }
+      ]
+    },
+    {
+      "type": "diagram",
+      "heading": "TCP vs QUIC",
+      "narration": "{TCP|тэ си пи} привязан к адресу и порту — сменил сеть, соединение умерло и просит нового рукопожатия. {QUIC|квик} поверх {UDP|ю ди пи} отвязывает личность от адреса.",
+      "nodes": [
+        { "id": "client", "label": "Телефон", "icon": "smartphone", "tone": "accent" },
+        { "id": "server", "label": "Сервер", "icon": "server", "tone": "accent2" }
+      ],
+      "packets": [
+        { "label": "TCP", "from": "client", "to": "server", "tone": "danger", "onWord": "TCP" },
+        { "label": "QUIC CID", "from": "client", "to": "server", "tone": "success", "onWord": "QUIC" }
+      ],
+      "state": { "label": "адрес ≠ ID", "tone": "success", "onWord": "UDP" }
+    },
+    {
+      "type": "diagram",
+      "heading": "Метка над IP",
+      "narration": "Секрет — {Connection ID|идентификатор соединения}. Это метка, которую дают оба конца, она не зависит от {IP|ай пи} и порта и живёт поверх транспорта.",
+      "nodes": [
+        { "id": "client", "label": "Телефон", "icon": "smartphone", "tone": "accent" },
+        { "id": "server", "label": "Сервер", "icon": "server", "tone": "accent2" }
+      ],
+      "packets": [
+        { "label": "CID 7A·3F", "from": "client", "to": "server", "tone": "accent", "onWord": "Connection" }
+      ],
+      "state": { "label": "живет над IP", "tone": "success", "onWord": "IP" }
+    },
+    {
+      "type": "story",
+      "heading": "Тот же ID, новый путь",
+      "narration": "Сменил сеть — клиент шлёт пакеты с тем же идентификатором уже с нового адреса. Сервер запускает {path validation|проверку пути} и убеждается, что это ты, а не подделка.",
+      "beats": [
+        { "visual": "quic-migration", "onWord": "Сменил", "params": { "phase": "migrate" } },
+        { "visual": "quic-migration", "onWord": "path", "params": { "phase": "validate" } }
+      ]
+    },
+    {
+      "type": "outro",
+      "title": "QUIC: смена сети",
+      "bullets": [
+        "CID живёт поверх IP",
+        "смена → проверка пути",
+        "нужна поддержка сервера"
+      ],
+      "cta": "Подпишись — дальше про потери пакетов",
+      "narration": "Итог: {QUIC|квик} может продолжить соединение после смены адреса, если сервер поддерживает миграцию — это не магия и не гарантия везде. В следующий раз — как теряются пакеты. Подпишись."
+    }
+  ]
+}
