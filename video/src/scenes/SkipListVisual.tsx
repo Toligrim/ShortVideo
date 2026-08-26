@@ -4,7 +4,7 @@ import { layout, theme } from "../lib/theme";
 import { PulseRing } from "../lib/Motion";
 import { IconGlyph } from "../primitives/IconGlyph";
 
-export type SkipListPhase = "compare" | "coin" | "levels" | "search" | "insert";
+export type SkipListPhase = "compare" | "coin" | "levels" | "search" | "insert" | "probability";
 
 const W = layout.width;
 const NODES = ["A", "B", "C", "D", "E", "F", "G"];
@@ -501,6 +501,120 @@ const InsertPhase: React.FC<{ local: number; dur: number; impactLocal: number }>
   );
 };
 
+/** Фаза probability: буквальный масштаб ничтожной вероятности промаха и редкий длинный путь поиска. */
+const ProbabilityPhase: React.FC<{ local: number; dur: number; impactLocal: number; fps: number }> = ({
+  local,
+  dur,
+  impactLocal,
+  fps,
+}) => {
+  const p = smooth(clamp01(local / Math.max(1, dur - 6)));
+  const reveal = spring(local, fps, 14);
+  const popped = local >= impactLocal;
+  // редкий длинный путь поиска: прыжок по верхнему уровню и спуск — худший, но всё ещё O(log n)
+  const longPath = [
+    { x: xOf(0), y: yOf(3) },
+    { x: xOf(3), y: yOf(3) },
+    { x: xOf(6), y: yOf(3) },
+    { x: xOf(6), y: yOf(2) },
+    { x: xOf(4), y: yOf(2) },
+    { x: xOf(4), y: yOf(0) },
+  ];
+  const tokenPos = lerpPath(longPath, p);
+  const hiCells = [
+    { i: 0, level: 3 },
+    { i: 3, level: 3 },
+    { i: 6, level: 3 },
+    { i: 6, level: 2 },
+    { i: 4, level: 2 },
+    { i: 4, level: 0 },
+  ];
+  const panelW = 760;
+  const panelX = W / 2 - panelW / 2;
+  const panelY = 300;
+  return (
+    <>
+      <div
+        style={{
+          position: "absolute",
+          left: W / 2,
+          top: 230,
+          transform: "translateX(-50%)",
+          fontFamily: theme.mono,
+          fontWeight: 800,
+          fontSize: 29,
+          letterSpacing: 2,
+          color: theme.subtext,
+        }}
+      >
+        ШАНС ПРОМАХА — МАСШТАБ
+      </div>
+      {/* панель с буквальной дробью 1 / 200 000 000 */}
+      <div
+        style={{
+          position: "absolute",
+          left: panelX,
+          top: panelY,
+          width: panelW,
+          height: 392,
+          borderRadius: 30,
+          border: `3px solid ${theme.warning}99`,
+          background: `${theme.warning}0D`,
+          transform: `scale(${0.72 + 0.28 * reveal})`,
+          opacity: reveal,
+          boxShadow: popped ? `0 0 80px ${theme.warning}55` : "none",
+          textAlign: "center",
+        }}
+      >
+        <div style={{ marginTop: 34, fontFamily: theme.font, fontWeight: 800, fontSize: 128, color: theme.text, lineHeight: 1 }}>1</div>
+        <div style={{ margin: "4px auto", width: 500, height: 5, background: theme.warning, borderRadius: 3 }} />
+        <div
+          style={{
+            fontFamily: theme.font,
+            fontWeight: 800,
+            fontSize: 76,
+            color: theme.warning,
+            textShadow: `0 0 30px ${theme.warning}66`,
+            letterSpacing: 1,
+          }}
+        >
+          200 000 000
+        </div>
+        <div style={{ marginTop: 16, fontFamily: theme.mono, fontSize: 26, color: theme.subtext }}>
+          n = 4096 · шанс промаха ×3 хуже среднего
+        </div>
+      </div>
+      {/* башни + редкий длинный путь поиска */}
+      <SkipTowers revealTop={3} highlight={hiCells} />
+      <svg style={{ position: "absolute", left: 0, top: 0, width: W, height: layout.height, zIndex: 1, pointerEvents: "none" }}>
+        <polyline
+          points={longPath.map((pt) => `${pt.x},${pt.y}`).join(" ")}
+          fill="none"
+          stroke={theme.danger}
+          strokeWidth={6}
+          strokeOpacity={0.6}
+          strokeDasharray="14 12"
+        />
+      </svg>
+      <div
+        style={{
+          position: "absolute",
+          left: tokenPos.x - 30,
+          top: tokenPos.y - 30,
+          width: 60,
+          height: 60,
+          borderRadius: 30,
+          background: theme.danger,
+          boxShadow: `0 0 40px ${theme.danger}`,
+          zIndex: 5,
+        }}
+      />
+      <Badge text="редкий длинный путь — всё равно O(log n)" color={theme.danger} top={1430} left={W / 2 - 320} />
+      {popped ? <PulseRing x={W / 2} y={panelY + 196} triggerFrame={impactLocal} tone="warning" size={440} /> : null}
+    </>
+  );
+};
+
 const spring = (frame: number, fps: number, mass: number) => {
   // лёгкая аппроксимация пружины для появления
   const t = clamp01(frame / (fps * 0.4));
@@ -525,6 +639,8 @@ export const SkipListVisual: React.FC<{
       return <SearchPhase local={local} dur={dur} impactLocal={impactLocal} />;
     case "insert":
       return <InsertPhase local={local} dur={dur} impactLocal={impactLocal} />;
+    case "probability":
+      return <ProbabilityPhase local={local} dur={dur} impactLocal={impactLocal} fps={fps} />;
     default:
       return <LevelsPhase local={local} dur={dur} />;
   }

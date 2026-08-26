@@ -186,7 +186,9 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
       impact = start + Math.round(dur * (beat.params?.phase === "grid" ? 0.85 : 0.6));
     if (beat.visual === "skip-list") {
       const phase = beat.params?.phase;
-      impact = start + Math.round(dur * (phase === "search" ? 0.66 : phase === "insert" ? 0.7 : 0.55));
+      impact =
+        start +
+        Math.round(dur * (phase === "search" ? 0.66 : phase === "insert" ? 0.7 : phase === "probability" ? 0.6 : 0.55));
     }
     return { beat, start, end, impact };
   });
@@ -366,7 +368,10 @@ export const storySfx = (
     }
     if (s.beat.visual === "skip-list") {
       const ph = s.beat.params?.phase;
-      events.push({ frame: s.impact, sound: ph === "search" || ph === "insert" || ph === "coin" ? "ding" : "pop" });
+      events.push({
+        frame: s.impact,
+        sound: ph === "search" || ph === "insert" || ph === "coin" || ph === "probability" ? "ding" : "pop",
+      });
     }
   }
   return events;
