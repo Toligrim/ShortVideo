@@ -50,7 +50,7 @@
         },
         {
           "visual": "skip-list",
-          "params": { "phase": "compare" },
+          "params": { "phase": "probability" },
           "onWord": "миллионов"
         }
       ]
