@@ -36,6 +36,7 @@ import { SuffixAutomatonVisual, type SuffixAutomatonPhase } from "./SuffixAutoma
 import { BwtMatrixVisual, type BwtMatrixPhase } from "./BwtMatrixVisual";
 import { BwtInvertVisual, type BwtInvertPhase } from "./BwtInvertVisual";
 import { HilbertCurveVisual, type HilbertPhase } from "./HilbertCurveVisual";
+import { SkipListVisual, type SkipListPhase } from "./SkipListVisual";
 
 /* ──────────────────────────── расписание битов ──────────────────────────── */
 
@@ -183,6 +184,10 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
     if (beat.visual === "quic-migration") impact = start + Math.round(dur * 0.62);
     if (beat.visual === "hilbert-curve")
       impact = start + Math.round(dur * (beat.params?.phase === "grid" ? 0.85 : 0.6));
+    if (beat.visual === "skip-list") {
+      const phase = beat.params?.phase;
+      impact = start + Math.round(dur * (phase === "search" ? 0.66 : phase === "insert" ? 0.7 : 0.55));
+    }
     return { beat, start, end, impact };
   });
 };
@@ -358,6 +363,10 @@ export const storySfx = (
     if (s.beat.visual === "hilbert-curve") {
       const ph = s.beat.params?.phase;
       events.push({ frame: s.impact, sound: ph === "cache" ? "ding" : ph === "grid" ? "ding" : "pop" });
+    }
+    if (s.beat.visual === "skip-list") {
+      const ph = s.beat.params?.phase;
+      events.push({ frame: s.impact, sound: ph === "search" || ph === "insert" || ph === "coin" ? "ding" : "pop" });
     }
   }
   return events;
@@ -8060,6 +8069,7 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     "bwt-matrix": { scale: 0.88, y: -20 },
     "bwt-invert": { scale: 0.9, y: -20 },
     "quic-migration": { scale: 0.9, y: -20 },
+    "skip-list": { scale: 0.92, y: -20 },
   };
   const cur = cams[slot.beat.visual] ?? { scale: 1, y: 0 };
   const prev = idx > 0 ? cams[slots[idx - 1].beat.visual] ?? cur : cur;
@@ -8670,6 +8680,16 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             fps={fps}
             impactLocal={impactLocal}
             phase={(slot.beat.params?.phase as HilbertPhase | undefined) ?? "grid"}
+          />
+        );
+      case "skip-list":
+        return (
+          <SkipListVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            dur={dur}
+            phase={(slot.beat.params?.phase as SkipListPhase | undefined) ?? "levels"}
           />
         );
       default:
