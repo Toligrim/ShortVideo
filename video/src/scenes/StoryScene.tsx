@@ -493,7 +493,7 @@ const XorFilterVisual: React.FC<{
           style={{
             position: "absolute",
             left: W / 2,
-            top: 650,
+            top: 720,
             transform: "translateX(-50%)",
             ...mono,
             fontSize: 28,
