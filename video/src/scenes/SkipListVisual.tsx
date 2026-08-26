@@ -16,6 +16,12 @@ const LEVEL_GAP = 185;
 const MARGIN_X = 110;
 const xOf = (i: number) => MARGIN_X + (i * (W - 2 * MARGIN_X)) / (N - 1);
 const yOf = (level: number) => BASE_Y - level * LEVEL_GAP;
+// локальная раскладка InsertPhase: 8 позиций A,B,C,D,P,E,F,G.
+// исходные i<3.5 сохраняют индекс, i>=3.5 получают i+1, P (3.5) → позиция 4.
+const INSERT_SLOTS = N + 1; // 8
+const insertSlotX = (slot: number) => MARGIN_X + (slot * (W - 2 * MARGIN_X)) / (INSERT_SLOTS - 1);
+const insertXOf = (i: number) =>
+  i < 3.5 ? insertSlotX(i) : i === 3.5 ? insertSlotX(4) : insertSlotX(i + 1);
 const LEVEL_COLORS = [theme.accent, theme.accent2, theme.success, theme.warning];
 
 // присутствие узла на каждом уровне (снизу вверх): skip-list с разной высотой узлов
@@ -72,8 +78,9 @@ const NodeCell: React.FC<{
   label?: string;
   active?: boolean;
   glow?: boolean;
-}> = ({ i, level, color, label, active, glow }) => {
-  const cx = xOf(i);
+  xOfFn?: (i: number) => number;
+}> = ({ i, level, color, label, active, glow, xOfFn = xOf }) => {
+  const cx = xOfFn(i);
   const cy = yOf(level);
   const pulse = active ? 1 + 0.05 * Math.sin(level * 3) : 1;
   return (
@@ -104,15 +111,16 @@ const NodeCell: React.FC<{
   );
 };
 
-const HConnector: React.FC<{ from: number; to: number; level: number; color: string; width?: number }> = ({
-  from,
-  to,
-  level,
-  color,
-  width = 5,
-}) => {
-  const x1 = xOf(from) + CELL_W / 2;
-  const x2 = xOf(to) - CELL_W / 2;
+const HConnector: React.FC<{
+  from: number;
+  to: number;
+  level: number;
+  color: string;
+  width?: number;
+  xOfFn?: (i: number) => number;
+}> = ({ from, to, level, color, width = 5, xOfFn = xOf }) => {
+  const x1 = xOfFn(from) + CELL_W / 2;
+  const x2 = xOfFn(to) - CELL_W / 2;
   return (
     <div
       style={{
@@ -138,7 +146,8 @@ const SkipTowers: React.FC<{
   highlight?: { i: number; level: number }[];
   levels?: number[][];
   suppress?: { from: number; to: number; level: number }[];
-}> = ({ revealTop = 3, highlight = [], levels = LEVELS, suppress = [] }) => {
+  xOfFn?: (i: number) => number;
+}> = ({ revealTop = 3, highlight = [], levels = LEVELS, suppress = [], xOfFn = xOf }) => {
   const isHi = (i: number, l: number) => highlight.some((h) => h.i === i && h.level === l);
   const isSuppressed = (L: number, from: number, to: number) =>
     suppress.some((s) => s.level === L && s.from === from && s.to === to);
@@ -153,7 +162,7 @@ const SkipTowers: React.FC<{
             key={`tower${i}`}
             style={{
               position: "absolute",
-              left: xOf(i) - 2,
+              left: xOfFn(i) - 2,
               top: yOf(top) - CELL_H / 2,
               width: 4,
               height: yOf(0) - yOf(top) + CELL_H,
@@ -171,7 +180,7 @@ const SkipTowers: React.FC<{
         return lv.slice(0, -1).map((idx, k) => {
           const to = lv[k + 1];
           if (isSuppressed(L, idx, to)) return null;
-          return <HConnector key={`h${L}-${k}`} from={idx} to={to} level={L} color={color} />;
+          return <HConnector key={`h${L}-${k}`} from={idx} to={to} level={L} color={color} xOfFn={xOfFn} />;
         });
       })}
       {/* ячейки узлов */}
@@ -185,6 +194,7 @@ const SkipTowers: React.FC<{
               level={L}
               color={LEVEL_COLORS[L]}
               active={isHi(i, L)}
+              xOfFn={xOfFn}
             />
           );
         })
@@ -497,7 +507,7 @@ const InsertPhase: React.FC<{ local: number; dur: number; impactLocal: number }>
   const appear = spring(local, 120, 14);
   const placed = local >= impactLocal;
   void appear;
-  const nx = xOf(newIdx);
+  const nx = insertXOf(newIdx);
   return (
     <>
       <div style={{ position: "absolute", left: W / 2, top: 250, transform: "translateX(-50%)", fontFamily: theme.mono, fontWeight: 800, fontSize: 29, letterSpacing: 2, color: theme.subtext }}>
@@ -507,6 +517,7 @@ const InsertPhase: React.FC<{ local: number; dur: number; impactLocal: number }>
           чтобы вшить P без z-fighting и не оставить дубликат D→E */}
       <SkipTowers
         revealTop={3}
+        xOfFn={insertXOf}
         suppress={[
           { from: 3, to: 4, level: 0 },
           ...(newTop >= 1 ? [{ from: 3, to: 4, level: 1 }] : []),
@@ -529,8 +540,8 @@ const InsertPhase: React.FC<{ local: number; dur: number; impactLocal: number }>
       {[0, 1].map((L) =>
         L <= newTop ? (
           <React.Fragment key={`ins-split-${L}`}>
-            <HConnector from={3} to={newIdx} level={L} color={theme.success} width={4} />
-            <HConnector from={newIdx} to={4} level={L} color={theme.success} width={4} />
+            <HConnector from={3} to={newIdx} level={L} color={theme.success} width={4} xOfFn={insertXOf} />
+            <HConnector from={newIdx} to={4} level={L} color={theme.success} width={4} xOfFn={insertXOf} />
           </React.Fragment>
         ) : null
       )}
