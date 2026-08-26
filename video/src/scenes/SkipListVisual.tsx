@@ -26,9 +26,9 @@ const LEVELS: number[][] = [
   [0, 3, 6], // L3 — верхний прыгает через узлы
 ];
 
-const maxLevelOf = (i: number) => {
+const maxLevelOf = (i: number, levels: number[][] = LEVELS) => {
   let m = -1;
-  LEVELS.forEach((lv, L) => {
+  levels.forEach((lv, L) => {
     if (lv.includes(i)) m = L;
   });
   return m;
@@ -129,17 +129,24 @@ const HConnector: React.FC<{ from: number; to: number; level: number; color: str
   );
 };
 
-/** Базовая «башня» skip-списка: башни разной высоты + длинные указатели по уровням. */
-const SkipTowers: React.FC<{ revealTop?: number; highlight?: { i: number; level: number }[] }> = ({
-  revealTop = 3,
-  highlight = [],
-}) => {
+/** Базовая «башня» skip-списка: башни разной высоты + длинные указатели по уровням.
+ *  levels — альтернативная раскладка уровней (по умолчанию глобальная LEVELS).
+ *  suppress — подавленные базовые коннекторы {from,to,level} (чтобы вставить
+ *  промежуточный узел без z-fighting). */
+const SkipTowers: React.FC<{
+  revealTop?: number;
+  highlight?: { i: number; level: number }[];
+  levels?: number[][];
+  suppress?: { from: number; to: number; level: number }[];
+}> = ({ revealTop = 3, highlight = [], levels = LEVELS, suppress = [] }) => {
   const isHi = (i: number, l: number) => highlight.some((h) => h.i === i && h.level === l);
+  const isSuppressed = (L: number, from: number, to: number) =>
+    suppress.some((s) => s.level === L && s.from === from && s.to === to);
   return (
     <>
       {/* вертикальные башни */}
       {Array.from({ length: N }).map((_, i) => {
-        const top = maxLevelOf(i);
+        const top = maxLevelOf(i, levels);
         if (top < 0) return null;
         return (
           <div
@@ -158,15 +165,17 @@ const SkipTowers: React.FC<{ revealTop?: number; highlight?: { i: number; level:
         );
       })}
       {/* горизонтальные длинные указатели по уровням */}
-      {LEVELS.map((lv, L) => {
+      {levels.map((lv, L) => {
         if (L > revealTop) return null;
         const color = LEVEL_COLORS[L];
-        return lv.slice(0, -1).map((idx, k) => (
-          <HConnector key={`h${L}-${k}`} from={idx} to={lv[k + 1]} level={L} color={color} />
-        ));
+        return lv.slice(0, -1).map((idx, k) => {
+          const to = lv[k + 1];
+          if (isSuppressed(L, idx, to)) return null;
+          return <HConnector key={`h${L}-${k}`} from={idx} to={to} level={L} color={color} />;
+        });
       })}
       {/* ячейки узлов */}
-      {LEVELS.map((lv, L) =>
+      {levels.map((lv, L) =>
         lv.map((i) => {
           if (L > revealTop) return null;
           return (
@@ -317,52 +326,76 @@ const ComparePhase: React.FC<{ local: number; dur: number }> = ({ local, dur }) 
   );
 };
 
-/** Фаза coin: монетка у каждого узла решает его высоту. */
+/** Фаза coin: детерминированная последовательность flips формирует высоту башни.
+ *  Для каждого узла: ОРЁЛ (О) добавляет уровень, РЕШКА (Р) останавливает.
+ *  Высота узла = 1 (база L0) + число подряд выпавших орлов до первой решки. */
 const CoinPhase: React.FC<{ local: number }> = ({ local }) => {
+  const MAX_LIFT = 3; // максимум до уровня L3 ⇒ высота до 4
+  // детерминированный flip: seed только от (узел, шаг), без кадра ⇒ стабильно между кадрами
+  const flipHeads = (i: number, j: number) => random(`coinflip-${i}-${j}`) < 0.5;
+  const heightOf = (i: number) => {
+    let h = 1;
+    for (let j = 1; j <= MAX_LIFT; j++) {
+      if (flipHeads(i, j)) h = j + 1;
+      else break;
+    }
+    return h;
+  };
+  // раскладка уровней, выведенная именно из исходов монетки
+  const coinLevels: number[][] = Array.from({ length: MAX_LIFT + 1 }, (_, L) =>
+    Array.from({ length: N }, (_, i) => i).filter((i) => L < heightOf(i))
+  );
+  const heights = Array.from({ length: N }, (_, i) => heightOf(i));
   return (
     <>
       <div style={{ position: "absolute", left: W / 2, top: 250, transform: "translateX(-50%)", fontFamily: theme.mono, fontWeight: 800, fontSize: 29, letterSpacing: 2, color: theme.subtext }}>
         МОНЕТКА РЕШАЕТ ВЫСОТУ УЗЛА
       </div>
-      <SkipTowers revealTop={3} />
+      <SkipTowers revealTop={3} levels={coinLevels} />
       {Array.from({ length: N }).map((_, i) => {
-        const top = maxLevelOf(i);
-        if (top < 0) return null;
+        const h = heightOf(i);
+        if (h < 1) return null;
+        const topCellTop = yOf(h - 1) - CELL_H / 2;
         const flip = interpolate(local % 18, [0, 9, 18], [0, 180, 360]) % 360;
-        const faceUp = Math.floor(random(`coin${i}`) * 2) === 0;
-        const coinY = yOf(top) - 90;
-        const emoji = faceUp ? "О" : "Р";
-        return (
-          <div
-            key={`coin${i}`}
-            style={{
-              position: "absolute",
-              left: xOf(i) - 26,
-              top: coinY,
-              width: 52,
-              height: 52,
-              borderRadius: 26,
-              background: theme.warning,
-              border: `3px solid ${theme.warning}`,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontFamily: theme.mono,
-              fontWeight: 800,
-              fontSize: 26,
-              color: "#3A2A00",
-              transform: `rotateY(${flip}deg) translateY(${4 * Math.sin(local / 7 + i)})`,
-              boxShadow: `0 0 26px ${theme.warning}77`,
-              zIndex: 4,
-            }}
-          >
-            {emoji}
-          </div>
-        );
+        // стек монет над башней: снизу вверх — орлы (добавили уровни),
+        // самая верхняя — решка, остановившая рост
+        return Array.from({ length: h }).map((_, k) => {
+          const isStop = k === h - 1;
+          const emoji = isStop ? "Р" : "О";
+          const cy = topCellTop - 34 - k * 50;
+          const tone = isStop ? theme.danger : theme.warning;
+          return (
+            <div
+              key={`coin-${i}-${k}`}
+              style={{
+                position: "absolute",
+                left: xOf(i) - 26,
+                top: cy,
+                width: 52,
+                height: 52,
+                borderRadius: 26,
+                background: tone,
+                border: `3px solid ${tone}`,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontFamily: theme.mono,
+                fontWeight: 800,
+                fontSize: 26,
+                color: "#3A2A00",
+                transform: `rotateY(${k % 2 ? flip : 360 - flip}deg) translateY(${4 * Math.sin(local / 7 + i + k)})`,
+                boxShadow: `0 0 26px ${tone}77`,
+                zIndex: 4,
+              }}
+            >
+              {emoji}
+            </div>
+          );
+        });
       })}
       <Badge text="ОРЁЛ → ещё уровень · РЕШКА → стоп" color={theme.warning} top={1430} left={W / 2 - 320} />
       <div style={{ position: "absolute", left: W / 2, top: 1500, transform: "translateX(-50%)", fontFamily: theme.font, fontWeight: 800, fontSize: 26, color: theme.subtext }}>
-        высоты случайны: 4, 2, 3, 4, 3, 2, 4 уровня
+        {`высоты по монетке: ${heights.join(", ")} уровня`}
       </div>
     </>
   );
@@ -452,7 +485,14 @@ const InsertPhase: React.FC<{ local: number; dur: number; impactLocal: number }>
       <div style={{ position: "absolute", left: W / 2, top: 250, transform: "translateX(-50%)", fontFamily: theme.mono, fontWeight: 800, fontSize: 29, letterSpacing: 2, color: theme.subtext }}>
         ВСТАВКА: МОНЕТКА ВМЕСТО ВРАЩЕНИЙ
       </div>
-      <SkipTowers revealTop={3} />
+      {/* подавляем исходный коннектор D→E на L0/L1, чтобы вшить P без z-fighting */}
+      <SkipTowers
+        revealTop={3}
+        suppress={[
+          { from: 3, to: 4, level: 0 },
+          { from: 3, to: 4, level: 1 },
+        ]}
+      />
       {/* башня нового узла */}
       <div
         style={{
@@ -466,35 +506,44 @@ const InsertPhase: React.FC<{ local: number; dur: number; impactLocal: number }>
           zIndex: 0,
         }}
       />
+      {/* базовые сегменты L0/L1 разделены на D→P и P→E — новые стрелки буквально вшивают P */}
       {[0, 1].map((L) =>
         L <= newTop ? (
-          <HConnector key={`nh${L}`} from={3} to={4} level={L} color={theme.success} width={4} />
+          <React.Fragment key={`ins-split-${L}`}>
+            <HConnector from={3} to={newIdx} level={L} color={theme.success} width={4} />
+            <HConnector from={newIdx} to={4} level={L} color={theme.success} width={4} />
+          </React.Fragment>
         ) : null
       )}
-      <div
-        style={{
-          position: "absolute",
-          left: nx - CELL_W / 2,
-          top: yOf(0) - CELL_H / 2,
-          width: CELL_W,
-          height: CELL_H,
-          borderRadius: 18,
-          border: `3px solid ${theme.success}FF`,
-          background: `${theme.success}33`,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          fontFamily: theme.font,
-          fontWeight: 800,
-          fontSize: 30,
-          color: theme.text,
-          transform: `scale(${0.6 + 0.4 * p})`,
-          boxShadow: placed ? `0 0 50px ${theme.success}` : "none",
-          zIndex: 4,
-        }}
-      >
-        P
-      </div>
+      {[0, 1].map((L) =>
+        L <= newTop ? (
+          <div
+            key={`np-${L}`}
+            style={{
+              position: "absolute",
+              left: nx - CELL_W / 2,
+              top: yOf(L) - CELL_H / 2,
+              width: CELL_W,
+              height: CELL_H,
+              borderRadius: 18,
+              border: `3px solid ${theme.success}FF`,
+              background: `${theme.success}33`,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontFamily: theme.font,
+              fontWeight: 800,
+              fontSize: 30,
+              color: theme.text,
+              transform: `scale(${0.6 + 0.4 * p})`,
+              boxShadow: placed && L === 0 ? `0 0 50px ${theme.success}` : "none",
+              zIndex: 4,
+            }}
+          >
+            P
+          </div>
+        ) : null
+      )}
       {placed ? <PulseRing x={nx} y={yOf(0)} triggerFrame={impactLocal} tone="success" size={170} /> : null}
       <Badge text="высота — монеткой · никаких вращений" color={theme.success} top={1430} left={W / 2 - 300} />
     </>
