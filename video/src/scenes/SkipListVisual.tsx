@@ -383,7 +383,7 @@ const CoinPhase: React.FC<{ local: number }> = ({ local }) => {
         if (info.capped) coins.push({ emoji: "ЛИМИТ", tone: theme.subtext, cap: true });
         else coins.push({ emoji: "Р", tone: theme.danger, cap: false });
         return coins.map((c, k) => {
-          const cy = topCellTop - 34 - k * 50;
+          const cy = topCellTop - 68 - k * 50;
           return (
             <div
               key={`coin-${i}-${k}`}
@@ -413,11 +413,6 @@ const CoinPhase: React.FC<{ local: number }> = ({ local }) => {
           );
         });
       })}
-      <Badge text="ОРЁЛ → уровень · РЕШКА → стоп · ЛИМИТ — потолок" color={theme.warning} top={1430} left={W / 2 - 320} />
-      {/* сводка высот — в безопасной зоне (y<1500), ниже башен, выше бейджа */}
-      <div style={{ position: "absolute", left: W / 2, top: 1392, transform: "translateX(-50%)", fontFamily: theme.font, fontWeight: 800, fontSize: 26, color: theme.subtext }}>
-        {`высоты по монетке: ${heights.join(", ")} уровня`}
-      </div>
     </>
   );
 };
@@ -432,7 +427,6 @@ const LevelsPhase: React.FC<{ local: number; dur: number }> = ({ local, dur }) =
         УРОВНИ ПЕРЕПРЫГИВАЮТ УЗЛЫ
       </div>
       <SkipTowers revealTop={reveal} />
-      <Badge text={`уровень ${reveal}: реже = длиннее прыжок`} color={theme.success} top={1430} left={W / 2 - 300} />
     </>
   );
 };
@@ -487,7 +481,6 @@ const SearchPhase: React.FC<{ local: number; dur: number; impactLocal: number }>
           <PulseRing x={xOf(target.i)} y={yOf(target.level)} triggerFrame={impactLocal} tone="success" size={170} />
         </>
       ) : null}
-      <Badge text="как бинарный поиск, но без дерева" color={theme.warning} top={1430} left={W / 2 - 300} />
     </>
   );
 };
@@ -502,7 +495,7 @@ const InsertPhase: React.FC<{ local: number; dur: number; impactLocal: number }>
   const newTop = pHeads ? 1 : 0;
   const pTone = pHeads ? theme.warning : theme.danger;
   const pEmoji = pHeads ? "О" : "Р";
-  const pCoinTop = yOf(newTop) - CELL_H / 2 - 34;
+  const pCoinTop = yOf(newTop) - CELL_H / 2 - 68;
   const pFlip = interpolate(local % 18, [0, 9, 18], [0, 180, 360]) % 360;
   const appear = spring(local, 120, 14);
   const placed = local >= impactLocal;
@@ -600,7 +593,6 @@ const InsertPhase: React.FC<{ local: number; dur: number; impactLocal: number }>
         {pEmoji}
       </div>
       {placed ? <PulseRing x={nx} y={yOf(0)} triggerFrame={impactLocal} tone="success" size={170} /> : null}
-      <Badge text="высота — монеткой · никаких вращений" color={theme.success} top={1430} left={W / 2 - 300} />
     </>
   );
 };
@@ -713,7 +705,6 @@ const ProbabilityPhase: React.FC<{ local: number; dur: number; impactLocal: numb
           zIndex: 5,
         }}
       />
-      <Badge text="редкий длинный путь — всё равно O(log n)" color={theme.danger} top={1430} left={W / 2 - 320} />
       {popped ? <PulseRing x={W / 2} y={panelY + 196} triggerFrame={impactLocal} tone="warning" size={440} /> : null}
     </>
   );
