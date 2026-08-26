@@ -35,6 +35,7 @@ import { TrieGrowthVisual } from "./TrieGrowthVisual";
 import { SuffixAutomatonVisual, type SuffixAutomatonPhase } from "./SuffixAutomatonVisual";
 import { BwtMatrixVisual, type BwtMatrixPhase } from "./BwtMatrixVisual";
 import { BwtInvertVisual, type BwtInvertPhase } from "./BwtInvertVisual";
+import { HilbertCurveVisual, type HilbertPhase } from "./HilbertCurveVisual";
 
 /* ──────────────────────────── расписание битов ──────────────────────────── */
 
@@ -180,6 +181,8 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
       impact = start + Math.round(dur * (phase === "runs" ? 0.72 : 0.62));
     }
     if (beat.visual === "quic-migration") impact = start + Math.round(dur * 0.62);
+    if (beat.visual === "hilbert-curve")
+      impact = start + Math.round(dur * (beat.params?.phase === "grid" ? 0.85 : 0.6));
     return { beat, start, end, impact };
   });
 };
@@ -351,6 +354,10 @@ export const storySfx = (
     if (s.beat.visual === "quic-migration") {
       const ph = s.beat.params?.phase;
       events.push({ frame: s.impact, sound: ph === "validate" ? "ding" : ph === "migrate" ? "pop" : "click" });
+    }
+    if (s.beat.visual === "hilbert-curve") {
+      const ph = s.beat.params?.phase;
+      events.push({ frame: s.impact, sound: ph === "cache" ? "ding" : ph === "grid" ? "ding" : "pop" });
     }
   }
   return events;
@@ -8654,6 +8661,15 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             fps={fps}
             impactLocal={impactLocal}
             phase={(slot.beat.params?.phase as QuicMigrationPhase | undefined) ?? "migrate"}
+          />
+        );
+      case "hilbert-curve":
+        return (
+          <HilbertCurveVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as HilbertPhase | undefined) ?? "grid"}
           />
         );
       default:

@@ -132,7 +132,8 @@ export interface StoryBeat {
       | "suffix-automaton"
       | "bwt-matrix"
       | "bwt-invert"
-      | "quic-migration";
+      | "quic-migration"
+      | "hilbert-curve";
   onWord?: string; // бит начинается на этом слове реплики
   params?: Record<string, unknown>;
 }
