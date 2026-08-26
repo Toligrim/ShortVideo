@@ -37,6 +37,7 @@ import { BwtMatrixVisual, type BwtMatrixPhase } from "./BwtMatrixVisual";
 import { BwtInvertVisual, type BwtInvertPhase } from "./BwtInvertVisual";
 import { HilbertCurveVisual, type HilbertPhase } from "./HilbertCurveVisual";
 import { SkipListVisual, type SkipListPhase } from "./SkipListVisual";
+import { EliasFanoVisual, type EliasFanoPhase } from "./EliasFanoVisual";
 
 /* ──────────────────────────── расписание битов ──────────────────────────── */
 
@@ -189,6 +190,10 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
       impact =
         start +
         Math.round(dur * (phase === "search" ? 0.66 : phase === "insert" ? 0.7 : phase === "probability" ? 0.6 : 0.55));
+    }
+    if (beat.visual === "elias-fano") {
+      const phase = beat.params?.phase;
+      impact = start + Math.round(dur * (phase === "formula" ? 0.58 : phase === "access" ? 0.62 : 0.55));
     }
     return { beat, start, end, impact };
   });
@@ -372,6 +377,10 @@ export const storySfx = (
         frame: s.impact,
         sound: ph === "search" || ph === "insert" || ph === "coin" || ph === "probability" ? "ding" : "pop",
       });
+    }
+    if (s.beat.visual === "elias-fano") {
+      const ph = s.beat.params?.phase;
+      events.push({ frame: s.impact, sound: ph === "formula" || ph === "access" ? "ding" : "pop" });
     }
   }
   return events;
@@ -8075,6 +8084,7 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     "bwt-invert": { scale: 0.9, y: -20 },
     "quic-migration": { scale: 0.9, y: -20 },
     "skip-list": { scale: 0.92, y: -20 },
+    "elias-fano": { scale: 0.9, y: -20 },
   };
   const cur = cams[slot.beat.visual] ?? { scale: 1, y: 0 };
   const prev = idx > 0 ? cams[slots[idx - 1].beat.visual] ?? cur : cur;
@@ -8695,6 +8705,15 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             impactLocal={impactLocal}
             dur={dur}
             phase={(slot.beat.params?.phase as SkipListPhase | undefined) ?? "levels"}
+          />
+        );
+      case "elias-fano":
+        return (
+          <EliasFanoVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as EliasFanoPhase | undefined) ?? "split"}
           />
         );
       default:

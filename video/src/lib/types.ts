@@ -134,7 +134,8 @@ export interface StoryBeat {
       | "bwt-matrix"
       | "bwt-invert"
       | "quic-migration"
-      | "hilbert-curve";
+    | "hilbert-curve"
+    | "elias-fano";
   onWord?: string; // бит начинается на этом слове реплики
   params?: Record<string, unknown>;
 }
