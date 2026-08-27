@@ -38,7 +38,7 @@ export const OutroScene: React.FC<{ scene: OutroProps; frames: number }> = ({ sc
           position: "absolute",
           left: 130,
           right: 130,
-          top: layout.height * 0.33,
+          top: layout.height * 0.42,
           display: "flex",
           flexDirection: "column",
           gap: 24,

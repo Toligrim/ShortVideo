@@ -255,7 +255,7 @@ export const DiagramScene: React.FC<{
         <>
           <PulseRing
             x={layout.width / 2}
-            y={bottom + 130}
+            y={bottom - 80}
             triggerFrame={stateFrame}
             tone={scene.state.tone ?? "success"}
             size={320}
@@ -264,7 +264,7 @@ export const DiagramScene: React.FC<{
             label={scene.state.label}
             tone={scene.state.tone ?? "success"}
             x={layout.width / 2}
-            y={bottom + 130}
+            y={bottom - 80}
             enterFrame={stateFrame}
           />
         </>
