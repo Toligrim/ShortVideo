@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "slug": "auto-20260827-082101",
+  "targets": {
+    "youtube": {
+      "title": "Как переполнение числа уничтожило первый Ariane 5",
+      "description": "Как одно переполнение числа в бортовой системе привело к потере управления Ariane 5. Реальный урок о границах типов данных.",
+      "tags": [
+        "Ariane 5",
+        "переполнение",
+        "программирование",
+        "информатика",
+        "software bugs"
+      ],
+      "category_id": "28",
+      "privacy_status": "public",
+      "made_for_kids": false,
+      "contains_synthetic_media": true,
+      "notify_subscribers": false
+    },
+    "instagram": {
+      "caption": "Как переполнение числа уничтожило первый Ariane 5. Реальный урок о границах типов данных. #информатика #программирование",
+      "share_to_feed": true
+    }
+  }
+}
