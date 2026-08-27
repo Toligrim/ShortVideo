@@ -1,7 +1,7 @@
 import React from "react";
 import { interpolate, useCurrentFrame } from "remotion";
 import { layout, theme } from "../lib/theme";
-import { stressed } from "../lib/stress";
+import { stripStress } from "../lib/stress";
 
 export const SceneHeading: React.FC<{ text: string }> = ({ text }) => {
   const frame = useCurrentFrame();
@@ -24,7 +24,7 @@ export const SceneHeading: React.FC<{ text: string }> = ({ text }) => {
         transform: `translateY(${(1 - opacity) * -20}px)`,
       }}
     >
-      {stressed(text)}
+      {stripStress(text)}
     </div>
   );
 };

@@ -1,46 +1,30 @@
-import React from "react";
-
-const COMBINING_ACUTE = "́";
+// Ударения (U+0301 и соседи из блока "Combining Diacritical Marks",
+// U+0300-U+036F) в сценарии нужны только для того, чтобы TTS выговорил
+// спорное слово правильно — на экране их быть не должно. Наши шрифты
+// (Montserrat cyrillic-подмножество + системные фолбэки) не умеют композитить
+// такие символы с предыдущей кириллической буквой: браузер берёт глиф из
+// другого шрифта и рисует его отдельным несвязанным символом рядом с буквой
+// вместо диакритики над ней. Поэтому просто вырезаем их из любого текста,
+// который попадает на экран.
+//
+// Фильтр по кодовым точкам, а не regex-литерал с диапазоном символов в
+// исходнике — так в файле нет невидимых комбинируемых символов, которые
+// легко случайно испортить при редактировании.
+const COMBINING_MARKS_START = 0x0300;
+const COMBINING_MARKS_END = 0x036f;
 
 /**
- * Наши шрифты (Montserrat cyrillic-подмножество + системные фолбэки) не умеют
- * композитить U+0301 с предыдущей кириллической буквой — браузер берёт глиф
- * из другого шрифта и рисует его отдельным несвязанным символом рядом с
- * буквой вместо диакритики над ней. Штрих ударения рисуется CSS поверх
- * буквы, а не глифом шрифта, поэтому не зависит от того, какой шрифт что
- * умеет.
- *
- * Используй везде, где на экран может попасть текст с ударениями
- * (U+0301) — заголовки, подписи, буллеты, караоке-субтитры.
+ * Используй везде, где на экран может попасть текст сценария — заголовки,
+ * подписи, буллеты, караоке-субтитры, подписи узлов/пакетов.
  */
-export function stressed(text: string): React.ReactNode {
-  if (!text || !text.includes(COMBINING_ACUTE)) return text;
-  const nodes: React.ReactNode[] = [];
-  let key = 0;
-  for (let i = 0; i < text.length; i++) {
-    const ch = text[i];
-    if (text[i + 1] === COMBINING_ACUTE) {
-      nodes.push(
-        <span key={key++} style={{ position: "relative" }}>
-          {ch}
-          <span
-            style={{
-              position: "absolute",
-              top: "-0.08em",
-              left: "42%",
-              width: "0.3em",
-              height: "0.07em",
-              background: "currentColor",
-              transform: "translateX(-50%) rotate(-25deg)",
-              borderRadius: "1px",
-            }}
-          />
-        </span>
-      );
-      i += 1; // пропустить сам U+0301
-    } else {
-      nodes.push(ch);
+export function stripStress(text: string): string {
+  if (!text) return text;
+  let result = "";
+  for (const ch of text) {
+    const code = ch.codePointAt(0) ?? 0;
+    if (code < COMBINING_MARKS_START || code > COMBINING_MARKS_END) {
+      result += ch;
     }
   }
-  return nodes;
+  return result;
 }

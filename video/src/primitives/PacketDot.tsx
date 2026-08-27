@@ -1,7 +1,7 @@
 import React from "react";
 import { interpolate, useCurrentFrame } from "remotion";
 import { theme, toneColor, Tone } from "../lib/theme";
-import { stressed } from "../lib/stress";
+import { stripStress } from "../lib/stress";
 
 const easeInOut = (t: number) => t * t * (3 - 2 * t);
 
@@ -104,7 +104,7 @@ export const PacketDot: React.FC<{
           whiteSpace: "nowrap",
         }}
       >
-        {stressed(label)}
+        {stripStress(label)}
       </div>
     </>
   );

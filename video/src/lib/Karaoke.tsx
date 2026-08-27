@@ -2,7 +2,7 @@ import React from "react";
 import { useCurrentFrame, useVideoConfig } from "remotion";
 import { fitText } from "@remotion/layout-utils";
 import { layout, theme, LEAD_SEC } from "./theme";
-import { stressed } from "./stress";
+import { stripStress } from "./stress";
 import type { Word } from "./types";
 
 const MAX_TOKENS = 3;
@@ -111,7 +111,7 @@ export const Karaoke: React.FC<{ words: Word[]; sceneFrames: number; cutoffFrame
                 : "0 4px 24px rgba(0,0,0,0.9), 0 2px 6px rgba(0,0,0,0.9)",
             }}
           >
-            {stressed(w.text)}
+            {stripStress(w.text)}
           </span>
         );
       })}
