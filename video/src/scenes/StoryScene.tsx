@@ -39,6 +39,7 @@ import { HilbertCurveVisual, type HilbertPhase } from "./HilbertCurveVisual";
 import { SkipListVisual, type SkipListPhase } from "./SkipListVisual";
 import { EliasFanoVisual, type EliasFanoPhase } from "./EliasFanoVisual";
 import { RaftQuorumVisual, type RaftQuorumPhase } from "./RaftQuorumVisual";
+import { ArianeOverflowVisual, type ArianeOverflowPhase } from "./ArianeOverflowVisual";
 
 /* ──────────────────────────── расписание битов ──────────────────────────── */
 
@@ -201,6 +202,10 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
       impact = start + Math.round(dur * (phase === "formula" ? 0.58 : phase === "access" ? 0.62 : 0.55));
     }
     if (beat.visual === "raft-quorum") impact = start + Math.round(dur * 0.62);
+    if (beat.visual === "ariane-overflow") {
+      const phase = beat.params?.phase;
+      impact = start + Math.round(dur * (phase === "launch" ? 0.72 : phase === "cascade" ? 0.5 : 0.62));
+    }
     return { beat, start, end, impact };
   });
 };
@@ -394,6 +399,10 @@ export const storySfx = (
       events.push({ frame: s.impact, sound: ph === "formula" || ph === "access" ? "ding" : "pop" });
     }
     if (s.beat.visual === "raft-quorum") events.push({ frame: s.impact, sound: "pop" });
+    if (s.beat.visual === "ariane-overflow") {
+      const phase = s.beat.params?.phase;
+      events.push({ frame: s.impact, sound: phase === "cascade" ? "slam" : phase === "launch" ? "whoosh" : "pop" });
+    }
   }
   return events;
 };
@@ -8726,6 +8735,7 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     "quic-migration": { scale: 0.9, y: -20 },
     "skip-list": { scale: 0.92, y: -20 },
     "elias-fano": { scale: 0.9, y: -20 },
+    "ariane-overflow": { scale: 0.88, y: -20 },
   };
   const cur = cams[slot.beat.visual] ?? { scale: 1, y: 0 };
   const prev = idx > 0 ? cams[slots[idx - 1].beat.visual] ?? cur : cur;
@@ -9375,6 +9385,15 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             phase={(slot.beat.params?.phase as RaftQuorumPhase | undefined) ?? "cluster"}
             quorum={slot.beat.params?.quorum as boolean | undefined}
             leader={slot.beat.params?.leader as number | undefined}
+          />
+        );
+      case "ariane-overflow":
+        return (
+          <ArianeOverflowVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as ArianeOverflowPhase | undefined) ?? "overflow"}
           />
         );
       default:
