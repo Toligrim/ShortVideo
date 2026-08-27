@@ -2,6 +2,7 @@ import React from "react";
 import { interpolate, spring, useCurrentFrame, useVideoConfig } from "remotion";
 import { TRANSITION_FRAMES, layout, theme } from "../lib/theme";
 import { PulseRing } from "../lib/Motion";
+import { stressed } from "../lib/stress";
 import type { OutroScene as OutroProps } from "../lib/types";
 
 /** Финал: заголовок, пункты-выводы, пульсирующий CTA. */
@@ -31,7 +32,7 @@ export const OutroScene: React.FC<{ scene: OutroProps; frames: number }> = ({ sc
           transform: `translateY(${(1 - titleS) * 50}px)`,
         }}
       >
-        {scene.title}
+        {stressed(scene.title)}
       </div>
       <div
         style={{
@@ -68,7 +69,7 @@ export const OutroScene: React.FC<{ scene: OutroProps; frames: number }> = ({ sc
                 }}
               />
               <span style={{ fontFamily: theme.font, fontWeight: 700, fontSize: 48, color: theme.text }}>
-                {b}
+                {stressed(b)}
               </span>
             </div>
           );
@@ -112,7 +113,7 @@ export const OutroScene: React.FC<{ scene: OutroProps; frames: number }> = ({ sc
               lineHeight: 1.05,
             }}
           >
-            {scene.cta}
+            {stressed(scene.cta)}
           </div>
         </div>
         </>

@@ -2,6 +2,7 @@ import React from "react";
 import { spring, useCurrentFrame, useVideoConfig, random } from "remotion";
 import { fitText } from "@remotion/layout-utils";
 import { theme, toneColor, Tone } from "../lib/theme";
+import { stressed } from "../lib/stress";
 import { IconGlyph } from "./IconGlyph";
 
 /** Узел схемы: панель с иконкой и подписью; парит, пульсирует при прилёте пакета. */
@@ -69,7 +70,7 @@ export const NodeBox: React.FC<{
           lineHeight: 1.1,
         }}
       >
-        {label}
+        {stressed(label)}
       </div>
     </div>
   );

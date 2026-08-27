@@ -2,6 +2,7 @@ import React from "react";
 import { spring, useCurrentFrame, useVideoConfig } from "remotion";
 import { fitText } from "@remotion/layout-utils";
 import { theme, toneColor, Tone } from "../lib/theme";
+import { stressed } from "../lib/stress";
 
 /** Бейдж состояния («Соединение установлено»), появляется пружинкой. */
 export const Badge: React.FC<{
@@ -39,7 +40,7 @@ export const Badge: React.FC<{
         boxShadow: `0 0 50px ${color}33`,
       }}
     >
-      {label}
+      {stressed(label)}
     </div>
   );
 };

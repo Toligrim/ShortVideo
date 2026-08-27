@@ -1,6 +1,7 @@
 import React from "react";
 import { interpolate, spring, useCurrentFrame, useVideoConfig } from "remotion";
 import { layout, theme } from "../lib/theme";
+import { stressed } from "../lib/stress";
 import type { HookScene as HookProps } from "../lib/types";
 
 /** Хук: крупный заголовок, слова влетают по одному. */
@@ -45,7 +46,7 @@ export const HookScene: React.FC<{ scene: HookProps }> = ({ scene }) => {
                     : "0 6px 40px rgba(0,0,0,0.6)",
               }}
             >
-              {w}
+              {stressed(w)}
             </span>
           );
         })}
@@ -67,7 +68,7 @@ export const HookScene: React.FC<{ scene: HookProps }> = ({ scene }) => {
             }),
           }}
         >
-          {scene.subtitle}
+          {stressed(scene.subtitle)}
         </div>
       ) : null}
     </>
