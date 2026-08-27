@@ -1,0 +1,87 @@
+{
+  "id": "auto-20260827-050001",
+  "title": "Три голоса из пяти: как Рафт переживает падение двух серверов",
+  "scenes": [
+    {
+      "type": "hook",
+      "title": "Три голоса из пяти",
+      "subtitle": "как Рафт переживает падение двух серверов",
+      "narration": "Рафт-кластер из пяти серверов. Два молчат — сломались, отключились, неважно. Остальные три чувствуют тишину."
+    },
+    {
+      "type": "story",
+      "narration": "Лидер опрашивает кластер. Фолловеры три и четыре отвечаю́т — они живы. Итого три из пяти — кворум на месте.",
+      "beats": [
+        {
+          "visual": "raft-quorum",
+          "onWord": "Лидер",
+          "params": { "phase": "poll", "quorum": true, "leader": 0 }
+        },
+        {
+          "visual": "raft-quorum",
+          "onWord": "отвечают",
+          "params": { "phase": "commit", "quorum": true, "leader": 0 }
+        }
+      ]
+    },
+    {
+      "type": "story",
+      "narration": "Лидер считает: я плюс фолловеры три и четыре — это три голоса. Три из пяти — запись подтверждена.",
+      "beats": [
+        {
+          "visual": "raft-quorum",
+          "onWord": "считает",
+          "params": { "phase": "commit", "quorum": true, "leader": 0 }
+        },
+        {
+          "visual": "raft-quorum",
+          "onWord": "Три",
+          "params": { "phase": "commit", "quorum": true, "leader": 0 }
+        }
+      ]
+    },
+    {
+      "type": "story",
+      "narration": "Вот и весь секрет. Пять машин — три голоса для кворума. Пока три живы —рафт работает. Потеряли двух — не страшно.",
+      "beats": [
+        {
+          "visual": "raft-quorum",
+          "onWord": "секрет",
+          "params": { "phase": "cluster", "quorum": true, "leader": 0 }
+        },
+        {
+          "visual": "raft-quorum",
+          "onWord": "рафт",
+          "params": { "phase": "cluster", "quorum": true, "leader": 0 }
+        }
+      ]
+    },
+    {
+      "type": "story",
+      "narration": "А вот если упадёт ещё один сервер — останутся два. Кворума нет. Новые записи не пройдут, но уже записанные — на месте.",
+      "beats": [
+        {
+          "visual": "raft-quorum",
+          "onWord": "упадёт",
+          "params": { "phase": "failure", "quorum": false, "leader": 0 }
+        },
+        {
+          "visual": "raft-quorum",
+          "onWord": "месте",
+          "params": { "phase": "no-commit", "quorum": false, "leader": 0 }
+        }
+      ]
+    },
+    {
+      "type": "outro",
+      "title": "Raft не теряет данные",
+      "bullets": [
+        "Коммиченные записи — навсегда",
+        "Кворум — три из пяти",
+        "Потеря большинства не убивает"
+      ],
+      "cta": "Подпишись: дальше — выборы и логи",
+      "narration": "Рафт не теряет данные даже после потери большинства. Коммиченные записи — навсегда. Подпишись, чтобы не пропустить следующий разбор."
+    }
+  ]
+}
