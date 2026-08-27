@@ -136,20 +136,22 @@ export const CapacitiveTouchVisual: React.FC<{
           border: `2px solid rgba(180,200,230,0.3)`,
         }}
       />
-      <div
-        style={{
-          position: "absolute",
-          left: W / 2,
-          top: GRID_TOP - 96,
-          transform: "translateX(-50%)",
-          color: theme.subtext,
-          fontFamily: theme.mono,
-          fontSize: 20,
-          whiteSpace: "nowrap",
-        }}
-      >
-        СТЕКЛО · не проводит
-      </div>
+      {phase !== "touch" && phase !== "glove" && (
+        <div
+          style={{
+            position: "absolute",
+            left: W / 2,
+            top: GRID_TOP - 96,
+            transform: "translateX(-50%)",
+            color: theme.subtext,
+            fontFamily: theme.mono,
+            fontSize: 20,
+            whiteSpace: "nowrap",
+          }}
+        >
+          СТЕКЛО · не проводит
+        </div>
+      )}
     </div>
   );
 
