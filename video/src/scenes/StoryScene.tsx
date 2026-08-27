@@ -206,6 +206,10 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
       const phase = beat.params?.phase;
       impact = start + Math.round(dur * (phase === "launch" ? 0.72 : phase === "cascade" ? 0.5 : 0.62));
     }
+    if (beat.visual === "ai-hallucination") {
+      const phase = beat.params?.phase;
+      impact = start + Math.round(dur * (phase === "predict" ? 0.62 : phase === "bluff-score" ? 0.58 : phase === "fake-citation" ? 0.64 : phase === "verify" ? 0.62 : 0.6));
+    }
     return { beat, start, end, impact };
   });
 };
@@ -402,6 +406,11 @@ export const storySfx = (
     if (s.beat.visual === "ariane-overflow") {
       const phase = s.beat.params?.phase;
       events.push({ frame: s.impact, sound: phase === "cascade" ? "slam" : phase === "launch" ? "whoosh" : "pop" });
+    }
+    if (s.beat.visual === "ai-hallucination") {
+      const phase = s.beat.params?.phase;
+      const sound = phase === "fake-citation" ? "slam" : phase === "verify" ? "ding" : phase === "bluff-score" ? "pop" : "click";
+      events.push({ frame: s.impact, sound });
     }
   }
   return events;
@@ -1045,6 +1054,504 @@ const XorFilterVisual: React.FC<{
   }
 
   return null;
+};
+
+type AiHallucinationPhase = "predict" | "bluff-score" | "fake-citation" | "verify";
+
+/** LLM галлюцинация буквально: предсказание следующего слова, награда за блеф, выдуманная цитата и проверка источников. */
+const AiHallucinationVisual: React.FC<{
+  local: number;
+  fps: number;
+  impactLocal: number;
+  phase?: AiHallucinationPhase;
+}> = ({ local, fps, impactLocal, phase = "predict" }) => {
+  const enter = spring({ frame: local, fps, config: { damping: 15, mass: 0.8 } });
+  const reveal = spring({ frame: Math.max(0, local - impactLocal), fps, config: { damping: 12, mass: 0.7 } });
+  const mono: React.CSSProperties = { fontFamily: theme.mono, fontWeight: 800, letterSpacing: 2 };
+  const panel = (color: string): React.CSSProperties => ({
+    borderRadius: 24,
+    background: `${theme.panel}E8`,
+    border: `3px solid ${color}66`,
+    boxShadow: `0 0 42px ${color}20`,
+  });
+  const headerTitle: Record<AiHallucinationPhase, string> = {
+    predict: "LLM · УГАДЫВАЕТ СЛЕДУЮЩЕЕ СЛОВО",
+    "bluff-score": "ОЦЕНКА · БЛЕФ ВЫГОДНЕЕ ПАУЗЫ",
+    "fake-citation": "ВЫДУМАННОЕ ДЕЛО · СУД",
+    verify: "ПРОВЕРКА · НЕ ВЕРЬ ТОНУ",
+  };
+  const header = (
+    <div
+      style={{
+        position: "absolute",
+        left: W / 2,
+        top: 265,
+        transform: "translateX(-50%)",
+        display: "flex",
+        alignItems: "center",
+        gap: 12,
+        color: theme.subtext,
+        fontSize: 24,
+        whiteSpace: "nowrap",
+        opacity: enter,
+        ...mono,
+      }}
+    >
+      <IconGlyph
+        name={phase === "predict" ? "bot" : phase === "bluff-score" ? "scale" : phase === "fake-citation" ? "gavel" : "search-check"}
+        size={28}
+        color={phase === "fake-citation" ? theme.danger : phase === "verify" ? theme.success : theme.accent2}
+        strokeWidth={1.8}
+      />
+      <span>{headerTitle[phase]}</span>
+    </div>
+  );
+
+  if (phase === "predict") {
+    const candidates = [
+      { word: "15 марта", pct: 42, color: theme.accent, best: true },
+      { word: "вчера", pct: 18, color: theme.subtext, best: false },
+      { word: "не знаю", pct: 5, color: theme.panelBorder, best: false },
+    ];
+    return (
+      <>
+        {header}
+        <div
+          style={{
+            position: "absolute",
+            left: 76,
+            right: 76,
+            top: 360,
+            height: 210,
+            ...panel(theme.accent),
+            opacity: enter,
+            transform: `translateY(${(1 - enter) * 40}px)`,
+            padding: "22px 26px",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 12, color: theme.subtext, fontFamily: theme.mono, fontSize: 22 }}>
+            <IconGlyph name="message-circle" size={24} color={theme.accent} strokeWidth={1.8} />
+            ты: День рождения кота?
+          </div>
+          <div
+            style={{
+              marginTop: 18,
+              display: "flex",
+              alignItems: "center",
+              gap: 14,
+              background: "#0D1420",
+              borderRadius: 16,
+              padding: "14px 18px",
+              border: `2px solid ${theme.panelBorder}`,
+            }}
+          >
+            <IconGlyph name="bot" size={30} color={theme.accent2} strokeWidth={1.8} />
+            <span style={{ fontFamily: theme.font, fontWeight: 800, fontSize: 28, color: theme.text }}>Кот родился</span>
+            <span
+              style={{
+                marginLeft: 6,
+                padding: "6px 14px",
+                borderRadius: 999,
+                background: `${theme.accent}22`,
+                border: `2px dashed ${theme.accent}99`,
+                color: theme.accent,
+                fontFamily: theme.mono,
+                fontSize: 24,
+                fontWeight: 800,
+              }}
+            >
+              …
+            </span>
+            <span style={{ fontFamily: theme.mono, fontSize: 20, color: theme.subtext, marginLeft: 6 }}>след. слово</span>
+          </div>
+          <div style={{ marginTop: 14, fontFamily: theme.mono, fontSize: 19, color: theme.subtext, letterSpacing: 1 }}>МИЛЛИАРДЫ ТЕКСТОВ → ВЕРОЯТНОСТЬ</div>
+        </div>
+        <div style={{ position: "absolute", left: 76, right: 76, top: 640, display: "flex", flexDirection: "column", gap: 14 }}>
+          {candidates.map((c, i) => {
+            const p = spring({ frame: Math.max(0, local - i * 6), fps, config: { damping: 14, mass: 0.75 } });
+            const active = c.best && local >= impactLocal;
+            return (
+              <div
+                key={c.word}
+                style={{
+                  height: 84,
+                  borderRadius: 18,
+                  background: active ? `${theme.accent}18` : theme.panel,
+                  border: `3px solid ${active ? theme.accent : c.color}88`,
+                  display: "flex",
+                  alignItems: "center",
+                  padding: "0 18px",
+                  gap: 14,
+                  opacity: enter * p,
+                  transform: `translateY(${(1 - p) * 28}px)`,
+                  boxShadow: active ? `0 0 32px ${theme.accent}44` : "none",
+                }}
+              >
+                <div style={{ flex: 1, fontFamily: theme.font, fontWeight: 800, fontSize: 30, color: active ? theme.accent : theme.text }}>{c.word}</div>
+                <div style={{ width: 170, height: 14, borderRadius: 999, background: theme.panelBorder, overflow: "hidden" }}>
+                  <div
+                    style={{
+                      width: `${c.pct}%`,
+                      height: "100%",
+                      borderRadius: 999,
+                      background: c.color,
+                      transform: `scaleX(${p})`,
+                      transformOrigin: "left",
+                    }}
+                  />
+                </div>
+                <div style={{ width: 72, textAlign: "right", fontFamily: theme.mono, fontWeight: 800, fontSize: 26, color: c.color }}>{c.pct}%</div>
+                {active ? <IconGlyph name="sparkles" size={26} color={theme.accent} strokeWidth={1.8} /> : null}
+              </div>
+            );
+          })}
+        </div>
+        <div
+          style={{
+            position: "absolute",
+            left: W / 2,
+            top: 970,
+            transform: `translateX(-50%) scale(${0.85 + reveal * 0.15})`,
+            padding: "14px 26px",
+            borderRadius: 999,
+            background: `${theme.accent}18`,
+            border: `2px solid ${theme.accent}99`,
+            color: theme.accent,
+            fontFamily: theme.mono,
+            fontSize: 24,
+            fontWeight: 800,
+            opacity: enter * reveal,
+            whiteSpace: "nowrap",
+          }}
+        >
+          ДОДУМЫВАЕТ РЕДКИЙ ФАКТ
+        </div>
+        <PulseRing x={W / 2} y={795} triggerFrame={impactLocal} tone="accent" size={200} />
+      </>
+    );
+  }
+
+  if (phase === "bluff-score") {
+    const bluffP = spring({ frame: Math.max(0, local - impactLocal), fps, config: { damping: 12, mass: 0.7 } });
+    return (
+      <>
+        {header}
+        <div style={{ position: "absolute", left: 76, right: 76, top: 370, display: "flex", gap: 20, opacity: enter }}>
+          <div style={{ flex: 1, height: 380, ...panel(theme.subtext), textAlign: "center", paddingTop: 28, opacity: 0.95 }}>
+            <div style={{ ...mono, fontSize: 22, color: theme.subtext }}>ПУСТОЙ ОТВЕТ</div>
+            <div
+              style={{
+                margin: "22px auto 0",
+                width: 160,
+                height: 92,
+                borderRadius: 18,
+                border: `3px dashed ${theme.subtext}`,
+                background: `${theme.subtext}12`,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: theme.subtext,
+                fontFamily: theme.mono,
+                fontSize: 40,
+                fontWeight: 800,
+              }}
+            >
+              —
+            </div>
+            <div style={{ marginTop: 22, fontFamily: theme.font, fontWeight: 800, fontSize: 42, color: theme.subtext }}>0</div>
+            <div style={{ ...mono, fontSize: 20, color: theme.subtext, marginTop: 6 }}>БАЛЛОВ ВСЕГДА</div>
+          </div>
+          <div
+            style={{
+              flex: 1,
+              height: 380,
+              ...panel(theme.warning),
+              textAlign: "center",
+              paddingTop: 28,
+              transform: `scale(${1 + bluffP * 0.04})`,
+              boxShadow: `0 0 42px ${theme.warning}33`,
+            }}
+          >
+            <div style={{ ...mono, fontSize: 22, color: theme.warning }}>УГАДАЛ</div>
+            <div
+              style={{
+                margin: "22px auto 0",
+                width: 160,
+                height: 92,
+                borderRadius: 18,
+                border: `3px solid ${theme.warning}`,
+                background: `${theme.warning}18`,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: theme.warning,
+                fontFamily: theme.mono,
+                fontSize: 38,
+                fontWeight: 800,
+                boxShadow: `0 0 22px ${theme.warning}55`,
+              }}
+            >
+              ? → ✓
+            </div>
+            <div style={{ marginTop: 22, fontFamily: theme.font, fontWeight: 800, fontSize: 42, color: theme.warning }}>+1</div>
+            <div style={{ ...mono, fontSize: 20, color: theme.warning, marginTop: 6 }}>ЕСЛИ ПОВЕЗЁТ</div>
+          </div>
+        </div>
+        <div
+          style={{
+            position: "absolute",
+            left: W / 2,
+            top: 820,
+            transform: `translateX(-50%) scale(${0.82 + bluffP * 0.18})`,
+            padding: "16px 28px",
+            borderRadius: 999,
+            background: `${theme.warning}18`,
+            border: `2px solid ${theme.warning}99`,
+            color: theme.warning,
+            fontFamily: theme.font,
+            fontWeight: 800,
+            fontSize: 30,
+            opacity: enter * (0.35 + bluffP * 0.65),
+            whiteSpace: "nowrap",
+          }}
+        >
+          БЛЕФОВАТЬ ВЫГОДНЕЕ · «НЕ ЗНАЮ» = 0
+        </div>
+        <div style={{ position: "absolute", left: W / 2, top: 970, transform: "translateX(-50%)", ...mono, fontSize: 22, color: theme.subtext, opacity: enter }}>
+          МОДЕЛЬ ЗАПОМИНАЕТ СТРАТЕГИЮ
+        </div>
+        <PulseRing x={W / 2 + 220} y={560} triggerFrame={impactLocal} tone="warning" size={170} />
+      </>
+    );
+  }
+
+  if (phase === "fake-citation") {
+    const stampP = spring({ frame: Math.max(0, local - impactLocal), fps, config: { damping: 11, mass: 0.7 } });
+    return (
+      <>
+        {header}
+        <div
+          style={{
+            position: "absolute",
+            left: 76,
+            right: 76,
+            top: 370,
+            height: 320,
+            ...panel(theme.accent2),
+            opacity: enter,
+            transform: `translateY(${(1 - enter) * 40}px)`,
+            padding: "22px 24px",
+            overflow: "hidden",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 12, color: theme.subtext, fontFamily: theme.mono, fontSize: 20 }}>
+            <IconGlyph name="bot" size={22} color={theme.accent2} strokeWidth={1.8} />
+            ChatGPT · ответ
+            <span style={{ marginLeft: "auto", padding: "4px 10px", borderRadius: 999, background: `${theme.accent2}18`, border: `1px solid ${theme.accent2}66`, fontSize: 18 }}>уверенно</span>
+          </div>
+          <div
+            style={{
+              marginTop: 18,
+              background: "#0D1420",
+              borderRadius: 16,
+              padding: "18px 18px",
+              border: `2px solid ${theme.panelBorder}`,
+            }}
+          >
+            <div style={{ fontFamily: theme.mono, fontSize: 22, color: theme.text, lineHeight: 1.35, fontWeight: 700 }}>
+              Varghese v. China Southern Airlines,
+              <br />
+              925 F.3d 1339 (S.D.N.Y. 2023)
+            </div>
+            <div style={{ marginTop: 10, fontFamily: theme.font, fontSize: 22, color: theme.subtext }}>ещё 5 дел · все выглядят правдоподобно</div>
+          </div>
+          <div
+            style={{
+              position: "absolute",
+              right: 18,
+              top: 118,
+              transform: `rotate(-14deg) scale(${0.7 + stampP * 0.3})`,
+              padding: "10px 18px",
+              borderRadius: 12,
+              border: `3px solid ${theme.danger}`,
+              background: `${theme.danger}18`,
+              color: theme.danger,
+              fontFamily: theme.font,
+              fontWeight: 800,
+              fontSize: 28,
+              letterSpacing: 2,
+              opacity: stampP,
+              boxShadow: `0 0 28px ${theme.danger}66`,
+            }}
+          >
+            ВЫДУМАНО
+          </div>
+        </div>
+        <div style={{ position: "absolute", left: 76, right: 76, top: 730, display: "flex", gap: 18, opacity: enter }}>
+          <div style={{ flex: 1, height: 180, ...panel(theme.danger), display: "flex", alignItems: "center", gap: 16, padding: "0 22px" }}>
+            <IconGlyph name="gavel" size={44} color={theme.danger} strokeWidth={1.8} />
+            <div>
+              <div style={{ fontFamily: theme.font, fontWeight: 800, fontSize: 30, color: theme.danger }}>Нью-Йорк · суд</div>
+              <div style={{ fontFamily: theme.mono, fontSize: 20, color: theme.subtext, marginTop: 4 }}>6 дел не нашлись</div>
+            </div>
+          </div>
+          <div
+            style={{
+              flex: 1,
+              height: 180,
+              ...panel(theme.warning),
+              display: "flex",
+              alignItems: "center",
+              gap: 16,
+              padding: "0 22px",
+              transform: `scale(${0.85 + stampP * 0.15})`,
+              opacity: 0.4 + stampP * 0.6,
+            }}
+          >
+            <IconGlyph name="badge-dollar-sign" size={44} color={theme.warning} strokeWidth={1.8} />
+            <div>
+              <div style={{ fontFamily: theme.font, fontWeight: 800, fontSize: 30, color: theme.warning }}>$5 000</div>
+              <div style={{ fontFamily: theme.mono, fontSize: 20, color: theme.subtext, marginTop: 4 }}>штраф адвокату</div>
+            </div>
+          </div>
+        </div>
+        <div
+          style={{
+            position: "absolute",
+            left: W / 2,
+            top: 980,
+            transform: `translateX(-50%) scale(${0.82 + stampP * 0.18})`,
+            padding: "12px 24px",
+            borderRadius: 999,
+            background: `${theme.danger}14`,
+            border: `2px solid ${theme.danger}88`,
+            color: theme.danger,
+            fontFamily: theme.mono,
+            fontSize: 22,
+            fontWeight: 800,
+            opacity: stampP,
+            whiteSpace: "nowrap",
+          }}
+        >
+          УВЕРЕННЫЙ ТОН ≠ ПРАВДА
+        </div>
+        <PulseRing x={W - 170} y={530} triggerFrame={impactLocal} tone="danger" size={180} />
+      </>
+    );
+  }
+
+  // verify
+  const checkP = spring({ frame: Math.max(0, local - impactLocal), fps, config: { damping: 12, mass: 0.7 } });
+  const items = [
+    { label: "цитаты", icon: "quote" as const, ok: false },
+    { label: "цифры", icon: "hash" as const, ok: false },
+    { label: "ссылки", icon: "link-2" as const, ok: true },
+  ];
+  return (
+    <>
+      {header}
+      <div
+        style={{
+          position: "absolute",
+          left: W / 2,
+          top: 360,
+          transform: "translateX(-50%)",
+          display: "flex",
+          alignItems: "center",
+          gap: 12,
+          padding: "12px 20px",
+          borderRadius: 999,
+          background: `${theme.success}14`,
+          border: `2px solid ${theme.success}88`,
+          color: theme.success,
+          fontFamily: theme.mono,
+          fontSize: 22,
+          fontWeight: 800,
+          opacity: enter,
+        }}
+      >
+        <IconGlyph name="search" size={22} color={theme.success} strokeWidth={1.8} />
+        ПОИСК
+        <span style={{ width: 52, height: 30, borderRadius: 999, background: theme.success, display: "flex", alignItems: "center", justifyContent: "flex-end", paddingRight: 4 }}>
+          <span style={{ width: 22, height: 22, borderRadius: "50%", background: "#fff" }} />
+        </span>
+        ВКЛ
+      </div>
+      <div style={{ position: "absolute", left: 76, right: 76, top: 450, display: "flex", flexDirection: "column", gap: 14, opacity: enter }}>
+        {items.map((it, i) => {
+          const p = spring({ frame: Math.max(0, local - i * 7), fps, config: { damping: 14, mass: 0.75 } });
+          const showCheck = local >= impactLocal;
+          return (
+            <div
+              key={it.label}
+              style={{
+                height: 112,
+                borderRadius: 20,
+                background: theme.panel,
+                border: `3px solid ${showCheck ? (it.ok ? theme.success : theme.danger) + "66" : theme.panelBorder}`,
+                display: "flex",
+                alignItems: "center",
+                padding: "0 22px",
+                gap: 16,
+                opacity: enter * p,
+                transform: `translateY(${(1 - p) * 28}px)`,
+              }}
+            >
+              <IconGlyph name={it.icon} size={34} color={showCheck ? (it.ok ? theme.success : theme.danger) : theme.subtext} strokeWidth={1.8} />
+              <span style={{ flex: 1, fontFamily: theme.font, fontWeight: 800, fontSize: 30, color: theme.text }}>{it.label}</span>
+              <span style={{ fontFamily: theme.mono, fontSize: 20, color: theme.subtext }}>проверь</span>
+              <div
+                style={{
+                  width: 52,
+                  height: 52,
+                  borderRadius: "50%",
+                  background: showCheck ? (it.ok ? `${theme.success}18` : `${theme.danger}18`) : `${theme.subtext}12`,
+                  border: `3px solid ${showCheck ? (it.ok ? theme.success : theme.danger) : theme.subtext}99`,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  opacity: showCheck ? checkP : 0.7,
+                  transform: `scale(${showCheck ? 0.7 + checkP * 0.3 : 1})`,
+                }}
+              >
+                <IconGlyph
+                  name={it.ok ? "check" : "x"}
+                  size={28}
+                  color={showCheck ? (it.ok ? theme.success : theme.danger) : theme.subtext}
+                  strokeWidth={2.2}
+                />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div
+        style={{
+          position: "absolute",
+          left: W / 2,
+          top: 900,
+          transform: `translateX(-50%) scale(${0.82 + checkP * 0.18})`,
+          padding: "16px 28px",
+          borderRadius: 999,
+          background: `${theme.success}18`,
+          border: `2px solid ${theme.success}99`,
+          color: theme.success,
+          fontFamily: theme.font,
+          fontWeight: 800,
+          fontSize: 28,
+          opacity: checkP,
+          whiteSpace: "nowrap",
+          boxShadow: `0 0 40px ${theme.success}22`,
+        }}
+      >
+        ПРОСИ ИСТОЧНИКИ · ПЕРЕПРОВЕРЯЙ
+      </div>
+      <div style={{ position: "absolute", left: W / 2, top: 990, transform: "translateX(-50%)", ...mono, fontSize: 20, color: theme.subtext, opacity: enter }}>
+        уверенность ≠ надёжность
+      </div>
+      <PulseRing x={W / 2} y={750} triggerFrame={impactLocal} tone="success" size={190} />
+    </>
+  );
 };
 
 /** Браузер + рука-курсор, кликающая по ссылке. */
@@ -8729,6 +9236,7 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     "sudoku-exact-cover": { scale: 0.88, y: -22 },
     "amdahl-speedup": { scale: 0.9, y: -20 },
     "gray-code": { scale: 0.92, y: -10 },
+    "ai-hallucination": { scale: 0.9, y: -20 },
     "consistent-hash-ring": { scale: 0.9, y: -20 },
     "bwt-matrix": { scale: 0.88, y: -20 },
     "bwt-invert": { scale: 0.9, y: -20 },
@@ -9394,6 +9902,15 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             fps={fps}
             impactLocal={impactLocal}
             phase={(slot.beat.params?.phase as ArianeOverflowPhase | undefined) ?? "overflow"}
+          />
+        );
+      case "ai-hallucination":
+        return (
+          <AiHallucinationVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as AiHallucinationPhase | undefined) ?? "predict"}
           />
         );
       default:
