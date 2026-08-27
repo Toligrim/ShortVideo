@@ -110,7 +110,7 @@ const SecretBadge: React.FC<{ label: string; x: number; y: number; side: number;
 const PACKET_FLIGHT = 26; // кадров на перелёт
 
 const geometry = (scene: DiagramProps) => {
-  const top = layout.safeTop + (scene.heading ? 180 : 60);
+  const top = layout.safeTop + (scene.heading ? 220 : 60);
   // при бейдже state низ поднимается, чтобы бейдж не наезжал на караоке
   const bottom = layout.safeBottom - (scene.state ? 260 : 140);
   const n = scene.nodes.length;
@@ -255,7 +255,7 @@ export const DiagramScene: React.FC<{
         <>
           <PulseRing
             x={layout.width / 2}
-            y={bottom - 80}
+            y={bottom - 220}
             triggerFrame={stateFrame}
             tone={scene.state.tone ?? "success"}
             size={320}
@@ -264,7 +264,7 @@ export const DiagramScene: React.FC<{
             label={scene.state.label}
             tone={scene.state.tone ?? "success"}
             x={layout.width / 2}
-            y={bottom - 80}
+            y={bottom - 220}
             enterFrame={stateFrame}
           />
         </>

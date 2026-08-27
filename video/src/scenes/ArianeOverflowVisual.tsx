@@ -133,15 +133,16 @@ const Rocket: React.FC<{ phase: ArianeOverflowPhase; local: number; hit: boolean
 };
 
 const BitRow: React.FC<{ label: string; bits: string; color: string; dim?: boolean }> = ({ label, bits, color, dim = false }) => (
-  <div style={{ display: "flex", alignItems: "center", gap: 14, opacity: dim ? 0.45 : 1 }}>
-    <div style={{ width: 170, color: theme.subtext, fontFamily: theme.mono, fontSize: 19, letterSpacing: 1 }}>{label}</div>
-    <div style={{ display: "flex", gap: 5 }}>
+  <div style={{ display: "flex", alignItems: "center", gap: bits.length > 16 ? 8 : 14, opacity: dim ? 0.45 : 1 }}>
+    <div style={{ width: bits.length > 16 ? 95 : 170, color: theme.subtext, fontFamily: theme.mono, fontSize: bits.length > 16 ? 16 : 19, lineHeight: 1.1, letterSpacing: bits.length > 16 ? 0.5 : 1 }}>{label}</div>
+    <div style={{ display: "flex", gap: bits.length > 16 ? 1 : 5, flexShrink: 0 }}>
       {bits.split("").map((bit, index) => (
         <div
           key={`${label}-${index}`}
           style={{
-            width: bits.length > 16 ? 10 : 16,
-            height: 34,
+            boxSizing: "border-box",
+            width: bits.length > 16 ? 4 : 16,
+            height: bits.length > 16 ? 26 : 34,
             borderRadius: 5,
             background: bit === "1" ? color : "#0A0F18",
             border: `2px solid ${bit === "1" ? color : theme.panelBorder}`,
