@@ -2363,7 +2363,7 @@ const PasswordHashVisual: React.FC<{
           </div>
         </div>
       ))}
-      <div style={{ position: "absolute", left: W / 2 - 250, top: 690, color: theme.warning, fontSize: 60, fontWeight: 800, opacity: enter }}>≠</div>
+      <div style={{ position: "absolute", left: W / 2, top: 690, transform: "translateX(-50%)", color: theme.warning, fontSize: 60, fontWeight: 800, opacity: enter }}>≠</div>
       <div
         style={{
           position: "absolute",
