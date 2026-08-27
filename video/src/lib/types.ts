@@ -140,7 +140,8 @@ export interface StoryBeat {
     | "raft-quorum"
     | "ariane-overflow"
     | "ai-hallucination"
-    | "password-hash";
+    | "password-hash"
+    | "capacitive-touch";
   onWord?: string; // бит начинается на этом слове реплики
   params?: Record<string, unknown>;
 }

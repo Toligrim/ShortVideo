@@ -40,6 +40,7 @@ import { SkipListVisual, type SkipListPhase } from "./SkipListVisual";
 import { EliasFanoVisual, type EliasFanoPhase } from "./EliasFanoVisual";
 import { RaftQuorumVisual, type RaftQuorumPhase } from "./RaftQuorumVisual";
 import { ArianeOverflowVisual, type ArianeOverflowPhase } from "./ArianeOverflowVisual";
+import { CapacitiveTouchVisual, type CapacitiveTouchPhase } from "./CapacitiveTouch";
 
 /* ──────────────────────────── расписание битов ──────────────────────────── */
 
@@ -211,6 +212,7 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
       impact = start + Math.round(dur * (phase === "predict" ? 0.62 : phase === "bluff-score" ? 0.58 : phase === "fake-citation" ? 0.64 : phase === "verify" ? 0.62 : 0.6));
     }
     if (beat.visual === "password-hash") impact = start + Math.round(dur * 0.58);
+    if (beat.visual === "capacitive-touch") impact = start + Math.round(dur * 0.58);
     return { beat, start, end, impact };
   });
 };
@@ -416,6 +418,10 @@ export const storySfx = (
     if (s.beat.visual === "password-hash") {
       const phase = s.beat.params?.phase;
       events.push({ frame: s.impact, sound: phase === "verify" ? "ding" : "pop" });
+    }
+    if (s.beat.visual === "capacitive-touch") {
+      const phase = s.beat.params?.phase;
+      events.push({ frame: s.impact, sound: phase === "touch" || phase === "glove" ? "pop" : "ding" });
     }
   }
   return events;
@@ -9652,6 +9658,7 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     "elias-fano": { scale: 0.9, y: -20 },
     "ariane-overflow": { scale: 0.88, y: -20 },
     "password-hash": { scale: 0.92, y: -20 },
+    "capacitive-touch": { scale: 0.94, y: -20 },
   };
   const cur = cams[slot.beat.visual] ?? { scale: 1, y: 0 };
   const prev = idx > 0 ? cams[slots[idx - 1].beat.visual] ?? cur : cur;
@@ -10328,6 +10335,15 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             fps={fps}
             impactLocal={impactLocal}
             phase={(slot.beat.params?.phase as PasswordHashPhase | undefined) ?? "store"}
+          />
+        );
+      case "capacitive-touch":
+        return (
+          <CapacitiveTouchVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as CapacitiveTouchPhase | undefined) ?? "grid"}
           />
         );
       default:
