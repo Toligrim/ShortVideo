@@ -265,22 +265,6 @@ export const CapacitiveTouchVisual: React.FC<{
             opacity: enter,
           }}
         />
-        <div
-          style={{
-            position: "absolute",
-            left: tx,
-            top: fingerY - 150,
-            transform: "translateX(-50%)",
-            color: blocked ? theme.warning : theme.danger,
-            fontFamily: theme.font,
-            fontSize: 20,
-            fontWeight: 800,
-            whiteSpace: "nowrap",
-            opacity: enter,
-          }}
-        >
-          {blocked ? "ПЕРЧАТКА" : "ПАЛЕЦ"}
-        </div>
         {/* узел касания: заряд падает */}
         <div
           style={{
