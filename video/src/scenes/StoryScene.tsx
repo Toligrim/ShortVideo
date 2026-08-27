@@ -38,6 +38,7 @@ import { BwtInvertVisual, type BwtInvertPhase } from "./BwtInvertVisual";
 import { HilbertCurveVisual, type HilbertPhase } from "./HilbertCurveVisual";
 import { SkipListVisual, type SkipListPhase } from "./SkipListVisual";
 import { EliasFanoVisual, type EliasFanoPhase } from "./EliasFanoVisual";
+import { RaftQuorumVisual, type RaftQuorumPhase } from "./RaftQuorumVisual";
 
 /* ──────────────────────────── расписание битов ──────────────────────────── */
 
@@ -199,6 +200,7 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
       const phase = beat.params?.phase;
       impact = start + Math.round(dur * (phase === "formula" ? 0.58 : phase === "access" ? 0.62 : 0.55));
     }
+    if (beat.visual === "raft-quorum") impact = start + Math.round(dur * 0.62);
     return { beat, start, end, impact };
   });
 };
@@ -391,6 +393,7 @@ export const storySfx = (
       const ph = s.beat.params?.phase;
       events.push({ frame: s.impact, sound: ph === "formula" || ph === "access" ? "ding" : "pop" });
     }
+    if (s.beat.visual === "raft-quorum") events.push({ frame: s.impact, sound: "pop" });
   }
   return events;
 };
@@ -9361,6 +9364,17 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             fps={fps}
             impactLocal={impactLocal}
             phase={(slot.beat.params?.phase as EliasFanoPhase | undefined) ?? "split"}
+          />
+        );
+      case "raft-quorum":
+        return (
+          <RaftQuorumVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as RaftQuorumPhase | undefined) ?? "cluster"}
+            quorum={slot.beat.params?.quorum as boolean | undefined}
+            leader={slot.beat.params?.leader as number | undefined}
           />
         );
       default:

@@ -136,7 +136,8 @@ export interface StoryBeat {
       | "bwt-invert"
       | "quic-migration"
     | "hilbert-curve"
-    | "elias-fano";
+    | "elias-fano"
+    | "raft-quorum";
   onWord?: string; // бит начинается на этом слове реплики
   params?: Record<string, unknown>;
 }
