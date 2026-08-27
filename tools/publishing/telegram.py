@@ -611,7 +611,17 @@ class TelegramReviewService:
             update_id = update.get("update_id")
             if not isinstance(update_id, int) or isinstance(update_id, bool) or update_id < 0:
                 continue
-            self.process_update(update)
+            try:
+                self.process_update(update)
+            except (OSError, StoreError, TelegramApprovalError, TelegramError) as exc:
+                # A single update (e.g. a callback query that expired before
+                # we could answer it) must not wedge the cursor forever and
+                # starve every later update in the same and all future polls.
+                print(
+                    f"Telegram callback processing failed for update {update_id}: {self._safe_error_text(exc)}",
+                    file=sys.stderr,
+                    flush=True,
+                )
             self._advance_cursor(update_id)
             processed += 1
         return processed
