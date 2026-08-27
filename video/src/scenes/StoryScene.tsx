@@ -210,6 +210,7 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
       const phase = beat.params?.phase;
       impact = start + Math.round(dur * (phase === "predict" ? 0.62 : phase === "bluff-score" ? 0.58 : phase === "fake-citation" ? 0.64 : phase === "verify" ? 0.62 : 0.6));
     }
+    if (beat.visual === "password-hash") impact = start + Math.round(dur * 0.58);
     return { beat, start, end, impact };
   });
 };
@@ -411,6 +412,10 @@ export const storySfx = (
       const phase = s.beat.params?.phase;
       const sound = phase === "fake-citation" ? "slam" : phase === "verify" ? "ding" : phase === "bluff-score" ? "pop" : "click";
       events.push({ frame: s.impact, sound });
+    }
+    if (s.beat.visual === "password-hash") {
+      const phase = s.beat.params?.phase;
+      events.push({ frame: s.impact, sound: phase === "verify" ? "ding" : "pop" });
     }
   }
   return events;
@@ -1982,6 +1987,408 @@ const PasswordLeak: React.FC<{ local: number; fps: number; impactLocal: number; 
           <IconGlyph name="eye" size={92} color={theme.danger} strokeWidth={1.6} />
         </div>
       ) : null}
+    </>
+  );
+};
+
+type PasswordHashPhase = "store" | "verify" | "salt";
+
+/** Односторонний хэш пароля: храним только отпечаток, при входе пересчитываем и сравниваем, соль ломает радугу. */
+const PasswordHashVisual: React.FC<{
+  local: number;
+  fps: number;
+  impactLocal: number;
+  phase?: PasswordHashPhase;
+}> = ({ local, fps, impactLocal, phase = "store" }) => {
+  const enter = spring({ frame: local, fps, config: { damping: 15, mass: 0.8 } });
+  const mono: React.CSSProperties = { fontFamily: theme.mono, fontWeight: 800, letterSpacing: 2 };
+  const phaseTitle: Record<PasswordHashPhase, string> = {
+    store: "ХРАНЕНИЕ · ПАРОЛЯ НЕТ",
+    verify: "ВХОД · ПЕРЕСЧЁТ И СРАВНЕНИЕ",
+    salt: "СОЛЬ · ОДИНАКОВЫЕ → РАЗНЫЕ",
+  };
+  const header = (
+    <div
+      style={{
+        position: "absolute",
+        left: W / 2,
+        top: 245,
+        transform: "translateX(-50%)",
+        display: "flex",
+        alignItems: "center",
+        gap: 12,
+        color: theme.subtext,
+        fontSize: 25,
+        whiteSpace: "nowrap",
+        opacity: enter,
+        ...mono,
+      }}
+    >
+      <IconGlyph name={phase === "verify" ? "log-in" : "lock-keyhole"} size={30} color={theme.accent} strokeWidth={1.8} />
+      <span>{phaseTitle[phase]}</span>
+    </div>
+  );
+  const card = (color: string): React.CSSProperties => ({
+    borderRadius: 24,
+    background: `${theme.panel}E8`,
+    border: `3px solid ${color}66`,
+    boxShadow: `0 0 42px ${color}20`,
+  });
+
+  if (phase === "store") {
+    const password = "hunter2";
+    const typedP = smooth(clamp01(local / Math.max(impactLocal, 1)));
+    const strikeP = smooth(clamp01((local - impactLocal) / 18));
+    const hashP = spring({ frame: Math.max(0, local - impactLocal), fps, config: { damping: 12, mass: 0.7 } });
+    return (
+      <>
+        {header}
+        {/* пароль пользователя */}
+          <div
+            style={{
+              position: "absolute",
+              left: 40,
+              top: 480,
+              width: 320,
+              height: 420,
+              ...card(theme.danger),
+              opacity: enter,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+            }}
+          >
+            <div style={{ ...mono, marginTop: 36, fontSize: 22, color: theme.danger }}>ТВОЙ ПАРОЛЬ</div>
+          <div
+            style={{
+              margin: "46px 0",
+              fontFamily: theme.mono,
+              fontSize: 52,
+              fontWeight: 800,
+              color: theme.danger,
+              textShadow: `0 0 26px ${theme.danger}66`,
+              position: "relative",
+              opacity: 1 - strikeP * 0.85,
+              transform: `scale(${1 - strikeP * 0.12})`,
+            }}
+          >
+            {password}
+            <div
+              style={{
+                position: "absolute",
+                left: -10,
+                right: -10,
+                top: "50%",
+                height: 6,
+                background: theme.danger,
+                borderRadius: 3,
+                transform: `scaleX(${strikeP})`,
+                transformOrigin: "left",
+                boxShadow: `0 0 16px ${theme.danger}`,
+              }}
+            />
+          </div>
+          <div style={{ ...mono, fontSize: 19, color: theme.subtext }}>открытым текстом</div>
+        </div>
+        {/* односторонний хэш */}
+          <div
+            style={{
+              position: "absolute",
+              left: 380,
+              top: 520,
+              width: 320,
+              height: 320,
+              ...card(theme.accent),
+              opacity: enter,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 14,
+            }}
+          >
+          <IconGlyph name="hash" size={64} color={theme.accent} strokeWidth={1.8} />
+          <div style={{ ...mono, fontSize: 23, color: theme.accent, textAlign: "center" }}>ОДНОСТОРОННИЙ ХЭШ</div>
+          <div style={{ ...mono, fontSize: 30, color: theme.text }}>пароль → фарш</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, color: theme.warning, ...mono, fontSize: 22 }}>
+            <IconGlyph name="ban" size={28} color={theme.warning} strokeWidth={1.8} />
+            НАЗАД НЕЛЬЗЯ
+          </div>
+        </div>
+        {/* в базе */}
+          <div
+            style={{
+              position: "absolute",
+              right: 40,
+              top: 480,
+              width: 320,
+              height: 420,
+              ...card(theme.success),
+              opacity: enter,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+            }}
+          >
+            <div style={{ ...mono, marginTop: 30, fontSize: 22, color: theme.success }}>В БАЗЕ</div>
+          <div
+            style={{
+              margin: "30px 0 0",
+              width: 256,
+              height: 96,
+              borderRadius: 18,
+              border: `3px solid ${theme.accent}`,
+              background: `${theme.accent}1A`,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 10,
+              color: theme.accent,
+              fontFamily: theme.mono,
+              fontSize: 30,
+              fontWeight: 800,
+              opacity: enter * hashP,
+              transform: `translateY(${(1 - hashP) * 30}px)`,
+              boxShadow: `0 0 ${20 + hashP * 26}px ${theme.accent}44`,
+            }}
+          >
+            <IconGlyph name="hash" size={26} color={theme.accent} strokeWidth={1.8} />
+            9f2a…
+          </div>
+          <div
+            style={{
+              margin: "20px 0 0",
+              width: 256,
+              height: 80,
+              borderRadius: 18,
+              border: `3px solid ${theme.accent2}`,
+              background: `${theme.accent2}1A`,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 10,
+              color: theme.accent2,
+              fontFamily: theme.mono,
+              fontSize: 26,
+              fontWeight: 800,
+            }}
+          >
+            <IconGlyph name="sparkles" size={24} color={theme.accent2} strokeWidth={1.8} />
+            соль
+          </div>
+          <div style={{ marginTop: 22, ...mono, fontSize: 19, color: theme.subtext, display: "flex", alignItems: "center", gap: 8 }}>
+            <IconGlyph name="x-circle" size={22} color={theme.danger} strokeWidth={1.8} />
+            пароля нет
+          </div>
+        </div>
+        {/* стрелки */}
+        <div style={{ position: "absolute", left: 344, top: 650, color: theme.accent, fontSize: 56, fontWeight: 800, opacity: enter }}>→</div>
+        <div style={{ position: "absolute", left: 684, top: 650, color: theme.success, fontSize: 56, fontWeight: 800, opacity: enter }}>→</div>
+        <PulseRing x={W / 2} y={690} triggerFrame={impactLocal} tone="accent" size={200} />
+      </>
+    );
+  }
+
+  if (phase === "verify") {
+    const password = "hunter2";
+    const calcP = spring({ frame: Math.max(0, local - impactLocal - 2), fps, config: { damping: 12, mass: 0.7 } });
+    const matchP = smooth(clamp01((local - impactLocal - 14) / 18));
+    return (
+      <>
+        {header}
+          <div
+            style={{
+              position: "absolute",
+              left: 40,
+              top: 480,
+              width: 320,
+              height: 300,
+              ...card(theme.accent2),
+              opacity: enter,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 16,
+            }}
+          >
+          <div style={{ ...mono, fontSize: 22, color: theme.accent2 }}>ВВОД</div>
+          <div style={{ fontFamily: theme.mono, fontSize: 50, fontWeight: 800, color: theme.text }}>{password}</div>
+          <IconGlyph name="arrow-down" size={36} color={theme.accent2} strokeWidth={2} />
+        </div>
+          <div
+            style={{
+              position: "absolute",
+              left: 380,
+              top: 510,
+              width: 320,
+              height: 290,
+              ...card(theme.accent),
+              opacity: enter,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 14,
+            }}
+          >
+          <IconGlyph name="hash" size={58} color={theme.accent} strokeWidth={1.8} />
+          <div style={{ ...mono, fontSize: 22, color: theme.accent }}>ПЕРЕСЧЁТ</div>
+          <div style={{ fontFamily: theme.mono, fontSize: 46, fontWeight: 800, color: theme.accent, opacity: calcP, transform: `scale(${0.8 + calcP * 0.2})` }}>9f2a…</div>
+        </div>
+          <div
+            style={{
+              position: "absolute",
+              right: 40,
+              top: 480,
+              width: 320,
+              height: 300,
+              ...card(theme.success),
+              opacity: enter,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 16,
+            }}
+          >
+          <div style={{ ...mono, fontSize: 22, color: theme.success }}>СОХРАНЁН</div>
+          <div style={{ fontFamily: theme.mono, fontSize: 46, fontWeight: 800, color: theme.accent }}>9f2a…</div>
+          <IconGlyph name="database" size={40} color={theme.success} strokeWidth={1.8} />
+        </div>
+        <div style={{ position: "absolute", left: 344, top: 600, color: theme.accent, fontSize: 50, fontWeight: 800, opacity: enter }}>→</div>
+        <div style={{ position: "absolute", left: 684, top: 600, color: theme.success, fontSize: 50, fontWeight: 800, opacity: enter }}>→</div>
+        <div
+          style={{
+            position: "absolute",
+            left: W / 2,
+            top: 940,
+            transform: `translateX(-50%) scale(${0.8 + matchP * 0.2})`,
+            padding: "20px 44px",
+            borderRadius: 999,
+            background: `${theme.success}18`,
+            border: `3px solid ${theme.success}`,
+            color: theme.success,
+            fontFamily: theme.font,
+            fontSize: 40,
+            fontWeight: 800,
+            whiteSpace: "nowrap",
+            opacity: enter * matchP,
+            display: "flex",
+            alignItems: "center",
+            gap: 14,
+            boxShadow: `0 0 44px ${theme.success}33`,
+          }}
+        >
+          <IconGlyph name="check-circle-2" size={42} color={theme.success} strokeWidth={1.8} />
+          СОВПАЛ · ДОСТУП
+        </div>
+        <div
+          style={{
+            position: "absolute",
+            left: W / 2,
+            top: 1110,
+            transform: "translateX(-50%)",
+            ...mono,
+            fontSize: 25,
+            color: theme.subtext,
+            opacity: enter * matchP,
+            whiteSpace: "nowrap",
+          }}
+        >
+          не расшифровка, а сравнение
+        </div>
+        <PulseRing x={W / 2} y={1030} triggerFrame={impactLocal + 14} tone="success" size={190} />
+      </>
+    );
+  }
+
+  // salt
+  const rows = [
+    { pass: "hunter2", salt: "§a1", hash: "9f2a…", color: theme.accent },
+    { pass: "hunter2", salt: "§z9", hash: "c71e…", color: theme.accent2 },
+  ];
+  const applyP = spring({ frame: Math.max(0, local - impactLocal), fps, config: { damping: 12, mass: 0.7 } });
+  return (
+    <>
+      {header}
+      <div style={{ position: "absolute", left: W / 2, top: 345, transform: "translateX(-50%)", color: theme.text, ...mono, fontSize: 26, opacity: enter, whiteSpace: "nowrap" }}>
+        одинаковый пароль — разные строки
+      </div>
+      {rows.map((row, i) => (
+        <div
+          key={i}
+          style={{
+            position: "absolute",
+            left: i === 0 ? 150 : W / 2 + 40,
+            top: 470,
+            width: 360,
+            height: 470,
+            ...card(row.color),
+            opacity: enter,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+          }}
+        >
+          <div style={{ ...mono, marginTop: 30, fontSize: 21, color: row.color }}>ПОЛЬЗОВАТЕЛЬ {i + 1}</div>
+          <div style={{ margin: "26px 0", fontFamily: theme.mono, fontSize: 46, fontWeight: 800, color: theme.text }}>{row.pass}</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, color: row.color, ...mono, fontSize: 22 }}>
+            <IconGlyph name="sparkles" size={22} color={row.color} strokeWidth={1.8} />
+            соль {row.salt}
+          </div>
+          <div
+            style={{
+              margin: "24px 0 0",
+              width: 250,
+              height: 84,
+              borderRadius: 18,
+              border: `3px solid ${row.color}`,
+              background: `${row.color}1A`,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 10,
+              color: row.color,
+              fontFamily: theme.mono,
+              fontSize: 34,
+              fontWeight: 800,
+              opacity: enter * applyP,
+              transform: `translateY(${(1 - applyP) * 26}px)`,
+              boxShadow: `0 0 ${18 + applyP * 24}px ${row.color}44`,
+            }}
+          >
+            <IconGlyph name="hash" size={24} color={row.color} strokeWidth={1.8} />
+            {row.hash}
+          </div>
+        </div>
+      ))}
+      <div style={{ position: "absolute", left: W / 2 - 250, top: 690, color: theme.warning, fontSize: 60, fontWeight: 800, opacity: enter }}>≠</div>
+      <div
+        style={{
+          position: "absolute",
+          left: W / 2,
+          top: 1060,
+          transform: "translateX(-50%)",
+          padding: "16px 34px",
+          borderRadius: 999,
+          background: `${theme.warning}16`,
+          border: `3px solid ${theme.warning}99`,
+          color: theme.warning,
+          fontFamily: theme.mono,
+          fontSize: 28,
+          fontWeight: 800,
+          whiteSpace: "nowrap",
+          opacity: enter * applyP,
+          display: "flex",
+          alignItems: "center",
+          gap: 12,
+        }}
+      >
+        <IconGlyph name="ban" size={30} color={theme.warning} strokeWidth={1.8} />
+        РАДУЖНАЯ ТАБЛИЦА БИТА
+      </div>
+      <PulseRing x={W / 2} y={705} triggerFrame={impactLocal} tone="accent2" size={170} />
     </>
   );
 };
@@ -9244,6 +9651,7 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     "skip-list": { scale: 0.92, y: -20 },
     "elias-fano": { scale: 0.9, y: -20 },
     "ariane-overflow": { scale: 0.88, y: -20 },
+    "password-hash": { scale: 0.92, y: -20 },
   };
   const cur = cams[slot.beat.visual] ?? { scale: 1, y: 0 };
   const prev = idx > 0 ? cams[slots[idx - 1].beat.visual] ?? cur : cur;
@@ -9911,6 +10319,15 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             fps={fps}
             impactLocal={impactLocal}
             phase={(slot.beat.params?.phase as AiHallucinationPhase | undefined) ?? "predict"}
+          />
+        );
+      case "password-hash":
+        return (
+          <PasswordHashVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as PasswordHashPhase | undefined) ?? "store"}
           />
         );
       default:

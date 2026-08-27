@@ -139,7 +139,8 @@ export interface StoryBeat {
     | "elias-fano"
     | "raft-quorum"
     | "ariane-overflow"
-    | "ai-hallucination";
+    | "ai-hallucination"
+    | "password-hash";
   onWord?: string; // бит начинается на этом слове реплики
   params?: Record<string, unknown>;
 }
