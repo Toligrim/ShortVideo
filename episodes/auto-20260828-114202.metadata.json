@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "slug": "auto-20260828-114202",
+  "targets": {
+    "youtube": {
+      "title": "Почему мощная USB-C зарядка не сжигает телефон",
+      "description": "Почему мощный USB-C блок не сжигает телефон: как устройства договариваются о напряжении по CC-линии — от безопасных 5 В до PS_RDY.",
+      "tags": ["USB-C", "зарядка", "смартфон", "технологии", "USB Power Delivery"],
+      "category_id": "28",
+      "privacy_status": "public",
+      "made_for_kids": false,
+      "contains_synthetic_media": true,
+      "notify_subscribers": false
+    },
+    "instagram": {
+      "caption": "Почему мощная USB-C зарядка не сжигает телефон? Устройства сначала договариваются о напряжении по CC-линии: 5 В до контракта, потом Request → Accept → PS_RDY. #USBC #зарядка #смартфон #технологии",
+      "share_to_feed": true
+    }
+  }
+}
