@@ -77,7 +77,7 @@ export const WifiAirtimeVisual: React.FC<Props> = ({ local, fps, impactLocal, ph
       style={{
         position: "absolute",
         left: CX,
-        top: 240,
+        top: phase === "anomaly" ? 360 : 240,
         transform: "translateX(-50%)",
         display: "flex",
         alignItems: "center",
