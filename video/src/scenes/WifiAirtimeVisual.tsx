@@ -646,9 +646,8 @@ export const WifiAirtimeVisual: React.FC<Props> = ({ local, fps, impactLocal, ph
                 <div
                   style={{
                     position: "absolute",
-                    left: barLeft + wBar + 16,
-                    top: barTop + i * barGap + barH / 2,
-                    transform: "translateY(-50%)",
+                    left: barLeft,
+                    top: barTop + i * barGap + barH + 16,
                     color: theme.warning,
                     fontSize: 18,
                     whiteSpace: "nowrap",
