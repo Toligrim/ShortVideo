@@ -41,6 +41,7 @@ import { EliasFanoVisual, type EliasFanoPhase } from "./EliasFanoVisual";
 import { RaftQuorumVisual, type RaftQuorumPhase } from "./RaftQuorumVisual";
 import { ArianeOverflowVisual, type ArianeOverflowPhase } from "./ArianeOverflowVisual";
 import { CapacitiveTouchVisual, type CapacitiveTouchPhase } from "./CapacitiveTouch";
+import { BgpRerouteVisual, type BgpReroutePhase } from "./BgpRerouteVisual";
 
 /* ──────────────────────────── расписание битов ──────────────────────────── */
 
@@ -214,6 +215,10 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
     if (beat.visual === "password-hash") impact = start + Math.round(dur * 0.58);
     if (beat.visual === "digital-signature") impact = start + Math.round(dur * 0.58);
     if (beat.visual === "capacitive-touch") impact = start + Math.round(dur * 0.58);
+    if (beat.visual === "bgp-reroute") {
+      const phase = beat.params?.phase;
+      impact = start + Math.round(dur * (phase === "break" ? 0.45 : phase === "withdraw" ? 0.55 : phase === "reroute" ? 0.62 : 0.68));
+    }
     return { beat, start, end, impact };
   });
 };
@@ -427,6 +432,11 @@ export const storySfx = (
     if (s.beat.visual === "capacitive-touch") {
       const phase = s.beat.params?.phase;
       events.push({ frame: s.impact, sound: phase === "touch" || phase === "glove" ? "pop" : "ding" });
+    }
+    if (s.beat.visual === "bgp-reroute") {
+      const phase = s.beat.params?.phase;
+      const sound = phase === "break" ? "slam" : phase === "withdraw" ? "whoosh" : phase === "reroute" ? "pop" : "ding";
+      events.push({ frame: s.impact, sound });
     }
   }
   return events;
@@ -10016,6 +10026,7 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     "ariane-overflow": { scale: 0.88, y: -20 },
     "password-hash": { scale: 0.92, y: -20 },
     "capacitive-touch": { scale: 0.94, y: -20 },
+    "bgp-reroute": { scale: 0.92, y: -20 },
   };
   const cur = cams[slot.beat.visual] ?? { scale: 1, y: 0 };
   const prev = idx > 0 ? cams[slots[idx - 1].beat.visual] ?? cur : cur;
@@ -10715,6 +10726,15 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             fps={fps}
             impactLocal={impactLocal}
             phase={(slot.beat.params?.phase as CapacitiveTouchPhase | undefined) ?? "grid"}
+          />
+        );
+      case "bgp-reroute":
+        return (
+          <BgpRerouteVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as BgpReroutePhase | undefined) ?? "break"}
           />
         );
       default:
