@@ -145,7 +145,8 @@ export interface StoryBeat {
     | "digital-signature"
     | "bgp-reroute"
     | "usb-pd-negotiation"
-    | "convolution-stencil";
+    | "convolution-stencil"
+    | "wifi-airtime";
   onWord?: string; // бит начинается на этом слове реплики
   params?: Record<string, unknown>;
 }

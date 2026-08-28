@@ -44,6 +44,7 @@ import { CapacitiveTouchVisual, type CapacitiveTouchPhase } from "./CapacitiveTo
 import { BgpRerouteVisual, type BgpReroutePhase } from "./BgpRerouteVisual";
 import { UsbPdNegotiationVisual, type UsbPdNegotiationPhase } from "./UsbPdNegotiationVisual";
 import { ConvolutionStencilVisual, type ConvolutionStencilPhase } from "./ConvolutionStencilVisual";
+import { WifiAirtimeVisual, type WifiAirtimePhase } from "./WifiAirtimeVisual";
 
 /* ──────────────────────────── расписание битов ──────────────────────────── */
 
@@ -228,6 +229,23 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
     if (beat.visual === "convolution-stencil") {
       const phase = beat.params?.phase;
       impact = start + Math.round(dur * (phase === "input" ? 0.62 : phase === "scan" ? 0.58 : phase === "features" ? 0.6 : 0.64));
+    }
+    if (beat.visual === "wifi-airtime") {
+      const phase = beat.params?.phase;
+      impact =
+        start +
+        Math.round(
+          dur *
+            (phase === "signal"
+              ? 0.6
+              : phase === "contention"
+              ? 0.62
+              : phase === "backoff"
+              ? 0.6
+              : phase === "airtime"
+              ? 0.6
+              : 0.55)
+        );
     }
     return { beat, start, end, impact };
   });
@@ -456,6 +474,18 @@ export const storySfx = (
     if (s.beat.visual === "convolution-stencil") {
       const phase = s.beat.params?.phase;
       const sound = phase === "input" ? "pop" : phase === "scan" ? "click" : phase === "features" ? "ding" : "whoosh";
+      events.push({ frame: s.impact, sound });
+    }
+    if (s.beat.visual === "wifi-airtime") {
+      const phase = s.beat.params?.phase;
+      const sound =
+        phase === "backoff" || phase === "anomaly"
+          ? "slam"
+          : phase === "airtime"
+          ? "ding"
+          : phase === "contention"
+          ? "pop"
+          : "click";
       events.push({ frame: s.impact, sound });
     }
   }
@@ -10049,6 +10079,7 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     "bgp-reroute": { scale: 0.92, y: -20 },
     "usb-pd-negotiation": { scale: 0.92, y: -20 },
     "convolution-stencil": { scale: 0.92, y: -20 },
+    "wifi-airtime": { scale: 0.92, y: -20 },
   };
   const cur = cams[slot.beat.visual] ?? { scale: 1, y: 0 };
   const prev = idx > 0 ? cams[slots[idx - 1].beat.visual] ?? cur : cur;
@@ -10775,6 +10806,15 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             fps={fps}
             impactLocal={impactLocal}
             phase={(slot.beat.params?.phase as ConvolutionStencilPhase | undefined) ?? "input"}
+          />
+        );
+      case "wifi-airtime":
+        return (
+          <WifiAirtimeVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as WifiAirtimePhase | undefined) ?? "signal"}
           />
         );
       default:
