@@ -289,8 +289,11 @@ export const ConvolutionStencilVisual: React.FC<Props> = ({
           <div
             style={{
               position: "absolute",
-              left: winX - left + 3 * cell + 2 * gap + 14,
-              top: winY - top + 18,
+              // Keep the label below the grid: placing it beside the moving
+              // window puts it on top of the grid's dot text at the first
+              // two sampled positions.
+              left: gridW - 110,
+              top: gridN * (cell + gap) + 14,
               padding: "6px 12px",
               borderRadius: 999,
               background: theme.warning,
@@ -559,7 +562,7 @@ export const ConvolutionStencilVisual: React.FC<Props> = ({
           style={{
             position: "absolute",
             left: CX,
-            top: 1185,
+            top: 1215,
             transform: "translateX(-50%)",
             fontFamily: theme.mono,
             fontSize: 18,
