@@ -212,6 +212,7 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
       impact = start + Math.round(dur * (phase === "predict" ? 0.62 : phase === "bluff-score" ? 0.58 : phase === "fake-citation" ? 0.64 : phase === "verify" ? 0.62 : 0.6));
     }
     if (beat.visual === "password-hash") impact = start + Math.round(dur * 0.58);
+    if (beat.visual === "digital-signature") impact = start + Math.round(dur * 0.58);
     if (beat.visual === "capacitive-touch") impact = start + Math.round(dur * 0.58);
     return { beat, start, end, impact };
   });
@@ -418,6 +419,10 @@ export const storySfx = (
     if (s.beat.visual === "password-hash") {
       const phase = s.beat.params?.phase;
       events.push({ frame: s.impact, sound: phase === "verify" ? "ding" : "pop" });
+    }
+    if (s.beat.visual === "digital-signature") {
+      const phase = s.beat.params?.phase;
+      events.push({ frame: s.impact, sound: phase === "tamper" ? "slam" : phase === "verify" ? "ding" : "pop" });
     }
     if (s.beat.visual === "capacitive-touch") {
       const phase = s.beat.params?.phase;
@@ -1561,6 +1566,358 @@ const AiHallucinationVisual: React.FC<{
         уверенность ≠ надёжность
       </div>
       <PulseRing x={W / 2} y={750} triggerFrame={impactLocal} tone="success" size={190} />
+    </>
+  );
+};
+
+type DigitalSignaturePhase = "sign" | "verify" | "tamper";
+
+/** Цифровая подпись буквально: приватный ключ создаёт подпись для конкретных
+ *  данных перевода, публичный ключ/узлы проверяют её, а изменение суммы или
+ *  получателя роняет проверку. */
+const DigitalSignatureVisual: React.FC<{
+  local: number;
+  fps: number;
+  impactLocal: number;
+  phase?: DigitalSignaturePhase;
+  amount?: string;
+  recipient?: string;
+  signature?: string;
+  privKey?: string;
+  pubKey?: string;
+}> = ({
+  local,
+  fps,
+  impactLocal,
+  phase = "sign",
+  amount = "0,5 BTC",
+  recipient = "1A2b…X9",
+  signature = "σ = 9c41…f2",
+  privKey = "k = 0x5f3a…",
+  pubKey = "K = 04af…7e",
+}) => {
+  const enter = spring({ frame: local, fps, config: { damping: 15, mass: 0.8 } });
+  const reveal = spring({ frame: Math.max(0, local - impactLocal), fps, config: { damping: 12, mass: 0.7 } });
+  const mono: React.CSSProperties = { fontFamily: theme.mono, fontWeight: 800, letterSpacing: 1 };
+  const phaseTitle: Record<DigitalSignaturePhase, string> = {
+    sign: "ПОДПИСЬ · ПРИВАТНЫЙ КЛЮЧ",
+    verify: "ПРОВЕРКА · ПУБЛИЧНЫЙ КЛЮЧ",
+    tamper: "ПОДМЕНА · ПРОВЕРКА РУХНУЛА",
+  };
+  const header = (
+    <div
+      style={{
+        position: "absolute",
+        left: W / 2,
+        top: 250,
+        transform: "translateX(-50%)",
+        display: "flex",
+        alignItems: "center",
+        gap: 12,
+        color: theme.subtext,
+        fontSize: 25,
+        whiteSpace: "nowrap",
+        opacity: enter,
+        ...mono,
+      }}
+    >
+      <IconGlyph
+        name={phase === "sign" ? "key-round" : phase === "verify" ? "shield-check" : "shield-x"}
+        size={30}
+        color={phase === "tamper" ? theme.danger : theme.accent}
+        strokeWidth={1.8}
+      />
+      <span>{phaseTitle[phase]}</span>
+    </div>
+  );
+  const card = (color: string): React.CSSProperties => ({
+    borderRadius: 24,
+    background: `${theme.panel}E8`,
+    border: `3px solid ${color}66`,
+    boxShadow: `0 0 42px ${color}20`,
+  });
+
+  if (phase === "sign") {
+    const signP = smooth(clamp01((local - impactLocal) / 16));
+    return (
+      <>
+        {header}
+        {/* приватный ключ */}
+        <div
+          style={{
+            position: "absolute",
+            left: 60,
+            top: 480,
+            width: 300,
+            height: 440,
+            ...card(theme.danger),
+            opacity: enter,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+          }}
+        >
+          <div style={{ ...mono, marginTop: 36, fontSize: 22, color: theme.danger }}>ПРИВАТНЫЙ КЛЮЧ</div>
+          <IconGlyph name="key-round" size={72} color={theme.danger} strokeWidth={1.8} />
+          <div style={{ margin: "30px 0 0", fontFamily: theme.mono, fontSize: 28, fontWeight: 800, color: theme.text }}>{privKey}</div>
+          <div
+            style={{
+              marginTop: 26,
+              padding: "10px 20px",
+              borderRadius: 999,
+              background: `${theme.danger}1A`,
+              border: `2px solid ${theme.danger}99`,
+              color: theme.danger,
+              fontFamily: theme.mono,
+              fontSize: 22,
+              fontWeight: 800,
+            }}
+          >
+            СЕКРЕТ
+          </div>
+          <div style={{ ...mono, marginTop: 22, fontSize: 18, color: theme.subtext }}>у владельца</div>
+        </div>
+        {/* данные перевода */}
+        <div
+          style={{
+            position: "absolute",
+            left: 390,
+            top: 480,
+            width: 300,
+            height: 440,
+            ...card(theme.accent2),
+            opacity: enter,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+          }}
+        >
+          <div style={{ ...mono, marginTop: 36, fontSize: 22, color: theme.accent2 }}>ДАННЫЕ ПЕРЕВОДА</div>
+          <IconGlyph name="arrow-right-left" size={62} color={theme.accent2} strokeWidth={1.8} />
+          <div style={{ margin: "28px 0 0", fontFamily: theme.mono, fontSize: 32, fontWeight: 800, color: theme.text }}>{amount}</div>
+          <div style={{ margin: "16px 0 0", fontFamily: theme.mono, fontSize: 24, fontWeight: 800, color: theme.accent2 }}>→ {recipient}</div>
+          <div style={{ ...mono, marginTop: 22, fontSize: 18, color: theme.subtext }}>сумма + получатель</div>
+        </div>
+        {/* стрелка + подпись */}
+        <div style={{ position: "absolute", left: 354, top: 670, color: theme.accent, fontSize: 52, fontWeight: 800, opacity: enter }}>→</div>
+        <div style={{ position: "absolute", left: 694, top: 670, color: theme.accent, fontSize: 52, fontWeight: 800, opacity: enter }}>→</div>
+        <div
+          style={{
+            position: "absolute",
+            left: W / 2 - 175,
+            top: 1010,
+            width: 350,
+            height: 200,
+            ...card(theme.accent),
+            opacity: enter * (0.3 + signP * 0.7),
+            transform: `translateX(-50%) scale(${0.8 + signP * 0.2})`,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 14,
+          }}
+        >
+          <IconGlyph name="file-signature" size={56} color={theme.accent} strokeWidth={1.8} />
+          <div style={{ ...mono, fontSize: 22, color: theme.accent }}>ПОДПИСЬ</div>
+          <div style={{ fontFamily: theme.mono, fontSize: 30, fontWeight: 800, color: theme.text }}>{signature}</div>
+        </div>
+        <div
+          style={{
+            position: "absolute",
+            left: W / 2,
+            top: 1300,
+            transform: "translateX(-50%)",
+            ...mono,
+            fontSize: 25,
+            color: theme.subtext,
+            opacity: enter * (0.3 + signP * 0.7),
+            whiteSpace: "nowrap",
+          }}
+        >
+          k + данные → σ  (односторонне)
+        </div>
+        <PulseRing x={W / 2} y={1110} triggerFrame={impactLocal} tone="accent" size={210} />
+      </>
+    );
+  }
+
+  if (phase === "verify") {
+    const okP = spring({ frame: Math.max(0, local - impactLocal), fps, config: { damping: 12, mass: 0.7 } });
+    return (
+      <>
+        {header}
+        {/* публичный ключ */}
+        <div
+          style={{
+            position: "absolute",
+            left: 60,
+            top: 480,
+            width: 300,
+            height: 360,
+            ...card(theme.success),
+            opacity: enter,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+          }}
+        >
+          <div style={{ ...mono, marginTop: 34, fontSize: 22, color: theme.success }}>ПУБЛИЧНЫЙ КЛЮЧ</div>
+          <IconGlyph name="key-round" size={62} color={theme.success} strokeWidth={1.8} />
+          <div style={{ margin: "26px 0 0", fontFamily: theme.mono, fontSize: 26, fontWeight: 800, color: theme.text }}>{pubKey}</div>
+          <div style={{ ...mono, marginTop: 20, fontSize: 18, color: theme.subtext }}>открыт всем</div>
+        </div>
+        {/* подпись + данные */}
+        <div
+          style={{
+            position: "absolute",
+            left: 390,
+            top: 480,
+            width: 300,
+            height: 360,
+            ...card(theme.accent),
+            opacity: enter,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+          }}
+        >
+          <div style={{ ...mono, marginTop: 34, fontSize: 22, color: theme.accent }}>ПОДПИСЬ + ДАННЫЕ</div>
+          <IconGlyph name="file-signature" size={56} color={theme.accent} strokeWidth={1.8} />
+          <div style={{ margin: "22px 0 0", fontFamily: theme.mono, fontSize: 26, fontWeight: 800, color: theme.text }}>{signature}</div>
+          <div style={{ ...mono, marginTop: 14, fontSize: 20, color: theme.subtext }}>{amount} → {recipient}</div>
+        </div>
+        {/* узлы проверки */}
+        <div style={{ position: "absolute", left: 720, top: 480, width: 300, height: 360, ...card(theme.accent2), opacity: enter, display: "flex", flexDirection: "column", alignItems: "center" }}>
+          <div style={{ ...mono, marginTop: 34, fontSize: 22, color: theme.accent2 }}>УЗЛЫ ПРОВЕРКИ</div>
+          <IconGlyph name="users" size={62} color={theme.accent2} strokeWidth={1.8} />
+          <div style={{ ...mono, marginTop: 20, fontSize: 18, color: theme.subtext }}>сверяют σ с данными</div>
+        </div>
+        <div style={{ position: "absolute", left: 354, top: 640, color: theme.accent, fontSize: 48, fontWeight: 800, opacity: enter }}>→</div>
+        <div style={{ position: "absolute", left: 684, top: 640, color: theme.success, fontSize: 48, fontWeight: 800, opacity: enter }}>→</div>
+        <div
+          style={{
+            position: "absolute",
+            left: W / 2,
+            top: 1010,
+            transform: `translateX(-50%) scale(${0.8 + okP * 0.2})`,
+            padding: "20px 44px",
+            borderRadius: 999,
+            background: `${theme.success}18`,
+            border: `3px solid ${theme.success}`,
+            color: theme.success,
+            fontFamily: theme.font,
+            fontSize: 40,
+            fontWeight: 800,
+            whiteSpace: "nowrap",
+            opacity: enter * okP,
+            display: "flex",
+            alignItems: "center",
+            gap: 14,
+            boxShadow: `0 0 44px ${theme.success}33`,
+          }}
+        >
+          <IconGlyph name="shield-check" size={42} color={theme.success} strokeWidth={1.8} />
+          ПОДЛИННО · ПРОВЕРКА OK
+        </div>
+        <PulseRing x={W / 2} y={1110} triggerFrame={impactLocal} tone="success" size={210} />
+      </>
+    );
+  }
+
+  // tamper
+  const failP = smooth(clamp01((local - impactLocal) / 16));
+  const tamperedAmount = "5,0 BTC";
+  const tamperedRecipient = "9Z8y…K2";
+  return (
+    <>
+      {header}
+      {/* валидный перевод */}
+      <div
+        style={{
+          position: "absolute",
+          left: 60,
+          top: 470,
+          width: 460,
+          height: 250,
+          ...card(theme.accent),
+          opacity: enter,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 12,
+        }}
+      >
+        <div style={{ ...mono, fontSize: 20, color: theme.accent }}>БЫЛО ПОДПИСАНО</div>
+        <div style={{ fontFamily: theme.mono, fontSize: 34, fontWeight: 800, color: theme.text }}>{amount} → {recipient}</div>
+        <div style={{ fontFamily: theme.mono, fontSize: 26, fontWeight: 800, color: theme.accent }}>{signature}</div>
+      </div>
+      {/* подмена */}
+      <div
+        style={{
+          position: "absolute",
+          left: 560,
+          top: 470,
+          width: 460,
+          height: 250,
+          ...card(theme.danger),
+          opacity: enter,
+          transform: `scale(${0.82 + failP * 0.18})`,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 12,
+        }}
+      >
+        <div style={{ ...mono, fontSize: 20, color: theme.danger }}>ПОДМЕНА В ДАННЫХ</div>
+        <div style={{ fontFamily: theme.mono, fontSize: 34, fontWeight: 800, color: theme.danger, textDecoration: "line-through", opacity: 0.7 }}>{amount} → {recipient}</div>
+        <div style={{ fontFamily: theme.mono, fontSize: 34, fontWeight: 800, color: theme.danger, textShadow: `0 0 22px ${theme.danger}66` }}>
+          {tamperedAmount} → {tamperedRecipient}
+        </div>
+      </div>
+      <div
+        style={{
+          position: "absolute",
+          left: W / 2,
+          top: 820,
+          transform: `translateX(-50%) scale(${0.8 + failP * 0.2})`,
+          padding: "20px 44px",
+          borderRadius: 999,
+          background: `${theme.danger}1A`,
+          border: `3px solid ${theme.danger}`,
+          color: theme.danger,
+          fontFamily: theme.font,
+          fontSize: 40,
+          fontWeight: 800,
+          whiteSpace: "nowrap",
+          opacity: enter * failP,
+          display: "flex",
+          alignItems: "center",
+          gap: 14,
+          boxShadow: `0 0 44px ${theme.danger}33`,
+        }}
+      >
+        <IconGlyph name="shield-x" size={42} color={theme.danger} strokeWidth={1.8} />
+        ПРОВЕРКА РУХНУЛА
+      </div>
+      <div
+        style={{
+          position: "absolute",
+          left: W / 2,
+          top: 1080,
+          transform: "translateX(-50%)",
+          ...mono,
+          fontSize: 25,
+          color: theme.subtext,
+          opacity: enter * failP,
+          whiteSpace: "nowrap",
+        }}
+      >
+        σ не совпадает → транзакция отвергнута
+      </div>
+      <PulseRing x={W / 2} y={900} triggerFrame={impactLocal} tone="danger" size={210} />
     </>
   );
 };
@@ -10335,6 +10692,20 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             fps={fps}
             impactLocal={impactLocal}
             phase={(slot.beat.params?.phase as PasswordHashPhase | undefined) ?? "store"}
+          />
+        );
+      case "digital-signature":
+        return (
+          <DigitalSignatureVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as DigitalSignaturePhase | undefined) ?? "sign"}
+            amount={slot.beat.params?.amount as string | undefined}
+            recipient={slot.beat.params?.recipient as string | undefined}
+            signature={slot.beat.params?.signature as string | undefined}
+            privKey={slot.beat.params?.privKey as string | undefined}
+            pubKey={slot.beat.params?.pubKey as string | undefined}
           />
         );
       case "capacitive-touch":

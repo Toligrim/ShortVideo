@@ -141,7 +141,8 @@ export interface StoryBeat {
     | "ariane-overflow"
     | "ai-hallucination"
     | "password-hash"
-    | "capacitive-touch";
+    | "capacitive-touch"
+    | "digital-signature";
   onWord?: string; // бит начинается на этом слове реплики
   params?: Record<string, unknown>;
 }
