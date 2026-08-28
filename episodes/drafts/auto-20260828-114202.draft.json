@@ -1,0 +1,38 @@
+{
+  "slug": "auto-20260828-114202",
+  "title": "Почему мощная USB-C зарядка не сжигает телефон — как устройства договариваются о напряжении?",
+  "category": "hardware",
+  "device": "Сценка",
+  "research": [
+    "До явного контракта источник обязан держать на VBUS безопасные 5 В (vSafe5V); повышение до 9/15/20 В и выше возможно только после PD-контракта — Texas Instruments, An Engineer’s Guide to USB Type-C (SLYY228): \"After the connection is detected through the Rp and Rd resistor divider, the source must provide 5V\" и \"you will need a USB PD controller to negotiate a voltage greater than 5V\". — https://www.ti.com/lit/eb/slyy228/slyy228.pdf",
+    "Переговоры идут не по силовым жилам VBUS, а по тонкой CC-линии кодировкой BMC 300 кбит/с ±10% — Texas Instruments, An Engineer’s Guide to USB Type-C: \"USB PD messaging consists of 300kbps ±10% biphase mark code (BMC) signaling between two connected devices. This messaging takes place on the CC pins.\" — https://www.ti.com/lit/eb/slyy228/slyy228.pdf",
+    "Явный PD-контракт: источник шлёт Source_Capabilities с PDO-меню (первый объект всегда 5 В), приёмник отвечает Request, источник шлёт Accept, переключает VBUS и только когда напряжение в ±5% от цели шлёт PS_RDY — после этого приёмник может брать ток; каждый шаг подтверждается GoodCRC — Microchip AN1974 и TI SLVA842, раздел 4.1 (8 шагов: Source_Cap -> GoodCRC -> Request -> GoodCRC -> Accept -> GoodCRC -> PS_RDY -> GoodCRC). — https://ww1.microchip.com/downloads/aemDocuments/documents/OTH/ApplicationNotes/ApplicationNotes/00001974A.pdf и https://www.ti.com/lit/an/slva842/slva842.pdf",
+    "До PD 3.1 максимум был 100 Вт (20 В при 5 А); ревизия PD 3.1 от 26 мая 2021 добавила фиксированные 28/36/48 В и режим EPR до 240 Вт (48 В × 5 А) — USB-IF, USB Promoter Group Announces USB PD 3.1. — https://usb.org/sites/default/files/2021-05/USB%20PG%20USB%20PD%203.1%20DevUpdate%20Announcement_FINAL.pdf и https://www.usb.org/usb-charger-pd"
+  ],
+  "blocks": [
+    {
+      "gist": "зритель втыкает сто-ваттный блок в телефон и ждёт дыма — телефон спокойно заряжается",
+      "narration": "Ты втыка́ешь сто-ваттный {USB-C|ю-эс-би-си́} блок в телефо́н и ждёшь ды́ма — а он спо́койно заряжа́ется. Почему́ мо́щный блок не сжига́ет телефо́н?"
+    },
+    {
+      "gist": "блок-официант выкладывает меню по тонкой линии, телефон-гость выбирает блюдо",
+      "narration": "Попро́сту: {USB Power Delivery|ю-эс-би па́уэр дели́вери} — это как меню́ по {CC|цэ-цэ}-ли́нии: блок выкла́дывает спи́сок напряже́ний, а телефо́н выбира́ет блю́до."
+    },
+    {
+      "gist": "без договора на проводе только безопасные пять вольт, сто ватт ждут разрешения",
+      "narration": "Пока́ не догово́рятся — на прово́де то́лько пять вольт. Это безопа́сный дефо́лт: даже сто-ваттный блок старту́ет с пяти́, а повыша́ет то́лько по́сле контра́кта."
+    },
+    {
+      "gist": "шёпот по CC-линии кодировкой BMC, источник шлёт меню Source Capabilities, телефон шлёт Request",
+      "narration": "Вау-фа́кт: догова́риваются не по си́ле, а по то́нкой {CC|цэ-цэ}-ли́нии — сигна́лом {BMC|би-эм-це́} на три́ста килоби́т. Исто́чник шлёт {Source Capabilities|со́рс кэпаби́литиз} — меню́, телефо́н шлёт {Request|рекве́ст}."
+    },
+    {
+      "gist": "источник отвечает Accept, переключает VBUS и шлёт PS_RDY только когда напряжение в допуске",
+      "narration": "Блок отве́чает {Accept|акце́пт}, переклю́чает пита́ние и то́лько когда́ напряже́ние вхо́дит в пять проце́нтов от це́ли, шлёт {PS_RDY|пи-эс-рэ́ди} — то́лько тогда́ телефо́н берёт ток."
+    },
+    {
+      "gist": "диктор сводит выжимку, даёт мостик к чипу в кабеле и зовёт подписаться",
+      "narration": "Запо́мни: мо́щность на коро́бке — не приго́вор, а меню́. Напряже́ние растёт то́лько по́сле рукопожа́тия по {CC|цэ-цэ}. А как ка́бель с чи́пом обма́нывает блок про пять ампе́р — расскажу́ да́льше, подпиши́сь."
+    }
+  ]
+}
