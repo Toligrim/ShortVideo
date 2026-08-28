@@ -121,7 +121,7 @@ export const UsbPdNegotiationVisual: React.FC<{
     </>
   );
 
-  // Cable lines
+  // Cable lines — CC-подпись для capabilities вынесена из полосы PDO (680–820) в свободную зону.
   const cables = (
     <svg width={layout.width} height={layout.height} viewBox={`0 0 ${layout.width} ${layout.height}`} style={{ position: "absolute", inset: 0, overflow: "visible", opacity: enter }}>
       {/* VBUS thick power line */}
@@ -130,7 +130,17 @@ export const UsbPdNegotiationVisual: React.FC<{
       <line x1={leftX + 110} y1={ccY} x2={rightX - 110} y2={ccY} stroke={theme.accent} strokeWidth={4} strokeDasharray={phase === "capabilities" || phase === "request" ? "10 8" : "none"} strokeLinecap="round" opacity={0.9} />
       {/* VBUS label */}
       <text x={cx} y={vbusY - 18} textAnchor="middle" fontFamily={theme.mono} fontSize={20} fontWeight={800} fill={phase === "discover" ? theme.success : theme.subtext}>VBUS</text>
-      <text x={cx} y={ccY - 18} textAnchor="middle" fontFamily={theme.mono} fontSize={20} fontWeight={800} fill={theme.accent}>CC</text>
+      <text
+        x={cx}
+        y={phase === "capabilities" ? 660 : ccY - 18}
+        textAnchor="middle"
+        fontFamily={theme.mono}
+        fontSize={20}
+        fontWeight={800}
+        fill={theme.accent}
+      >
+        CC
+      </text>
     </svg>
   );
 
@@ -269,7 +279,7 @@ export const UsbPdNegotiationVisual: React.FC<{
           style={{
             position: "absolute",
             left: cx - 150,
-            top: ccY - 55,
+            top: 830,
             width: 300,
             height: 48,
             borderRadius: 999,
@@ -338,16 +348,17 @@ export const UsbPdNegotiationVisual: React.FC<{
   if (phase === "request") {
     const t = smooth(clamp01((local - impactLocal) / 28));
     const reqX = interpolate(t, [0, 1], [rightX - 80, leftX + 80]);
+    const accX = interpolate(t, [0, 1], [leftX + 80, rightX - 80]);
     return (
       <>
         {header}
         {devices}
         {cables}
-        {/* Request packet moving left on CC */}
+        {/* Request packet moving left on CC — центр пилюли совпадает с reqX */}
         <div
           style={{
             position: "absolute",
-            left: reqX - 90,
+            left: reqX,
             top: ccY - 42,
             width: 180,
             height: 52,
@@ -369,11 +380,11 @@ export const UsbPdNegotiationVisual: React.FC<{
           <IconGlyph name="arrow-left" size={20} color="#1A1200" strokeWidth={2} />
           Request 9В
         </div>
-        {/* Accept packet moving right */}
+        {/* Accept packet moving right — центр пилюли совпадает с accX */}
         <div
           style={{
             position: "absolute",
-            left: interpolate(t, [0, 1], [leftX + 80, rightX - 80]) - 90,
+            left: accX,
             top: ccY - 42,
             width: 180,
             height: 52,
