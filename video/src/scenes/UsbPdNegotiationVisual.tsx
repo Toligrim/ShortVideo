@@ -354,12 +354,12 @@ export const UsbPdNegotiationVisual: React.FC<{
         {header}
         {devices}
         {cables}
-        {/* Request packet moving left on CC — центр пилюли совпадает с reqX */}
+        {/* Request packet moving left — верхняя дорожка над CC (ccY-64), Accept — нижняя дорожка под CC (ccY+12): без перекрытия при любом кадре */}
         <div
           style={{
             position: "absolute",
             left: reqX,
-            top: ccY - 42,
+            top: ccY - 64,
             width: 180,
             height: 52,
             borderRadius: 999,
@@ -380,12 +380,12 @@ export const UsbPdNegotiationVisual: React.FC<{
           <IconGlyph name="arrow-left" size={20} color="#1A1200" strokeWidth={2} />
           Request 9В
         </div>
-        {/* Accept packet moving right — центр пилюли совпадает с accX */}
+        {/* Accept packet moving right — нижняя дорожка под CC */}
         <div
           style={{
             position: "absolute",
             left: accX,
-            top: ccY - 42,
+            top: ccY + 12,
             width: 180,
             height: 52,
             borderRadius: 999,
