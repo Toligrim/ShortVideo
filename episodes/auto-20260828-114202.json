@@ -1,0 +1,112 @@
+{
+  "id": "auto-20260828-114202",
+  "title": "Почему мощная USB-C зарядка не сжигает телефон — как устройства договариваются о напряжении?",
+  "scenes": [
+    {
+      "type": "story",
+      "narration": "Ты втыка́ешь сто-ваттный {USB-C|ю-эс-би-си́} блок в телефо́н и ждёшь ды́ма — а он спо́койно заряжа́ется. Почему́ мо́щный блок не сжига́ет телефо́н?",
+      "beats": [
+        {
+          "visual": "usb-pd-negotiation",
+          "onWord": "втыка́ешь",
+          "params": { "phase": "discover" }
+        },
+        {
+          "visual": "usb-pd-negotiation",
+          "onWord": "ды́ма",
+          "params": { "phase": "discover" }
+        }
+      ]
+    },
+    {
+      "type": "story",
+      "narration": "Попро́сту: {USB Power Delivery|ю-эс-би па́уэр дели́вери} — это как меню́ по {CC|цэ-цэ}-ли́нии: блок выкла́дывает спи́сок напряже́ний, а телефо́н выбира́ет блю́до.",
+      "beats": [
+        {
+          "visual": "usb-pd-negotiation",
+          "onWord": "меню́",
+          "params": { "phase": "capabilities" }
+        },
+        {
+          "visual": "usb-pd-negotiation",
+          "onWord": "выкла́дывает",
+          "params": { "phase": "capabilities" }
+        },
+        {
+          "visual": "usb-pd-negotiation",
+          "onWord": "выбира́ет",
+          "params": { "phase": "request" }
+        }
+      ]
+    },
+    {
+      "type": "story",
+      "narration": "Пока́ не догово́рятся — на прово́де то́лько пять вольт. Это безопа́сный дефо́лт: даже сто-ваттный блок старту́ет с пяти́, а повыша́ет то́лько по́сле контра́кта.",
+      "beats": [
+        {
+          "visual": "usb-pd-negotiation",
+          "onWord": "пять",
+          "params": { "phase": "discover" }
+        },
+        {
+          "visual": "usb-pd-negotiation",
+          "onWord": "контра́кта",
+          "params": { "phase": "discover" }
+        }
+      ]
+    },
+    {
+      "type": "story",
+      "narration": "Вау-фа́кт: догова́риваются не по си́ле, а по то́нкой {CC|цэ-цэ}-ли́нии — сигна́лом {BMC|би-эм-це́} на три́ста килоби́т. Исто́чник шлёт {Source Capabilities|со́рс кэпаби́литиз} — меню́, телефо́н шлёт {Request|рекве́ст}.",
+      "beats": [
+        {
+          "visual": "usb-pd-negotiation",
+          "onWord": "сигна́лом",
+          "params": { "phase": "capabilities" }
+        },
+        {
+          "visual": "usb-pd-negotiation",
+          "onWord": "Source",
+          "params": { "phase": "capabilities" }
+        },
+        {
+          "visual": "usb-pd-negotiation",
+          "onWord": "Request",
+          "params": { "phase": "request" }
+        }
+      ]
+    },
+    {
+      "type": "story",
+      "narration": "Блок отве́чает {Accept|акце́пт}, переклю́чает пита́ние и то́лько когда́ напряже́ние вхо́дит в пять проце́нтов от це́ли, шлёт {PS_RDY|пи-эс-рэ́ди} — то́лько тогда́ телефо́н берёт ток.",
+      "beats": [
+        {
+          "visual": "usb-pd-negotiation",
+          "onWord": "Accept",
+          "params": { "phase": "request" }
+        },
+        {
+          "visual": "usb-pd-negotiation",
+          "onWord": "переклю́чает",
+          "params": { "phase": "contract" }
+        },
+        {
+          "visual": "usb-pd-negotiation",
+          "onWord": "PS_RDY",
+          "params": { "phase": "contract" }
+        }
+      ]
+    },
+    {
+      "type": "outro",
+      "title": "Что запо́мнить",
+      "bullets": [
+        "мо́щность — не приго́вор, а меню́",
+        "5 В безопа́сно до контра́кта",
+        "контра́кт: Request→Accept→PS_RDY"
+      ],
+      "cta": "Подпиши́сь: дальше — чип в кабеле",
+      "narration": "Запо́мни: мо́щность на коро́бке — не приго́вор, а меню́. Напряже́ние растёт то́лько по́сле рукопожа́тия по {CC|цэ-цэ}. А как ка́бель с чи́пом обма́нывает блок про пять ампе́р — расскажу́ да́льше, подпиши́сь."
+    }
+  ]
+}
