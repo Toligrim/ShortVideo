@@ -43,6 +43,7 @@ import { ArianeOverflowVisual, type ArianeOverflowPhase } from "./ArianeOverflow
 import { CapacitiveTouchVisual, type CapacitiveTouchPhase } from "./CapacitiveTouch";
 import { BgpRerouteVisual, type BgpReroutePhase } from "./BgpRerouteVisual";
 import { UsbPdNegotiationVisual, type UsbPdNegotiationPhase } from "./UsbPdNegotiationVisual";
+import { ConvolutionStencilVisual, type ConvolutionStencilPhase } from "./ConvolutionStencilVisual";
 
 /* ──────────────────────────── расписание битов ──────────────────────────── */
 
@@ -223,6 +224,10 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
     if (beat.visual === "usb-pd-negotiation") {
       const phase = beat.params?.phase;
       impact = start + Math.round(dur * (phase === "discover" ? 0.55 : phase === "capabilities" ? 0.62 : phase === "request" ? 0.58 : 0.68));
+    }
+    if (beat.visual === "convolution-stencil") {
+      const phase = beat.params?.phase;
+      impact = start + Math.round(dur * (phase === "input" ? 0.62 : phase === "scan" ? 0.58 : phase === "features" ? 0.6 : 0.64));
     }
     return { beat, start, end, impact };
   });
@@ -446,6 +451,11 @@ export const storySfx = (
     if (s.beat.visual === "usb-pd-negotiation") {
       const phase = s.beat.params?.phase;
       const sound = phase === "discover" ? "pop" : phase === "capabilities" ? "click" : phase === "request" ? "pop" : "ding";
+      events.push({ frame: s.impact, sound });
+    }
+    if (s.beat.visual === "convolution-stencil") {
+      const phase = s.beat.params?.phase;
+      const sound = phase === "input" ? "pop" : phase === "scan" ? "click" : phase === "features" ? "ding" : "whoosh";
       events.push({ frame: s.impact, sound });
     }
   }
@@ -10038,6 +10048,7 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     "capacitive-touch": { scale: 0.94, y: -20 },
     "bgp-reroute": { scale: 0.92, y: -20 },
     "usb-pd-negotiation": { scale: 0.92, y: -20 },
+    "convolution-stencil": { scale: 0.92, y: -20 },
   };
   const cur = cams[slot.beat.visual] ?? { scale: 1, y: 0 };
   const prev = idx > 0 ? cams[slots[idx - 1].beat.visual] ?? cur : cur;
@@ -10755,6 +10766,15 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             fps={fps}
             impactLocal={impactLocal}
             phase={(slot.beat.params?.phase as UsbPdNegotiationPhase | undefined) ?? "discover"}
+          />
+        );
+      case "convolution-stencil":
+        return (
+          <ConvolutionStencilVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as ConvolutionStencilPhase | undefined) ?? "input"}
           />
         );
       default:

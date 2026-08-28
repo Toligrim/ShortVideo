@@ -144,7 +144,8 @@ export interface StoryBeat {
     | "capacitive-touch"
     | "digital-signature"
     | "bgp-reroute"
-    | "usb-pd-negotiation";
+    | "usb-pd-negotiation"
+    | "convolution-stencil";
   onWord?: string; // бит начинается на этом слове реплики
   params?: Record<string, unknown>;
 }
