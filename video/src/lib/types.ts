@@ -143,7 +143,8 @@ export interface StoryBeat {
     | "password-hash"
     | "capacitive-touch"
     | "digital-signature"
-    | "bgp-reroute";
+    | "bgp-reroute"
+    | "usb-pd-negotiation";
   onWord?: string; // бит начинается на этом слове реплики
   params?: Record<string, unknown>;
 }

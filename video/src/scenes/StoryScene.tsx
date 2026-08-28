@@ -42,6 +42,7 @@ import { RaftQuorumVisual, type RaftQuorumPhase } from "./RaftQuorumVisual";
 import { ArianeOverflowVisual, type ArianeOverflowPhase } from "./ArianeOverflowVisual";
 import { CapacitiveTouchVisual, type CapacitiveTouchPhase } from "./CapacitiveTouch";
 import { BgpRerouteVisual, type BgpReroutePhase } from "./BgpRerouteVisual";
+import { UsbPdNegotiationVisual, type UsbPdNegotiationPhase } from "./UsbPdNegotiationVisual";
 
 /* ──────────────────────────── расписание битов ──────────────────────────── */
 
@@ -218,6 +219,10 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
     if (beat.visual === "bgp-reroute") {
       const phase = beat.params?.phase;
       impact = start + Math.round(dur * (phase === "break" ? 0.45 : phase === "withdraw" ? 0.55 : phase === "reroute" ? 0.62 : 0.68));
+    }
+    if (beat.visual === "usb-pd-negotiation") {
+      const phase = beat.params?.phase;
+      impact = start + Math.round(dur * (phase === "discover" ? 0.55 : phase === "capabilities" ? 0.62 : phase === "request" ? 0.58 : 0.68));
     }
     return { beat, start, end, impact };
   });
@@ -436,6 +441,11 @@ export const storySfx = (
     if (s.beat.visual === "bgp-reroute") {
       const phase = s.beat.params?.phase;
       const sound = phase === "break" ? "slam" : phase === "withdraw" ? "whoosh" : phase === "reroute" ? "pop" : "ding";
+      events.push({ frame: s.impact, sound });
+    }
+    if (s.beat.visual === "usb-pd-negotiation") {
+      const phase = s.beat.params?.phase;
+      const sound = phase === "discover" ? "pop" : phase === "capabilities" ? "click" : phase === "request" ? "pop" : "ding";
       events.push({ frame: s.impact, sound });
     }
   }
@@ -10027,6 +10037,7 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     "password-hash": { scale: 0.92, y: -20 },
     "capacitive-touch": { scale: 0.94, y: -20 },
     "bgp-reroute": { scale: 0.92, y: -20 },
+    "usb-pd-negotiation": { scale: 0.92, y: -20 },
   };
   const cur = cams[slot.beat.visual] ?? { scale: 1, y: 0 };
   const prev = idx > 0 ? cams[slots[idx - 1].beat.visual] ?? cur : cur;
@@ -10735,6 +10746,15 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             fps={fps}
             impactLocal={impactLocal}
             phase={(slot.beat.params?.phase as BgpReroutePhase | undefined) ?? "break"}
+          />
+        );
+      case "usb-pd-negotiation":
+        return (
+          <UsbPdNegotiationVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as UsbPdNegotiationPhase | undefined) ?? "discover"}
           />
         );
       default:
