@@ -45,6 +45,7 @@ import { BgpRerouteVisual, type BgpReroutePhase } from "./BgpRerouteVisual";
 import { UsbPdNegotiationVisual, type UsbPdNegotiationPhase } from "./UsbPdNegotiationVisual";
 import { ConvolutionStencilVisual, type ConvolutionStencilPhase } from "./ConvolutionStencilVisual";
 import { WifiAirtimeVisual, type WifiAirtimePhase } from "./WifiAirtimeVisual";
+import { FileDeleteRecoveryVisual, type FileDeleteRecoveryPhase } from "./FileDeleteRecovery";
 
 /* ──────────────────────────── расписание битов ──────────────────────────── */
 
@@ -246,6 +247,10 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
               ? 0.6
               : 0.55)
         );
+    }
+    if (beat.visual === "file-delete-recovery") {
+      const phase = beat.params?.phase;
+      impact = start + Math.round(dur * (phase === "overwrite" ? 0.62 : phase === "trim" ? 0.64 : phase === "recovered" ? 0.58 : 0.55));
     }
     return { beat, start, end, impact };
   });
@@ -486,6 +491,11 @@ export const storySfx = (
           : phase === "contention"
           ? "pop"
           : "click";
+      events.push({ frame: s.impact, sound });
+    }
+    if (s.beat.visual === "file-delete-recovery") {
+      const phase = s.beat.params?.phase;
+      const sound = phase === "overwrite" ? "slam" : phase === "trim" ? "pop" : phase === "recovered" ? "ding" : "click";
       events.push({ frame: s.impact, sound });
     }
   }
@@ -10815,6 +10825,15 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             fps={fps}
             impactLocal={impactLocal}
             phase={(slot.beat.params?.phase as WifiAirtimePhase | undefined) ?? "signal"}
+          />
+        );
+      case "file-delete-recovery":
+        return (
+          <FileDeleteRecoveryVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as FileDeleteRecoveryPhase | undefined) ?? "unlink"}
           />
         );
       default:

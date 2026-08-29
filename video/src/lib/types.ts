@@ -146,7 +146,8 @@ export interface StoryBeat {
     | "bgp-reroute"
     | "usb-pd-negotiation"
     | "convolution-stencil"
-    | "wifi-airtime";
+    | "wifi-airtime"
+    | "file-delete-recovery";
   onWord?: string; // бит начинается на этом слове реплики
   params?: Record<string, unknown>;
 }
