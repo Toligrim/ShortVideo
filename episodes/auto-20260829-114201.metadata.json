@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "slug": "auto-20260829-114201",
+  "targets": {
+    "youtube": {
+      "title": "Почему Face ID узнаёт тебя в полной темноте?",
+      "description": "Face ID открывает телефон в полной темноте — но камера не видит как кошка. Невидимый Flood Illuminator подсвечивает лицо инфракрасным светом, а TrueDepth проецирует около 30 000 точек. IR-камера считывает их и строит карту глубины: фото плоское, а лицо — 3D-рельеф.",
+      "tags": [
+        "Face ID",
+        "айфон",
+        "смартфон",
+        "биометрия",
+        "инфракрасный свет",
+        "TrueDepth",
+        "как работает Face ID",
+        "распознавание лица",
+        "технологии",
+        "shortvideo"
+      ],
+      "category_id": "28",
+      "privacy_status": "public",
+      "made_for_kids": false,
+      "contains_synthetic_media": true,
+      "notify_subscribers": false
+    },
+    "instagram": {
+      "caption": "Почему Face ID узнаёт тебя в полной темноте? Невидимый инфракрасный свет и карта глубины лица — вот почему плоская фотография не срабатывает. #faceid #айфон #смартфон #технологии #shortvideo",
+      "share_to_feed": true
+    }
+  }
+}
