@@ -1,0 +1,38 @@
+{
+  "slug": "auto-20260829-114201",
+  "title": "Почему Face ID узнаёт тебя в полной темноте?",
+  "category": "hardware",
+  "device": "Миф-бастер",
+  "research": [
+    "Apple Support HT102381: «The TrueDepth camera captures accurate face data by projecting and analyzing thousands of invisible dots to create a depth map of your face and also captures an infrared image of your face... it's designed to work indoors, outdoors, and even in total darkness» — https://support.apple.com/en-lamr/102381",
+    "Apple Developer AVFoundation: «The TrueDepth camera projects an infrared light pattern in front of the camera and images that pattern with an infrared camera. By observing how objects in the scene distorts the pattern, the capture system can calculate the distance from the camera to each point in the image» — https://developer.apple.com/documentation/avfoundation/capturing-photos-with-depth",
+    "Apple keynote 2017 / MacRumors: «Face ID uses infrared to scan your face, so it works in low lighting conditions and in the dark. The TrueDepth camera also has what Apple calls a 'Flood Illuminator,' aka an infrared light that illuminates your face in the dark so the dot map and the infrared camera can do their jobs» — https://www.macrumors.com/2017/09/13/how-iphone-x-face-id-works",
+    "Wikipedia (VCSEL): «Vertical-cavity surface-emitting laser (VCSEL) dot projector module that projects more than 30,000 infrared dots onto the user's face... The pattern is projected from the laser using an Active Diffractive Optical Element which divides the beam into 30,000 dots» — https://en.wikipedia.org/wiki/Face_ID"
+  ],
+  "blocks": [
+    {
+      "gist": "Хук: ночь, телефон разблокировался в полной темноте — миф: «видит как кот»",
+      "narration": "Полночь, ты берёшь телефон — он разблокировался во тьме. Кажется, он видит в темноте как кот. Миф."
+    },
+    {
+      "gist": "Миф-бастер: Face ID не «видит» во тьме — он сам светит невидимым светом",
+      "narration": "Face ID не видит во тьме. Он сам светит: {Flood Illuminator|флад иллюминатор} — невидимая подсветка лица, которой глаз не заметит."
+    },
+    {
+      "gist": "Один механизм TrueDepth: инфракрасный рисунок точек и карта глубины",
+      "narration": "Камера {TrueDepth|тру-депт} проецирует тридцать тысяч невидимых точек — инфракрасный рисунок. {VCSEL|ви-си-эл} рисует его, а IR-камера строит карту глубины."
+    },
+    {
+      "gist": "Как рождается карта глубины: точки искривляются на рельефе, камера читает искажение",
+      "narration": "Точки падают на нос и скулы и искривляются. IR-камера читает это искажение и строит карту глубины — расстояние до каждой точки лица."
+    },
+    {
+      "gist": "Почему плоское фото не подходит: нет глубины, нет карты, совпадения нет",
+      "narration": "Фото плоское — у него нет глубины. Нет искажения точек, нет карты. Поэтому плоская картинка Face ID не обманет."
+    },
+    {
+      "gist": "Итог: работает в темноте, потому что сам светит невидимым светом и читает 3D-рельеф. Мостик к Attention Aware и подписка",
+      "narration": "Итог: Face ID работает в темноте, потому что сам светит невидимым светом и читает твой 3D-рельеф. Как он понимает, что ты смотришь? Следующим — подпишись."
+    }
+  ]
+}
