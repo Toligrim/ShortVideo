@@ -146,20 +146,6 @@ const SphereIntersection: React.FC<{
   </g>
 );
 
-const PhaseTitle: React.FC<{ phase: GpsPseudorangePhase; opacity: number }> = ({ phase, opacity }) => {
-  const titles: Record<GpsPseudorangePhase, string> = {
-    listening: "Пассивный GPS-приёмник",
-    signals: "Четыре сигнала спутников",
-    spheres: "Сферы пересекаются: позиция и часы",
-    correction: "Поправка часов приёмника",
-  };
-  return (
-    <div style={{ position: "absolute", top: SAFE_TOP + 26, left: 46, right: 46, textAlign: "center", opacity, color: theme.text, fontFamily: theme.font, fontSize: 49, fontWeight: 800, lineHeight: 1.08 }}>
-      {titles[phase]}
-    </div>
-  );
-};
-
 export const GpsPseudorangeVisual: React.FC<{
   local: number;
   fps: number;
@@ -183,7 +169,6 @@ export const GpsPseudorangeVisual: React.FC<{
   return (
     <div style={{ position: "absolute", inset: 0, width: W, height: H, overflow: "hidden", fontFamily: theme.font }}>
       <div style={{ position: "absolute", inset: 0, opacity: 0.38, background: "radial-gradient(ellipse 70% 48% at 50% 42%, #1c3b67 0%, transparent 72%)" }} />
-      <PhaseTitle phase={phase} opacity={enter} />
 
       {phase === "listening" ? (
         <>
