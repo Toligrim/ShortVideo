@@ -147,7 +147,7 @@ export interface StoryBeat {
     | "usb-pd-negotiation"
     | "convolution-stencil"
   | "wifi-airtime"
-    | "file-delete-recovery"
+  | "file-delete-recovery"
 | "block-chain"
     | "mempool-rbf"
     | "face-id-depth"
