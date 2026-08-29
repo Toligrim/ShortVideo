@@ -179,7 +179,7 @@ export const DiffusionDenoiseVisual: React.FC<Props> = ({
       style={{
         position: "absolute",
         left: W / 2,
-        top: 245,
+        top: 280,
         transform: "translateX(-50%)",
         display: "flex",
         alignItems: "center",

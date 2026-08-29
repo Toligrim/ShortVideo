@@ -147,11 +147,11 @@ export interface StoryBeat {
     | "usb-pd-negotiation"
     | "convolution-stencil"
   | "wifi-airtime"
-  | "file-delete-recovery"
+    | "file-delete-recovery"
 | "block-chain"
     | "mempool-rbf"
-    | "diffusion-denoise"
-    | "face-id-depth";
+    | "face-id-depth"
+    | "diffusion-denoise";
   onWord?: string; // бит начинается на этом слове реплики
   params?: Record<string, unknown>;
 }
