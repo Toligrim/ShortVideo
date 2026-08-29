@@ -148,8 +148,9 @@ export interface StoryBeat {
     | "convolution-stencil"
   | "wifi-airtime"
   | "file-delete-recovery"
-  | "block-chain"
-  | "mempool-rbf";
+| "block-chain"
+    | "mempool-rbf"
+    | "face-id-depth";
   onWord?: string; // бит начинается на этом слове реплики
   params?: Record<string, unknown>;
 }

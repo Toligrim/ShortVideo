@@ -41,6 +41,7 @@ import { EliasFanoVisual, type EliasFanoPhase } from "./EliasFanoVisual";
 import { RaftQuorumVisual, type RaftQuorumPhase } from "./RaftQuorumVisual";
 import { ArianeOverflowVisual, type ArianeOverflowPhase } from "./ArianeOverflowVisual";
 import { CapacitiveTouchVisual, type CapacitiveTouchPhase } from "./CapacitiveTouch";
+import { FaceIdDepthVisual, type FaceIdDepthPhase } from "./FaceIdDepthVisual";
 import { BgpRerouteVisual, type BgpReroutePhase } from "./BgpRerouteVisual";
 import { UsbPdNegotiationVisual, type UsbPdNegotiationPhase } from "./UsbPdNegotiationVisual";
 import { ConvolutionStencilVisual, type ConvolutionStencilPhase } from "./ConvolutionStencilVisual";
@@ -143,6 +144,10 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
       impact = start + Math.round(dur * (phase === "invariant" ? 0.65 : 0.58));
     }
     if (beat.visual === "counter") impact = start + Math.round(dur * 0.7);
+    if (beat.visual === "face-id-depth") {
+      const phase = beat.params?.phase;
+      impact = start + Math.round(dur * (phase === "darkness" ? 0.55 : phase === "dots" ? 0.62 : 0.58));
+    }
     if (beat.visual === "mincut-contract") {
       const phase = beat.params?.phase;
       impact = start + Math.round(dur * (phase === "branch" ? 0.65 : phase === "repeat" ? 0.72 : 0.55));
@@ -365,6 +370,11 @@ export const storySfx = (
     if (s.beat.visual === "counter") {
       const ph = s.beat.params?.phase;
       const sound = ph === "tradeoff" || ph === "logarithm" ? "ding" : ph === "exact" ? "click" : "pop";
+      events.push({ frame: s.impact, sound });
+    }
+    if (s.beat.visual === "face-id-depth") {
+      const ph = s.beat.params?.phase;
+      const sound = ph === "darkness" ? "pop" : ph === "dots" ? "ding" : "pop";
       events.push({ frame: s.impact, sound });
     }
     if (s.beat.visual === "mincut-contract") {
