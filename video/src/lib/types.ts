@@ -150,6 +150,7 @@ export interface StoryBeat {
   | "file-delete-recovery"
 | "block-chain"
     | "mempool-rbf"
+    | "diffusion-denoise"
     | "face-id-depth";
   onWord?: string; // бит начинается на этом слове реплики
   params?: Record<string, unknown>;

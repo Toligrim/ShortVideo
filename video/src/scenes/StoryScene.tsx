@@ -49,6 +49,7 @@ import { WifiAirtimeVisual, type WifiAirtimePhase } from "./WifiAirtimeVisual";
 import { FileDeleteRecoveryVisual, type FileDeleteRecoveryPhase } from "./FileDeleteRecovery";
 import { BlockChainVisual, type BlockChainPhase } from "./BlockChainVisual";
 import { MempoolRbfVisual, type MempoolRbfPhase } from "./MempoolRbfVisual";
+import { DiffusionDenoiseVisual, type DiffusionDenoisePhase } from "./DiffusionDenoiseVisual";
 
 /* ──────────────────────────── расписание битов ──────────────────────────── */
 
@@ -266,6 +267,10 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
     if (beat.visual === "mempool-rbf") {
       const phase = beat.params?.phase;
       impact = start + Math.round(dur * (phase === "mined" ? 0.62 : phase === "rbf" ? 0.58 : 0.55));
+    }
+    if (beat.visual === "diffusion-denoise") {
+      const phase = beat.params?.phase;
+      impact = start + Math.round(dur * (phase === "glass" ? 0.58 : phase === "latent" ? 0.62 : phase === "ddim" ? 0.68 : phase === "prompt" ? 0.62 : 0.58));
     }
     return { beat, start, end, impact };
   });
@@ -526,6 +531,11 @@ export const storySfx = (
     if (s.beat.visual === "mempool-rbf") {
       const phase = s.beat.params?.phase;
       const sound = phase === "mined" ? "ding" : phase === "rbf" ? "pop" : "click";
+      events.push({ frame: s.impact, sound });
+    }
+    if (s.beat.visual === "diffusion-denoise") {
+      const phase = s.beat.params?.phase;
+      const sound = phase === "glass" ? "whoosh" : phase === "latent" ? "ding" : phase === "ddim" ? "pop" : phase === "denoise" ? "click" : "pop";
       events.push({ frame: s.impact, sound });
     }
   }
@@ -10121,6 +10131,7 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     "usb-pd-negotiation": { scale: 0.92, y: -20 },
     "convolution-stencil": { scale: 0.92, y: -20 },
     "wifi-airtime": { scale: 0.92, y: -20 },
+    "diffusion-denoise": { scale: 0.92, y: -20 },
   };
   const cur = cams[slot.beat.visual] ?? { scale: 1, y: 0 };
   const prev = idx > 0 ? cams[slots[idx - 1].beat.visual] ?? cur : cur;
@@ -10892,6 +10903,18 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             fps={fps}
             impactLocal={impactLocal}
             phase={(slot.beat.params?.phase as MempoolRbfPhase | undefined) ?? "broadcast"}
+          />
+        );
+      case "diffusion-denoise":
+        return (
+          <DiffusionDenoiseVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as DiffusionDenoisePhase | undefined) ?? "denoise"}
+            prompt={slot.beat.params?.prompt as string | undefined}
+            step={slot.beat.params?.step as number | undefined}
+            stepsTotal={slot.beat.params?.stepsTotal as number | undefined}
           />
         );
       default:
