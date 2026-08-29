@@ -46,6 +46,8 @@ import { UsbPdNegotiationVisual, type UsbPdNegotiationPhase } from "./UsbPdNegot
 import { ConvolutionStencilVisual, type ConvolutionStencilPhase } from "./ConvolutionStencilVisual";
 import { WifiAirtimeVisual, type WifiAirtimePhase } from "./WifiAirtimeVisual";
 import { FileDeleteRecoveryVisual, type FileDeleteRecoveryPhase } from "./FileDeleteRecovery";
+import { BlockChainVisual, type BlockChainPhase } from "./BlockChainVisual";
+import { MempoolRbfVisual, type MempoolRbfPhase } from "./MempoolRbfVisual";
 
 /* ──────────────────────────── расписание битов ──────────────────────────── */
 
@@ -251,6 +253,14 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
     if (beat.visual === "file-delete-recovery") {
       const phase = beat.params?.phase;
       impact = start + Math.round(dur * (phase === "overwrite" ? 0.62 : phase === "trim" ? 0.64 : phase === "cloud" ? 0.58 : phase === "recovered" ? 0.58 : 0.55));
+    }
+    if (beat.visual === "block-chain") {
+      const phase = beat.params?.phase;
+      impact = start + Math.round(dur * (phase === "confirm" ? 0.78 : phase === "tamper" ? 0.6 : 0.55));
+    }
+    if (beat.visual === "mempool-rbf") {
+      const phase = beat.params?.phase;
+      impact = start + Math.round(dur * (phase === "mined" ? 0.62 : phase === "rbf" ? 0.58 : 0.55));
     }
     return { beat, start, end, impact };
   });
@@ -496,6 +506,16 @@ export const storySfx = (
     if (s.beat.visual === "file-delete-recovery") {
       const phase = s.beat.params?.phase;
       const sound = phase === "overwrite" ? "slam" : phase === "trim" ? "pop" : phase === "cloud" ? "ding" : phase === "recovered" ? "ding" : "click";
+      events.push({ frame: s.impact, sound });
+    }
+    if (s.beat.visual === "block-chain") {
+      const phase = s.beat.params?.phase;
+      const sound = phase === "confirm" ? "ding" : phase === "tamper" ? "slam" : "pop";
+      events.push({ frame: s.impact, sound });
+    }
+    if (s.beat.visual === "mempool-rbf") {
+      const phase = s.beat.params?.phase;
+      const sound = phase === "mined" ? "ding" : phase === "rbf" ? "pop" : "click";
       events.push({ frame: s.impact, sound });
     }
   }
@@ -10834,6 +10854,24 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             fps={fps}
             impactLocal={impactLocal}
             phase={(slot.beat.params?.phase as FileDeleteRecoveryPhase | undefined) ?? "unlink"}
+          />
+        );
+      case "block-chain":
+        return (
+          <BlockChainVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as BlockChainPhase | undefined) ?? "link"}
+          />
+        );
+      case "mempool-rbf":
+        return (
+          <MempoolRbfVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as MempoolRbfPhase | undefined) ?? "broadcast"}
           />
         );
       default:
