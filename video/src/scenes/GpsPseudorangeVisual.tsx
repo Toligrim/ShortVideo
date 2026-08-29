@@ -174,14 +174,14 @@ export const GpsPseudorangeVisual: React.FC<{
         <>
           <MetricCard
             x={CX}
-            y={SAFE_BOTTOM - 230}
+            y={SAFE_BOTTOM - 430}
             width={440}
             label="пассивный слушатель"
             value="никого не передаёт"
             color={theme.accent}
             opacity={card(12)}
           />
-          <div style={{ position: "absolute", left: 46, right: 46, top: SAFE_BOTTOM - 100, height: 80, textAlign: "center", color: theme.subtext, fontFamily: theme.font, fontSize: 28, opacity: enter }}>
+          <div style={{ position: "absolute", left: 46, right: 46, top: SAFE_BOTTOM - 270, height: 80, textAlign: "center", color: theme.subtext, fontFamily: theme.font, fontSize: 28, opacity: enter }}>
             <p>GPS-приёмник только ловит сигналы</p>
             <p>со спутников — не передаёт ничего в космос</p>
             <p>постоянно: L1 ~ 1575.42 МГц</p>
@@ -265,14 +265,14 @@ export const GpsPseudorangeVisual: React.FC<{
         <>
           <MetricCard
             x={CX}
-            y={SAFE_BOTTOM - 230}
+            y={SAFE_BOTTOM - 430}
             width={500}
             label="поправка часов"
             value="− ошибка кварца · синхронизация"
             color={theme.warning}
             opacity={card(18)}
           />
-          <div style={{ position: "absolute", left: 46, right: 46, top: SAFE_BOTTOM - 100, height: 80, textAlign: "center", color: theme.subtext, fontFamily: theme.font, fontSize: 28, opacity: enter }}>
+          <div style={{ position: "absolute", left: 46, right: 46, top: SAFE_BOTTOM - 270, height: 80, textAlign: "center", color: theme.subtext, fontFamily: theme.font, fontSize: 28, opacity: enter }}>
             <p>4-й спутник снимает ошибку кварцевого</p>
             <p>часа в приёмнике — подстраивает время</p>
             <p>без атомных часов — бесплатно</p>
