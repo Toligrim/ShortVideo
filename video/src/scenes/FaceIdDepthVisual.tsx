@@ -53,24 +53,30 @@ export const FaceIdDepthVisual: React.FC<Props> = ({ local, fps, impactLocal, ph
   const reveal = smooth(local / 24);
   const hit = local >= impactLocal ? Math.exp(-(local - impactLocal) * 0.18) : 0;
 
+  // детерминированный сидированный генератор (без Math.random) — кадры воспроизводимы
+  const seeded = (i: number, salt: number) => {
+    const x = Math.sin(i * 12.9898 + salt * 78.233) * 43758.5453;
+    return x - Math.floor(x);
+  };
+
   const darknessParticles = Array.from({ length: 50 }, (_, i) => ({
-    x: 100 + (Math.random() * 880),
-    y: 200 + (Math.random() * 1520),
-    size: 1 + Math.random() * 3,
-    speed: 0.5 + Math.random() * 1.5,
+    x: 100 + seeded(i, 1) * 880,
+    y: 200 + seeded(i, 2) * 1520,
+    size: 1 + seeded(i, 3) * 3,
+    speed: 0.5 + seeded(i, 4) * 1.5,
   }));
 
   const dotPositions = Array.from({ length: 150 }, (_, i) => ({
-    x: 100 + (Math.random() * 880),
-    y: 300 + (Math.random() * 1320),
-    brightness: 0.3 + Math.random() * 0.7,
+    x: 100 + seeded(i, 5) * 880,
+    y: 300 + seeded(i, 6) * 1320,
+    brightness: 0.3 + seeded(i, 7) * 0.7,
   }));
 
   const depthMapPoints = Array.from({ length: 100 }, (_, i) => ({
-    x: 50 + (Math.random() * 980),
-    y: 400 + (Math.random() * 1120),
-    height: 2 + Math.random() * 4,
-    depthValue: 0.5 + Math.random() * 0.5,
+    x: 50 + seeded(i, 8) * 980,
+    y: 400 + seeded(i, 9) * 1120,
+    height: 2 + seeded(i, 10) * 4,
+    depthValue: 0.5 + seeded(i, 11) * 0.5,
   }));
 
   return (

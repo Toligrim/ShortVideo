@@ -10116,6 +10116,7 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     "ariane-overflow": { scale: 0.88, y: -20 },
     "password-hash": { scale: 0.92, y: -20 },
     "capacitive-touch": { scale: 0.94, y: -20 },
+    "face-id-depth": { scale: 0.94, y: -20 },
     "bgp-reroute": { scale: 0.92, y: -20 },
     "usb-pd-negotiation": { scale: 0.92, y: -20 },
     "convolution-stencil": { scale: 0.92, y: -20 },
@@ -10810,6 +10811,15 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             signature={slot.beat.params?.signature as string | undefined}
             privKey={slot.beat.params?.privKey as string | undefined}
             pubKey={slot.beat.params?.pubKey as string | undefined}
+          />
+        );
+      case "face-id-depth":
+        return (
+          <FaceIdDepthVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as FaceIdDepthPhase | undefined) ?? "darkness"}
           />
         );
       case "capacitive-touch":
