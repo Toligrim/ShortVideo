@@ -85,7 +85,7 @@ export const MempoolRbfVisual: React.FC<{
       style={{
         position: "absolute",
         left: W / 2,
-        top: 245,
+        top: 330,
         transform: "translateX(-50%)",
         display: "flex",
         alignItems: "center",

@@ -10,6 +10,7 @@ const W = layout.width;
 const mono: React.CSSProperties = { fontFamily: theme.mono, fontWeight: 800, letterSpacing: 1 };
 const BW = 720;
 const BH = 150;
+const CONFIRM_BH = 110;
 
 const phaseTitle: Record<BlockChainPhase, string> = {
   link: "БЛОКЧЕЙН · ОДНА ТЕТРАДЬ НА ВЕСЬ МИР",
@@ -24,7 +25,7 @@ const Header: React.FC<{ title: string; enter: number; icon: string }> = ({ titl
     style={{
       position: "absolute",
       left: W / 2,
-      top: 245,
+      top: 330,
       transform: "translateX(-50%)",
       display: "flex",
       alignItems: "center",
@@ -53,9 +54,10 @@ interface CardProps {
   broken?: boolean;
   changed?: boolean;
   showPrev?: boolean;
+  compact?: boolean;
 }
 
-const BlockCard: React.FC<CardProps> = ({ y, idx, to, prev, color, enter, locked, danger, broken, changed, showPrev = true }) => (
+const BlockCard: React.FC<CardProps> = ({ y, idx, to, prev, color, enter, locked, danger, broken, changed, showPrev = true, compact = false }) => (
   <>
     <div
       style={{
@@ -63,8 +65,8 @@ const BlockCard: React.FC<CardProps> = ({ y, idx, to, prev, color, enter, locked
         left: (W - BW) / 2,
         top: y,
         width: BW,
-        height: BH,
-        borderRadius: 22,
+        height: compact ? CONFIRM_BH : BH,
+        borderRadius: compact ? 16 : 22,
         background: `${theme.panel}E8`,
         border: `3px solid ${danger ? theme.danger : color}${broken ? "44" : "99"}`,
         boxShadow: `0 0 42px ${danger ? theme.danger : color}${broken ? "10" : "22"}`,
@@ -73,34 +75,34 @@ const BlockCard: React.FC<CardProps> = ({ y, idx, to, prev, color, enter, locked
         display: "flex",
         flexDirection: "column",
         justifyContent: "center",
-        gap: 10,
-        padding: "0 26px",
+        gap: compact ? 4 : 10,
+        padding: compact ? "0 22px" : "0 26px",
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: compact ? 8 : 12 }}>
         <div
           style={{
             ...mono,
-            fontSize: 22,
+            fontSize: compact ? 20 : 22,
             color: danger ? theme.danger : color,
             background: `${danger ? theme.danger : color}1A`,
             borderRadius: 10,
-            padding: "2px 12px",
+            padding: compact ? "1px 10px" : "2px 12px",
           }}
         >
           #{idx}
         </div>
-        <div style={{ ...mono, fontSize: 24, color: theme.text }}>БЛОК</div>
-        {locked ? <div style={{ marginLeft: "auto" }}><IconGlyph name="lock" size={26} color={theme.success} strokeWidth={2} /></div> : null}
-        {broken ? <div style={{ marginLeft: "auto" }}><IconGlyph name="link-2-off" size={26} color={theme.danger} strokeWidth={2} /></div> : null}
+        <div style={{ ...mono, fontSize: compact ? 21 : 24, color: theme.text }}>БЛОК</div>
+        {locked ? <div style={{ marginLeft: "auto" }}><IconGlyph name="lock" size={compact ? 24 : 26} color={theme.success} strokeWidth={2} /></div> : null}
+        {broken ? <div style={{ marginLeft: "auto" }}><IconGlyph name="link-2-off" size={compact ? 24 : 26} color={theme.danger} strokeWidth={2} /></div> : null}
       </div>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, color: theme.text, fontSize: 28, fontWeight: 800 }}>
-        <IconGlyph name="bitcoin" size={26} color={theme.warning} strokeWidth={2} />
+      <div style={{ display: "flex", alignItems: "center", gap: compact ? 8 : 10, color: theme.text, fontSize: compact ? 22 : 28, fontWeight: 800 }}>
+        <IconGlyph name="bitcoin" size={compact ? 22 : 26} color={theme.warning} strokeWidth={2} />
         <span>tx&nbsp; A → {to}&nbsp; 0.5 ₿</span>
       </div>
       {showPrev ? (
-        <div style={{ display: "flex", alignItems: "center", gap: 10, color: danger ? theme.danger : theme.subtext, fontSize: 22, ...mono }}>
-          <IconGlyph name="arrow-up" size={20} color={danger ? theme.danger : color} strokeWidth={2.4} />
+        <div style={{ display: "flex", alignItems: "center", gap: compact ? 8 : 10, color: danger ? theme.danger : theme.subtext, fontSize: compact ? 18 : 22, ...mono }}>
+          <IconGlyph name="arrow-up" size={compact ? 18 : 20} color={danger ? theme.danger : color} strokeWidth={2.4} />
           <span>prev&nbsp; {prev}</span>
         </div>
       ) : null}
@@ -224,10 +226,10 @@ export const BlockChainVisual: React.FC<{
   }
 
   // confirm
-  const targetY = 1000;
+  const targetY = 1190;
   const targetEnter = spring({ frame: Math.max(0, local - 4), fps, config: { damping: 14, mass: 0.75 } });
-  const step = BH + 14;
-  const confirmYs = Array.from({ length: confirms }, (_, k) => targetY - step * (k + 1));
+  const confirmStep = CONFIRM_BH + 12;
+  const confirmYs = Array.from({ length: confirms }, (_, k) => targetY - confirmStep * (k + 1));
   const doneCount = Math.max(0, Math.min(confirms, Math.floor(local / 8)));
   const allDone = doneCount >= confirms;
   const doneP = spring({ frame: Math.max(0, local - impactLocal), fps, config: { damping: 12, mass: 0.7 } });
@@ -235,7 +237,7 @@ export const BlockChainVisual: React.FC<{
     <>
       <Header title={phaseTitle.confirm} enter={enter} icon="layers" />
       {/* цель: блок пользователя */}
-      <BlockCard y={targetY} idx={1} to="B" prev={`${HEX[0]}…${HEX[3]}`} color={theme.accent} enter={targetEnter} locked showPrev={false} />
+      <BlockCard y={targetY} idx={1} to="B" prev={`${HEX[0]}…${HEX[3]}`} color={theme.accent} enter={targetEnter} locked showPrev={false} compact />
       {/* подтверждения сверху */}
       {confirmYs.map((y, k) => {
         const cEnter = spring({ frame: Math.max(0, local - 8 * (k + 1)), fps, config: { damping: 13, mass: 0.7 } });
@@ -249,6 +251,7 @@ export const BlockChainVisual: React.FC<{
             prev={`${HEX[(k + 1) % HEX.length]}…${HEX[(k + 4) % HEX.length]}`}
             color={theme.success}
             enter={cEnter}
+            compact
           />
         ) : null;
       })}
@@ -257,7 +260,7 @@ export const BlockChainVisual: React.FC<{
         style={{
           position: "absolute",
           left: W / 2,
-          top: 300,
+          top: 390,
           transform: "translateX(-50%)",
           padding: "14px 30px",
           borderRadius: 999,
@@ -278,7 +281,7 @@ export const BlockChainVisual: React.FC<{
           style={{
             position: "absolute",
             left: W / 2,
-            top: 220,
+            top: 280,
             transform: `translateX(-50%) scale(${0.7 + doneP * 0.3})`,
             display: "flex",
             alignItems: "center",
@@ -299,7 +302,7 @@ export const BlockChainVisual: React.FC<{
         style={{
           position: "absolute",
           left: W / 2,
-          top: 1180,
+          top: 1340,
           transform: "translateX(-50%)",
           ...mono,
           fontSize: 26,
@@ -310,7 +313,7 @@ export const BlockChainVisual: React.FC<{
       >
         КАЖДОЕ — НОВЫЙ БЛОК ПОВЕРХ ≈ ЧАС ДО УВЕРЕННОСТИ
       </div>
-      <PulseRing x={W / 2} y={targetY - step * confirms} triggerFrame={impactLocal} tone="success" size={200} />
+      <PulseRing x={W / 2} y={targetY - confirmStep * confirms} triggerFrame={impactLocal} tone="success" size={200} />
     </>
   );
 };
