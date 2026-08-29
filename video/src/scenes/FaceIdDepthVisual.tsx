@@ -53,33 +53,6 @@ const depthColor = (z: number) => {
 const faceX = (u: number, z = 0) => FACE_CX + u * FACE_W + z * 55;
 const faceY = (v: number, z = 0) => FACE_CY - v * FACE_H - z * 30;
 
-const PhaseTitle: React.FC<{ phase: FaceIdDepthPhase; opacity: number }> = ({ phase, opacity }) => {
-  const title: Record<FaceIdDepthPhase, string> = {
-    darkness: "Лицо в темноте",
-    dots: "Точечный проектор",
-    depth: "Карта глубины",
-  };
-  return (
-    <div
-      style={{
-        position: "absolute",
-        top: 235,
-        left: 50,
-        right: 50,
-        textAlign: "center",
-        color: theme.text,
-        fontFamily: theme.font,
-        fontSize: 46,
-        fontWeight: 800,
-        lineHeight: 1.08,
-        opacity,
-      }}
-    >
-      {title[phase]}
-    </div>
-  );
-};
-
 /** Силуэт лица: голова + плечи. Цвет/прозрачность задаёт вызывающий. */
 const FaceSilhouette: React.FC<{ stroke: string; fill: string; opacity: number }> = ({ stroke, fill, opacity }) => (
   <svg viewBox={`0 0 ${W} ${layout.height}`} style={{ position: "absolute", inset: 0, overflow: "visible" }}>
@@ -160,8 +133,6 @@ export const FaceIdDepthVisual: React.FC<Props> = ({ local, fps, impactLocal, ph
     <div style={{ position: "relative", width: W, height: layout.height, overflow: "hidden" }}>
       {/* фон — первый слой */}
       <div style={{ position: "absolute", inset: 0, background: theme.bg, opacity: enter }} />
-
-      <PhaseTitle phase={phase} opacity={enter} />
 
       {phase === "darkness" && (
         <>
