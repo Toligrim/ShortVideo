@@ -15,11 +15,13 @@
       "beats": [
         {
           "visual": "face-id-depth",
-          "onWord": "светит"
+          "onWord": "светит",
+          "params": { "phase": "darkness" }
         },
         {
           "visual": "face-id-depth",
-          "onWord": "тьме"
+          "onWord": "тьме",
+          "params": { "phase": "darkness" }
         }
       ]
     },
@@ -30,11 +32,13 @@
       "beats": [
         {
           "visual": "face-id-depth",
-          "onWord": "точек"
+          "onWord": "точек",
+          "params": { "phase": "dots" }
         },
         {
           "visual": "face-id-depth",
-          "onWord": "глубины"
+          "onWord": "глубины",
+          "params": { "phase": "dots" }
         }
       ]
     },
@@ -45,11 +49,13 @@
       "beats": [
         {
           "visual": "face-id-depth",
-          "onWord": "карту"
+          "onWord": "карту",
+          "params": { "phase": "depth" }
         },
         {
           "visual": "face-id-depth",
-          "onWord": "глубины"
+          "onWord": "глубины",
+          "params": { "phase": "depth" }
         }
       ]
     },
@@ -60,11 +66,13 @@
       "beats": [
         {
           "visual": "face-id-depth",
-          "onWord": "глубины"
+          "onWord": "глубины",
+          "params": { "phase": "depth" }
         },
         {
           "visual": "face-id-depth",
-          "onWord": "фото"
+          "onWord": "фото",
+          "params": { "phase": "depth" }
         }
       ]
     },
