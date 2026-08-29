@@ -4,7 +4,7 @@ import { layout, theme } from "../lib/theme";
 import { IconGlyph } from "../primitives/IconGlyph";
 import { PulseRing } from "../lib/Motion";
 
-export type FileDeleteRecoveryPhase = "unlink" | "overwrite" | "trim" | "recovered";
+export type FileDeleteRecoveryPhase = "unlink" | "overwrite" | "trim" | "cloud" | "recovered";
 
 const W = layout.width;
 const mono: React.CSSProperties = { fontFamily: theme.mono, fontWeight: 800, letterSpacing: 2 };
@@ -13,6 +13,7 @@ const phaseTitle: Record<FileDeleteRecoveryPhase, string> = {
   unlink: "UNLINK · ИМЯ УДАЛЕНО · БАЙТЫ НА МЕСТЕ",
   overwrite: "ПЕРЕЗАПИСЬ · ДАННЫЕ УНИЧТОЖЕНЫ",
   trim: "TRIM · КОНТРОЛЛЕР СТИРАЕТ ФИЗИЧЕСКИ",
+  cloud: "ОБЛАЧНАЯ КОРЗИНА · 30–60 ДНЕЙ",
   recovered: "ВОССТАНОВЛЕНИЕ · ФАЙЛ ОБНАРУЖЕН",
 };
 
@@ -430,6 +431,69 @@ export const FileDeleteRecoveryVisual: React.FC<{
           ФИЗИЧЕСКОЕ СТИРАНИЕ · ОКНО ЗАКРЫТО
         </div>
         <PulseRing x={W / 2} y={580} triggerFrame={impactLocal} tone="danger" size={170} />
+      </>
+    );
+  }
+
+  if (phase === "cloud") {
+    const cloudP = spring({ frame: Math.max(0, local - impactLocal), fps, config: { damping: 12, mass: 0.7 } });
+    return (
+      <>
+        {header}
+        {/* Cloud bucket */}
+        <div
+          style={{
+            position: "absolute",
+            left: W / 2,
+            top: 400,
+            transform: `translateX(-50%) scale(${0.7 + cloudP * 0.3})`,
+            opacity: enter * cloudP,
+            textAlign: "center",
+          }}
+        >
+          <IconGlyph name="cloud" size={82} color={theme.success} strokeWidth={1.6} />
+          <div style={{ ...mono, fontSize: 32, color: theme.success, marginTop: 16 }}>КОРЗИНА</div>
+        </div>
+
+        {/* Retention badge */}
+        <div
+          style={{
+            position: "absolute",
+            left: W / 2,
+            top: 620,
+            transform: `translateX(-50%) scale(${0.7 + cloudP * 0.3})`,
+            padding: "18px 38px",
+            borderRadius: 22,
+            background: `${theme.success}18`,
+            border: `3px solid ${theme.success}AA`,
+            color: theme.success,
+            fontFamily: theme.mono,
+            fontSize: 32,
+            fontWeight: 800,
+            whiteSpace: "nowrap",
+            opacity: enter * cloudP,
+            boxShadow: `0 0 36px ${theme.success}22`,
+          }}
+        >
+          30–60 ДНЕЙ
+        </div>
+
+        {/* Status */}
+        <div
+          style={{
+            position: "absolute",
+            left: W / 2,
+            top: 800,
+            transform: "translateX(-50%)",
+            ...mono,
+            fontSize: 28,
+            color: theme.success,
+            opacity: enter * cloudP,
+          }}
+        >
+          ВОССТАНОВЛЕНИЕ ВОЗМОЖНО
+        </div>
+        <PulseRing x={W / 2} y={510} triggerFrame={impactLocal} tone="success" size={180} />
       </>
     );
   }

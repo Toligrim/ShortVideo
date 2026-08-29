@@ -250,7 +250,7 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
     }
     if (beat.visual === "file-delete-recovery") {
       const phase = beat.params?.phase;
-      impact = start + Math.round(dur * (phase === "overwrite" ? 0.62 : phase === "trim" ? 0.64 : phase === "recovered" ? 0.58 : 0.55));
+      impact = start + Math.round(dur * (phase === "overwrite" ? 0.62 : phase === "trim" ? 0.64 : phase === "cloud" ? 0.58 : phase === "recovered" ? 0.58 : 0.55));
     }
     return { beat, start, end, impact };
   });
@@ -495,7 +495,7 @@ export const storySfx = (
     }
     if (s.beat.visual === "file-delete-recovery") {
       const phase = s.beat.params?.phase;
-      const sound = phase === "overwrite" ? "slam" : phase === "trim" ? "pop" : phase === "recovered" ? "ding" : "click";
+      const sound = phase === "overwrite" ? "slam" : phase === "trim" ? "pop" : phase === "cloud" ? "ding" : phase === "recovered" ? "ding" : "click";
       events.push({ frame: s.impact, sound });
     }
   }
