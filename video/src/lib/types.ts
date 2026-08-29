@@ -99,6 +99,7 @@ export interface StoryBeat {
     | "hamming-word"
     | "hamming-syndrome"
     | "gps-relativity"
+    | "gps-pseudorange"
     | "cuckoo-table"
     | "cuckoo-cycle"
     | "cuckoo-stash"

@@ -9,6 +9,7 @@ import { PulseRing } from "../lib/Motion";
 import { SceneHeading } from "./SceneHeading";
 import { OrbitFftGroups } from "./OrbitFftGroups";
 import { GpsRelativity } from "./GpsRelativity";
+import { GpsPseudorangeVisual } from "./GpsPseudorangeVisual";
 import { InverseSqrtBits } from "./InverseSqrtBits";
 import { BusyBeaverVisual } from "./BusyBeaverVisual";
 import { MtRecoveryVisual, type MtRecoveryPhase } from "./MtRecoveryVisual";
@@ -113,6 +114,7 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
     if (beat.visual === "hamming-word") impact = start + Math.round(dur * 0.58);
     if (beat.visual === "hamming-syndrome") impact = start + Math.round(dur * 0.64);
     if (beat.visual === "gps-relativity") impact = start + Math.round(dur * 0.62);
+    if (beat.visual === "gps-pseudorange") impact = start + Math.round(dur * 0.65);
     if (beat.visual === "mt-recovery") impact = start + Math.round(dur * 0.55);
     if (beat.visual === "orbit-fft-groups") {
       const phase = beat.params?.phase;
@@ -336,6 +338,9 @@ export const storySfx = (
       const ph = s.beat.params?.phase;
       const sound = ph === "factory" ? "click" : ph === "balance" ? "ding" : "pop";
       events.push({ frame: s.impact, sound });
+    }
+    if (s.beat.visual === "gps-pseudorange") {
+      events.push({ frame: s.impact, sound: "pop" });
     }
     if (s.beat.visual === "mt-recovery") {
       events.push({ frame: s.impact, sound: "ding" });
@@ -10094,6 +10099,7 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     "hamming-word": { scale: 0.9, y: -25 },
     "hamming-syndrome": { scale: 0.88, y: -25 },
     "gps-relativity": { scale: 0.9, y: -20 },
+    "gps-pseudorange": { scale: 0.9, y: -20 },
     "mt-recovery": { scale: 0.92, y: -20 },
     "cuckoo-table": { scale: 0.9, y: -30 },
     "cuckoo-cycle": { scale: 0.88, y: -30 },
@@ -10410,6 +10416,15 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             fps={fps}
             impactLocal={impactLocal}
             phase={(slot.beat.params?.phase as "orbit" | "speed" | "gravity" | "balance" | "factory" | "correction" | undefined) ?? "orbit"}
+          />
+        );
+      case "gps-pseudorange":
+        return (
+          <GpsPseudorangeVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as "listening" | "signals" | "spheres" | "correction" | undefined) ?? "listening"}
           />
         );
       case "mt-recovery":
