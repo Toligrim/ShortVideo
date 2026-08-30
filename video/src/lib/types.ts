@@ -149,6 +149,7 @@ export interface StoryBeat {
     | "convolution-stencil"
   | "wifi-airtime"
   | "file-delete-recovery"
+  | "tls-handshake"
 | "block-chain"
     | "mempool-rbf"
     | "face-id-depth"

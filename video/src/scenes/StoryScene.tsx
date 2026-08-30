@@ -51,6 +51,7 @@ import { FileDeleteRecoveryVisual, type FileDeleteRecoveryPhase } from "./FileDe
 import { BlockChainVisual, type BlockChainPhase } from "./BlockChainVisual";
 import { MempoolRbfVisual, type MempoolRbfPhase } from "./MempoolRbfVisual";
 import { DiffusionDenoiseVisual, type DiffusionDenoisePhase } from "./DiffusionDenoiseVisual";
+import { TlsHandshakeVisual, type TlsHandshakePhase } from "./TlsHandshakeVisual";
 
 /* ──────────────────────────── расписание битов ──────────────────────────── */
 
@@ -274,6 +275,7 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
       const phase = beat.params?.phase;
       impact = start + Math.round(dur * (phase === "glass" ? 0.58 : phase === "latent" ? 0.62 : phase === "ddim" ? 0.68 : phase === "prompt" ? 0.62 : 0.58));
     }
+    if (beat.visual === "tls-handshake") impact = start + Math.round(dur * 0.62);
     return { beat, start, end, impact };
   });
 };
@@ -541,6 +543,11 @@ export const storySfx = (
     if (s.beat.visual === "diffusion-denoise") {
       const phase = s.beat.params?.phase;
       const sound = phase === "glass" ? "whoosh" : phase === "latent" ? "ding" : phase === "ddim" ? "pop" : phase === "denoise" ? "click" : "pop";
+      events.push({ frame: s.impact, sound });
+    }
+    if (s.beat.visual === "tls-handshake") {
+      const ph = s.beat.params?.phase;
+      const sound = ph === "certificate" ? "pop" : ph === "derive" ? "ding" : "click";
       events.push({ frame: s.impact, sound });
     }
   }
@@ -10138,6 +10145,7 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     "convolution-stencil": { scale: 0.92, y: -20 },
     "wifi-airtime": { scale: 0.92, y: -20 },
     "diffusion-denoise": { scale: 0.92, y: -20 },
+    "tls-handshake": { scale: 0.92, y: -20 },
   };
   const cur = cams[slot.beat.visual] ?? { scale: 1, y: 0 };
   const prev = idx > 0 ? cams[slots[idx - 1].beat.visual] ?? cur : cur;
@@ -10930,6 +10938,15 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             prompt={slot.beat.params?.prompt as string | undefined}
             step={slot.beat.params?.step as number | undefined}
             stepsTotal={slot.beat.params?.stepsTotal as number | undefined}
+          />
+        );
+      case "tls-handshake":
+        return (
+          <TlsHandshakeVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as TlsHandshakePhase | undefined) ?? "certificate"}
           />
         );
       default:
