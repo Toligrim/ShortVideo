@@ -18,11 +18,11 @@ export type IncognitoSessionPhase =
 const mono: React.CSSProperties = { fontFamily: theme.mono, fontWeight: 800, letterSpacing: 1 };
 
 const phaseTitle: Record<IncognitoSessionPhase, string> = {
-  request: "INCOGNITO-SESSION · ЗАПРОС",
-  separate: "ОТДЕЛЬНАЯ SESSION · Изоляция",
-  storage: "LOKAL'NOE ХРАНИЛISCO · Локальное хранилище",
-  erase: "СТИРАНIE · Удаление данных",
-  "no-signal": "BEZ SIGNALA · Нет следов сети",
+  request: "ИНКОГНИТО · ЗАПРОС",
+  separate: "ОТДЕЛЬНАЯ СЕССИЯ · ИЗОЛЯЦИЯ",
+  storage: "ЛОКАЛЬНОЕ ХРАНИЛИЩЕ",
+  erase: "СТИРАНИЕ · УДАЛЕНИЕ ДАННЫХ",
+  "no-signal": "БЕЗ СПЕЦИАЛЬНОЙ МЕТКИ",
 };
 
 const mono2: React.CSSProperties = { fontFamily: theme.mono, fontWeight: 800, letterSpacing: 1 };
@@ -36,12 +36,12 @@ const IncognitoSessionVisual: React.FC<{
   const enter = spring({ frame: local, fps, config: { damping: 15, mass: 0.8 } });
   const reveal = spring({ frame: Math.max(0, local - impactLocal), fps, config: { damping: 12, mass: 0.7 } });
 
-  const renderSiteIcon = () => (
+  const renderSiteIcon = (left = 720, top = 420) => (
     <div
       style={{
         position: "absolute",
-        left: 0,
-        top: 0,
+        left,
+        top,
         width: 160,
         height: 120,
         borderRadius: 12,
@@ -58,12 +58,12 @@ const IncognitoSessionVisual: React.FC<{
     </div>
   );
 
-  const renderBrowserIcon = () => (
+  const renderBrowserIcon = (left = 120, top = 340) => (
     <div
       style={{
         position: "absolute",
-        left: 0,
-        top: 0,
+        left,
+        top,
         width: 280,
         height: 340,
         borderRadius: 16,
@@ -83,12 +83,12 @@ const IncognitoSessionVisual: React.FC<{
     </div>
   );
 
-  const renderStorageIcon = () => (
+  const renderStorageIcon = (left = 720, top = 500) => (
     <div
       style={{
         position: "absolute",
-        left: 0,
-        top: 0,
+        left,
+        top,
         width: 160,
         height: 120,
         borderRadius: 12,
@@ -105,12 +105,12 @@ const IncognitoSessionVisual: React.FC<{
     </div>
   );
 
-  const renderEraseIcon = () => (
+  const renderEraseIcon = (left = 720, top = 500) => (
     <div
       style={{
         position: "absolute",
-        left: 0,
-        top: 0,
+        left,
+        top,
         width: 160,
         height: 120,
         borderRadius: 12,
@@ -127,12 +127,12 @@ const IncognitoSessionVisual: React.FC<{
     </div>
   );
 
-  const renderNoSignalIcon = () => (
+  const renderNoSignalIcon = (left = 120, top = 500) => (
     <div
       style={{
         position: "absolute",
-        left: 0,
-        top: 0,
+        left,
+        top,
         width: 160,
         height: 120,
         borderRadius: 12,
@@ -144,8 +144,8 @@ const IncognitoSessionVisual: React.FC<{
         opacity: 0.8,
       }}
     >
-      <IconGlyph name="wifi-off" size={28} color={theme.accent2} strokeWidth={1.8} />
-      <div style={{ fontSize: 14, color: theme.accent2, whiteSpace: "nowrap" }}>НЕТ SIGNALA</div>
+      <IconGlyph name="tag" size={28} color={theme.accent2} strokeWidth={1.8} />
+      <div style={{ fontSize: 14, color: theme.accent2, whiteSpace: "nowrap" }}>НЕТ МЕТКИ</div>
     </div>
   );
 
@@ -174,35 +174,35 @@ const IncognitoSessionVisual: React.FC<{
           ...mono,
         }}
       >
-        <IconGlyph name="lock-closed" size={30} color={theme.accent2} strokeWidth={1.8} />
+        <IconGlyph name="lock" size={30} color={theme.accent2} strokeWidth={1.8} />
         <span>{phaseTitle[phase]}</span>
       </div>
 
       {phase === "request" && (
         <>
-          {renderSiteIcon()}
-          {renderBrowserIcon()}
+          {renderSiteIcon(720, 440)}
+          {renderBrowserIcon(120, 390)}
         </>
       )}
 
       {phase === "separate" && (
         <>
-          {renderBrowserIcon()}
-          {renderStorageIcon()}
+          {renderBrowserIcon(120, 350)}
+          {renderStorageIcon(720, 500)}
         </>
       )}
 
       {phase === "storage" && (
         <>
-          {renderBrowserIcon()}
-          {renderStorageIcon()}
+          {renderBrowserIcon(120, 350)}
+          {renderStorageIcon(720, 500)}
         </>
       )}
 
       {phase === "erase" && (
         <>
-          {renderStorageIcon()}
-          {renderEraseIcon()}
+          {renderStorageIcon(120, 500)}
+          {renderEraseIcon(720, 500)}
           <div
             style={{
               position: "absolute",
@@ -220,15 +220,15 @@ const IncognitoSessionVisual: React.FC<{
               opacity: enter,
             }}
           >
-            Данные на устройстве удалены, но на сервере сохраняются
+            На устройстве чисто · сайт может сохранить данные
           </div>
         </>
       )}
 
       {phase === "no-signal" && (
         <>
-          {renderNoSignalIcon()}
-          {renderBrowserIcon()}
+          {renderNoSignalIcon(120, 500)}
+          {renderBrowserIcon(720, 350)}
           <div
             style={{
               position: "absolute",
@@ -246,7 +246,7 @@ const IncognitoSessionVisual: React.FC<{
               opacity: enter,
             }}
           >
-            Нет сетевых следов — только локальный след
+            Обычный запрос · нет метки инкогнито
           </div>
         </>
       )}
