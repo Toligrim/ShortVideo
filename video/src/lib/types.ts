@@ -156,6 +156,7 @@ export interface StoryBeat {
     | "diffusion-denoise"
     | "battery-sei-growth"
     | "battery-charge-limit"
+    | "incognito-session"
     | "context-window"
     | "attention-cost";
   onWord?: string; // бит начинается на этом слове реплики
