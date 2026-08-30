@@ -115,9 +115,9 @@ export const TlsHandshakeVisual: React.FC<{
         <div
           style={{
             position: "absolute",
-            left: W / 2 - 155 + (1 - flyP) * 220,
-            top: 530,
-            width: 310,
+            left: W / 2 - 135,
+            top: 430 + flyP * 100,
+            width: 270,
             height: 280,
             borderRadius: 22,
             background: theme.panel,
@@ -392,8 +392,8 @@ export const TlsHandshakeVisual: React.FC<{
 
   // phase === "channel"
   const tunnelP = spring({ frame: Math.max(0, local - 6), fps, config: { damping: 13, mass: 0.8 } });
-  const letterP = done ? spring({ frame: local - impactLocal, fps, config: { damping: 11, mass: 0.7 } }) : 0;
-  const eyeFade = done ? clamp01((local - impactLocal - 10) / 14) : 0;
+  const letterP = spring({ frame: Math.max(0, local - 20), fps, config: { damping: 11, mass: 0.7 } });
+  const eyeFade = clamp01((local - 30) / 16);
   return (
     <>
       {header}
