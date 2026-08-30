@@ -54,6 +54,8 @@ import { DiffusionDenoiseVisual, type DiffusionDenoisePhase } from "./DiffusionD
 import { TlsHandshakeVisual, type TlsHandshakePhase } from "./TlsHandshakeVisual";
 import { BatterySeiGrowthVisual, type SeiPhase } from "./BatterySeiGrowth";
 import { BatteryChargeLimitVisual, type ChargeLimitPhase } from "./BatteryChargeLimitVisual";
+import { ContextWindowVisual, type ContextWindowPhase } from "./ContextWindowVisual";
+import { AttentionCostVisual, type AttentionCostPhase } from "./AttentionCostVisual";
 
 /* ──────────────────────────── расписание битов ──────────────────────────── */
 
@@ -285,6 +287,35 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
     if (beat.visual === "battery-charge-limit") {
       const phase = beat.params?.phase;
       impact = start + Math.round(dur * (phase === "heat" ? 0.62 : phase === "limit80" ? 0.58 : 0.55));
+    }
+    if (beat.visual === "context-window") {
+      const phase = beat.params?.phase;
+      impact =
+        start +
+        Math.round(
+          dur *
+            (phase === "evict"
+              ? 0.6
+              : phase === "why-big"
+              ? 0.6
+              : phase === "finite"
+              ? 0.64
+              : phase === "cut"
+              ? 0.58
+              : phase === "summary"
+              ? 0.6
+              : phase === "memory"
+              ? 0.62
+              : phase === "tokens"
+              ? 0.6
+              : phase === "stack"
+              ? 0.58
+              : 0.62)
+        );
+    }
+    if (beat.visual === "attention-cost") {
+      const phase = beat.params?.phase;
+      impact = start + Math.round(dur * (phase === "quadratic" ? 0.7 : 0.62));
     }
     return { beat, start, end, impact };
   });
@@ -569,6 +600,22 @@ export const storySfx = (
       const ph = s.beat.params?.phase;
       const sound = ph === "heat" ? "slam" : ph === "limit80" ? "ding" : "pop";
       events.push({ frame: s.impact, sound });
+    }
+    if (s.beat.visual === "context-window") {
+      const ph = s.beat.params?.phase;
+      const sound =
+        ph === "evict" || ph === "finite" || ph === "cut"
+          ? "slam"
+          : ph === "desk" || ph === "why-big"
+          ? "pop"
+          : ph === "memory"
+          ? "ding"
+          : "click";
+      events.push({ frame: s.impact, sound });
+    }
+    if (s.beat.visual === "attention-cost") {
+      const ph = s.beat.params?.phase;
+      events.push({ frame: s.impact, sound: ph === "quadratic" ? "slam" : "pop" });
     }
   }
   return events;
@@ -10166,6 +10213,8 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     "wifi-airtime": { scale: 0.92, y: -20 },
     "diffusion-denoise": { scale: 0.92, y: -20 },
     "tls-handshake": { scale: 0.92, y: -20 },
+    "context-window": { scale: 0.9, y: -20 },
+    "attention-cost": { scale: 0.9, y: -20 },
   };
   const cur = cams[slot.beat.visual] ?? { scale: 1, y: 0 };
   const prev = idx > 0 ? cams[slots[idx - 1].beat.visual] ?? cur : cur;
@@ -10985,6 +11034,24 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             fps={fps}
             impactLocal={impactLocal}
             phase={(slot.beat.params?.phase as ChargeLimitPhase | undefined) ?? "full"}
+          />
+        );
+      case "context-window":
+        return (
+          <ContextWindowVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as ContextWindowPhase | undefined) ?? "desk"}
+          />
+        );
+      case "attention-cost":
+        return (
+          <AttentionCostVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as AttentionCostPhase | undefined) ?? "pairs"}
           />
         );
       default:

@@ -155,7 +155,9 @@ export interface StoryBeat {
     | "face-id-depth"
     | "diffusion-denoise"
     | "battery-sei-growth"
-    | "battery-charge-limit";
+    | "battery-charge-limit"
+    | "context-window"
+    | "attention-cost";
   onWord?: string; // бит начинается на этом слове реплики
   params?: Record<string, unknown>;
 }
