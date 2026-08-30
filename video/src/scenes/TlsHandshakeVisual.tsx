@@ -142,29 +142,11 @@ export const TlsHandshakeVisual: React.FC<{
           </div>
         </div>
         {/* arrows */}
-        <div
-          style={{
-            position: "absolute",
-            left: 376,
-            top: 590,
-            color: theme.accent,
-            fontSize: 36,
-            opacity: enter * flyP,
-          }}
-        >
-          ←
+        <div style={{ position: "absolute", left: 376, top: 845, opacity: enter * flyP }}>
+          <IconGlyph name="arrow-left" size={36} color={theme.accent} />
         </div>
-        <div
-          style={{
-            position: "absolute",
-            right: 376,
-            top: 590,
-            color: theme.accent2,
-            fontSize: 36,
-            opacity: enter * flyP,
-          }}
-        >
-          →
+        <div style={{ position: "absolute", right: 376, top: 845, opacity: enter * flyP }}>
+          <IconGlyph name="arrow-right" size={36} color={theme.accent2} />
         </div>
         {/* domain ↔ key line */}
         <div
