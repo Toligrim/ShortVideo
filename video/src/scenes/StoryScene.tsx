@@ -52,6 +52,8 @@ import { BlockChainVisual, type BlockChainPhase } from "./BlockChainVisual";
 import { MempoolRbfVisual, type MempoolRbfPhase } from "./MempoolRbfVisual";
 import { DiffusionDenoiseVisual, type DiffusionDenoisePhase } from "./DiffusionDenoiseVisual";
 import { TlsHandshakeVisual, type TlsHandshakePhase } from "./TlsHandshakeVisual";
+import { BatterySeiGrowthVisual, type SeiPhase } from "./BatterySeiGrowth";
+import { BatteryChargeLimitVisual, type ChargeLimitPhase } from "./BatteryChargeLimitVisual";
 
 /* ──────────────────────────── расписание битов ──────────────────────────── */
 
@@ -276,6 +278,14 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
       impact = start + Math.round(dur * (phase === "glass" ? 0.58 : phase === "latent" ? 0.62 : phase === "ddim" ? 0.68 : phase === "prompt" ? 0.62 : 0.58));
     }
     if (beat.visual === "tls-handshake") impact = start + Math.round(dur * 0.62);
+    if (beat.visual === "battery-sei-growth") {
+      const phase = beat.params?.phase;
+      impact = start + Math.round(dur * (phase === "sei-growth" ? 0.62 : phase === "resistance" ? 0.68 : phase === "high-voltage" ? 0.58 : 0.55));
+    }
+    if (beat.visual === "battery-charge-limit") {
+      const phase = beat.params?.phase;
+      impact = start + Math.round(dur * (phase === "heat" ? 0.62 : phase === "limit80" ? 0.58 : 0.55));
+    }
     return { beat, start, end, impact };
   });
 };
@@ -548,6 +558,16 @@ export const storySfx = (
     if (s.beat.visual === "tls-handshake") {
       const ph = s.beat.params?.phase;
       const sound = ph === "certificate" ? "pop" : ph === "derive" ? "ding" : "click";
+      events.push({ frame: s.impact, sound });
+    }
+    if (s.beat.visual === "battery-sei-growth") {
+      const ph = s.beat.params?.phase;
+      const sound = ph === "sei-growth" ? "pop" : ph === "resistance" ? "slam" : ph === "high-voltage" ? "ding" : "click";
+      events.push({ frame: s.impact, sound });
+    }
+    if (s.beat.visual === "battery-charge-limit") {
+      const ph = s.beat.params?.phase;
+      const sound = ph === "heat" ? "slam" : ph === "limit80" ? "ding" : "pop";
       events.push({ frame: s.impact, sound });
     }
   }
@@ -10947,6 +10967,24 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             fps={fps}
             impactLocal={impactLocal}
             phase={(slot.beat.params?.phase as TlsHandshakePhase | undefined) ?? "certificate"}
+          />
+        );
+      case "battery-sei-growth":
+        return (
+          <BatterySeiGrowthVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as SeiPhase | undefined) ?? "ions"}
+          />
+        );
+      case "battery-charge-limit":
+        return (
+          <BatteryChargeLimitVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as ChargeLimitPhase | undefined) ?? "full"}
           />
         );
       default:

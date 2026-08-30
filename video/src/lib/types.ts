@@ -153,7 +153,9 @@ export interface StoryBeat {
 | "block-chain"
     | "mempool-rbf"
     | "face-id-depth"
-    | "diffusion-denoise";
+    | "diffusion-denoise"
+    | "battery-sei-growth"
+    | "battery-charge-limit";
   onWord?: string; // бит начинается на этом слове реплики
   params?: Record<string, unknown>;
 }
