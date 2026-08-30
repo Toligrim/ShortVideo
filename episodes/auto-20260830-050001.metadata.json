@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "slug": "auto-20260830-050001",
+  "targets": {
+    "youtube": {
+      "title": "Почему замочек в браузере не означает, что сайт добрый?",
+      "description": "Что на самом деле гарантирует замочек в браузере: TLS защищает канал и подтверждает домен, но не делает сайт честным.",
+      "tags": [
+        "кибербезопасность",
+        "браузер",
+        "HTTPS",
+        "TLS",
+        "фишинг",
+        "shortvideo"
+      ],
+      "category_id": "28",
+      "privacy_status": "public",
+      "made_for_kids": false,
+      "contains_synthetic_media": true,
+      "notify_subscribers": false
+    },
+    "instagram": {
+      "caption": "Замочек в браузере — не гарантия честного сайта. TLS защищает канал, но не совесть владельца. #кибербезопасность #браузер #TLS #shortvideo",
+      "share_to_feed": true
+    }
+  }
+}
