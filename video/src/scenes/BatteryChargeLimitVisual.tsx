@@ -186,7 +186,6 @@ export const BatteryChargeLimitVisual: React.FC<Props> = ({ local, fps, impactLo
   if (phase === "full") {
     return (
       <>
-        {header}
         <WarehouseVisual local={local} fps={fps} impactLocal={impactLocal} full={true} />
         {/* Phone battery indicator */}
         <div
@@ -232,7 +231,6 @@ export const BatteryChargeLimitVisual: React.FC<Props> = ({ local, fps, impactLo
   if (phase === "limit80") {
     return (
       <>
-        {header}
         <WarehouseVisual local={local} fps={fps} impactLocal={impactLocal} full={false} />
         {/* Phone battery indicator */}
         <div
@@ -286,7 +284,6 @@ export const BatteryChargeLimitVisual: React.FC<Props> = ({ local, fps, impactLo
     const heatPulse = 0.5 + 0.5 * Math.sin(local / 7);
     return (
       <>
-        {header}
         {/* Thermometer */}
         <div
           style={{

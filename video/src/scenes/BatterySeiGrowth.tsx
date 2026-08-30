@@ -33,28 +33,6 @@ export const BatterySeiGrowthVisual: React.FC<Props> = ({ local, fps, impactLoca
   const enter = spring({ frame: local, fps, config: { damping: 15, mass: 0.8 } });
   const reveal = spring({ frame: Math.max(0, local - impactLocal), fps, config: { damping: 12, mass: 0.7 } });
 
-  const header = (
-    <div
-      style={{
-        position: "absolute",
-        left: W / 2,
-        top: 245,
-        transform: "translateX(-50%)",
-        display: "flex",
-        alignItems: "center",
-        gap: 12,
-        color: theme.subtext,
-        fontSize: 25,
-        whiteSpace: "nowrap",
-        opacity: enter,
-        ...mono,
-      }}
-    >
-      <IconGlyph name="zap" size={30} color={theme.accent} strokeWidth={1.8} />
-      <span>{phaseTitle[phase]}</span>
-    </div>
-  );
-
   const panel = (color: string): React.CSSProperties => ({
     borderRadius: 24,
     background: `${theme.panel}E8`,
@@ -75,7 +53,6 @@ export const BatterySeiGrowthVisual: React.FC<Props> = ({ local, fps, impactLoca
 
     return (
       <>
-        {header}
         {/* Cathode (left) */}
         <div
           style={{
@@ -196,7 +173,6 @@ export const BatterySeiGrowthVisual: React.FC<Props> = ({ local, fps, impactLoca
     const voltagePulse = 0.5 + 0.5 * Math.sin(local / 8);
     return (
       <>
-        {header}
         {/* Cell voltage meter */}
         <div
           style={{
@@ -276,7 +252,6 @@ export const BatterySeiGrowthVisual: React.FC<Props> = ({ local, fps, impactLoca
     const filmH = 12 + filmThickness * 180;
     return (
       <>
-        {header}
         {/* Anode cross-section */}
         <div
           style={{
@@ -338,7 +313,7 @@ export const BatterySeiGrowthVisual: React.FC<Props> = ({ local, fps, impactLoca
           <div
             style={{
               position: "absolute",
-              right: -20,
+              right: -140,
               top: 300 - filmH / 2,
               ...mono,
               fontSize: 20,
@@ -380,7 +355,6 @@ export const BatterySeiGrowthVisual: React.FC<Props> = ({ local, fps, impactLoca
     const resistP = smooth(clamp01((local - impactLocal * 0.2) / (impactLocal * 0.8)));
     return (
       <>
-        {header}
         {/* Impedance meter */}
         <div
           style={{
