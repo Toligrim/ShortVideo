@@ -214,7 +214,7 @@ export const BatterySeiGrowthVisual: React.FC<Props> = ({ local, fps, impactLoca
           }}
         >
           <div style={{ ...mono, fontSize: 24, color: theme.subtext }}>ПОТЕНЦИАЛ АНОДА</div>
-          <div style={{ fontFamily: theme.mono, fontSize: 68, fontWeight: 800, color: theme.accent }}>
+          <div style={{ fontFamily: theme.mono, fontSize: 56, fontWeight: 800, color: theme.accent, whiteSpace: "nowrap" }}>
             0.05 В →≈ 0 В
           </div>
           <div style={{ ...mono, fontSize: 22, color: theme.danger }}>НИЗКИЙ · ЭЛЕКТРОЛИТ РАЗЛАГАЕТСЯ</div>

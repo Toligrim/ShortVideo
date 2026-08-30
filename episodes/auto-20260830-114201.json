@@ -47,7 +47,7 @@
         },
         {
           "visual": "battery-charge-limit",
-          "onWord": "ста",
+          "onWord": "зарядка",
           "params": { "phase": "limit80" }
         },
         {
