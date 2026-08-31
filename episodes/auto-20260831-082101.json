@@ -8,15 +8,8 @@
       "narration": "Пять палочек, а видео дёргается? Расследование: кто тормозит ролик, если ро́утер рядом, а сигнал полный?",
       "beats": [
         {
-          "visual": "wifi-airtime",
-          "onWord": "Пять",
-          "params": {
-            "phase": "signal"
-          }
-        },
-        {
           "visual": "wifi-signal-vs-airtime",
-          "onWord": "дёргается"
+          "onWord": "Пять"
         },
         {
           "visual": "title-slam",
