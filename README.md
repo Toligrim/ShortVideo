@@ -18,6 +18,9 @@ video/               Remotion-проект (движок рендера)
   src/scenes/        сцены: hook, diagram, terminal, code, outro
   src/lib/           тема, таймлайн, караоке-субтитры, типы
   public/episodes/   собранные ассеты эпизода (audio + meta + script)
+corrections/         историческая база багов конвейера (найденных пользователем
+                      в готовых роликах) — по эпизоду, с root cause и списком
+                      правок; см. corrections/CLAUDE.md
 .claude/skills/animator/   скилл: как писать эпизоды (каталог сцен, стайлгайд)
 PLAN.md              дорожная карта
 ```
@@ -26,7 +29,7 @@ PLAN.md              дорожная карта
 
 ```bash
 python3 tools/validate.py episodes/<slug>.json
-/home/toligrim/projects/TTS/venv/bin/python tools/tts_scenes.py \
+venv/bin/python tools/tts_scenes.py \
   episodes/<slug>.json --out video/public/episodes/<slug>
 cp episodes/<slug>.json video/public/episodes/<slug>/script.json
 cd video && npx remotion render Episode out/<slug>.mp4 --props='{"episodeId":"<slug>"}'
