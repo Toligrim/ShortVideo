@@ -156,9 +156,10 @@ export interface StoryBeat {
     | "diffusion-denoise"
     | "battery-sei-growth"
     | "battery-charge-limit"
-    | "incognito-session"
-    | "context-window"
-    | "attention-cost";
+   | "incognito-session"
+  | "context-window"
+  | "attention-cost"
+  | "wallet-copy";
   onWord?: string; // бит начинается на этом слове реплики
   params?: Record<string, unknown>;
 }

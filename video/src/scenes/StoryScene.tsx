@@ -322,6 +322,10 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
       const phase = beat.params?.phase;
       impact = start + Math.round(dur * (phase === "quadratic" ? 0.7 : 0.62));
     }
+    if (beat.visual === "wallet-copy") {
+      const phase = beat.params?.phase;
+      impact = start + Math.round(dur * (phase === "double" ? 0.62 : 0.58));
+    }
     return { beat, start, end, impact };
   });
 };
@@ -621,6 +625,10 @@ export const storySfx = (
     if (s.beat.visual === "attention-cost") {
       const ph = s.beat.params?.phase;
       events.push({ frame: s.impact, sound: ph === "quadratic" ? "slam" : "pop" });
+    }
+    if (s.beat.visual === "wallet-copy") {
+      const ph = s.beat.params?.phase;
+      events.push({ frame: s.impact, sound: ph === "double" ? "slam" : "pop" });
     }
   }
   return events;
@@ -2112,6 +2120,107 @@ const DigitalSignatureVisual: React.FC<{
         σ не совпадает → транзакция отвергнута
       </div>
       <PulseRing x={W / 2} y={900} triggerFrame={impactLocal} tone="danger" size={210} />
+    </>
+  );
+};
+
+export type WalletCopyPhase = "copy" | "double";
+
+const WalletCopyVisual: React.FC<{
+  local: number;
+  fps: number;
+  impactLocal: number;
+  phase?: WalletCopyPhase;
+}> = ({ local, fps, impactLocal, phase = "copy" }) => {
+  const enter = spring({ frame: local, fps, config: { damping: 15, mass: 0.8 } });
+  const reveal = spring({ frame: Math.max(0, local - impactLocal), fps, config: { damping: 12, mass: 0.7 } });
+  const mono: React.CSSProperties = { fontFamily: theme.mono, fontWeight: 800, letterSpacing: 1 };
+  const card = (color: string): React.CSSProperties => ({
+    borderRadius: 24,
+    background: `${theme.panel}E8`,
+    border: `3px solid ${color}66`,
+    boxShadow: `0 0 42px ${color}20`,
+  });
+  const title = phase === "copy" ? "КОПИЯ ФАЙЛА ≠ КОПИЯ ДЕНЕГ" : "ОДИН ВЫХОД · ДВЕ ПОПЫТКИ";
+  const iconName = phase === "copy" ? "copy" : "shield-x";
+  const header = (
+    <div style={{ position: "absolute", left: W / 2, top: 250, transform: "translateX(-50%)", display: "flex", alignItems: "center", gap: 12, color: theme.subtext, fontSize: 25, whiteSpace: "nowrap", opacity: enter, ...mono }}>
+      <IconGlyph name={iconName} size={30} color={phase === "double" ? theme.danger : theme.accent} strokeWidth={1.8} />
+      <span>{title}</span>
+    </div>
+  );
+  if (phase === "copy") {
+    const dupP = smooth(clamp01((local - impactLocal) / 18));
+    return (
+      <>
+        {header}
+        {/* два файла кошелька */}
+        <div style={{ position: "absolute", left: 76, top: 420, width: 440, height: 380, ...card(theme.accent2), opacity: enter, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 14 }}>
+          <IconGlyph name="wallet-minimal" size={56} color={theme.accent2} strokeWidth={1.8} />
+          <div style={{ ...mono, fontSize: 22, color: theme.accent2 }}>wallet.dat</div>
+          <div style={{ fontFamily: theme.mono, fontSize: 26, fontWeight: 800, color: theme.text }}>НОУТБУК</div>
+          <div style={{ ...mono, fontSize: 18, color: theme.subtext }}>оригинал</div>
+        </div>
+        <div style={{ position: "absolute", left: 564, top: 420, width: 440, height: 380, ...card(theme.accent2), opacity: enter * (0.45 + dupP * 0.55), transform: `scale(${0.92 + dupP * 0.08})`, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 14 }}>
+          <IconGlyph name="hard-drive" size={56} color={theme.accent2} strokeWidth={1.8} />
+          <div style={{ ...mono, fontSize: 22, color: theme.accent2 }}>wallet.dat</div>
+          <div style={{ fontFamily: theme.mono, fontSize: 26, fontWeight: 800, color: theme.text }}>ФЛЕШКА</div>
+          <div style={{ ...mono, fontSize: 18, color: theme.subtext }}>копия файла</div>
+        </div>
+        {/* стрелка копирования */}
+        <div style={{ position: "absolute", left: W / 2, top: 575, transform: "translate(-50%, -50%)", display: "flex", alignItems: "center", gap: 10, color: theme.accent, fontSize: 42, fontWeight: 800, opacity: enter }}>
+          <span>→</span>
+          <IconGlyph name="copy" size={28} color={theme.accent} strokeWidth={2} />
+        </div>
+        <div style={{ position: "absolute", left: W / 2, top: 620, transform: "translateX(-50%)", ...mono, fontSize: 20, color: theme.accent, opacity: enter * dupP }}>×2 файла</div>
+        {/* единая запись — противовес */}
+        <div style={{ position: "absolute", left: W / 2 - 340, top: 880, width: 680, height: 190, ...card(theme.success), opacity: enter * (0.45 + dupP * 0.55), display: "flex", alignItems: "center", justifyContent: "center", gap: 18 }}>
+          <IconGlyph name="database" size={48} color={theme.success} strokeWidth={1.8} />
+          <div>
+            <div style={{ ...mono, fontSize: 20, color: theme.success }}>ЕДИНАЯ ЗАПИСЬ В ТЕТРАДИ СЕТИ</div>
+            <div style={{ fontFamily: theme.mono, fontSize: 28, fontWeight: 800, color: theme.text }}>UTXO  #a3f1 · 0.8 ₿</div>
+            <div style={{ ...mono, fontSize: 18, color: theme.subtext }}>одна строка — не файл</div>
+          </div>
+        </div>
+        <div style={{ position: "absolute", left: W / 2, top: 1140, transform: "translateX(-50%)", padding: "16px 30px", borderRadius: 999, background: `${theme.accent}14`, border: `2px solid ${theme.accent}66`, color: theme.accent, ...mono, fontSize: 24, opacity: enter * dupP, whiteSpace: "nowrap" }}>
+          ×2 КОПИИ → ×1 БАЛАНС
+        </div>
+        <PulseRing x={W / 2} y={975} triggerFrame={impactLocal} tone="accent" size={190} />
+      </>
+    );
+  }
+  // double — двойная трата
+  const rejectP = smooth(clamp01((local - impactLocal) / 16));
+  return (
+    <>
+      {header}
+      <div style={{ position: "absolute", left: W / 2 - 340, top: 400, width: 680, height: 170, ...card(theme.warning), opacity: enter, display: "flex", alignItems: "center", justifyContent: "center", gap: 18 }}>
+        <IconGlyph name="coins" size={44} color={theme.warning} strokeWidth={1.8} />
+        <div>
+          <div style={{ ...mono, fontSize: 20, color: theme.warning }}>ОДИН ВЫХОД</div>
+          <div style={{ fontFamily: theme.mono, fontSize: 28, fontWeight: 800, color: theme.text }}>UTXO  #a3f1 · 0.8 ₿</div>
+          <div style={{ ...mono, fontSize: 18, color: theme.subtext }}>тратится один раз</div>
+        </div>
+      </div>
+      {/* две транзакции */}
+      <div style={{ position: "absolute", left: 76, top: 660, width: 460, height: 320, ...card(theme.success), opacity: enter, transform: `scale(${0.96 + reveal * 0.04})`, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12 }}>
+        <IconGlyph name="arrow-right-left" size={44} color={theme.success} strokeWidth={1.8} />
+        <div style={{ ...mono, fontSize: 20, color: theme.success }}>ТРАНЗАКЦИЯ #1</div>
+        <div style={{ fontFamily: theme.mono, fontSize: 26, fontWeight: 800, color: theme.text }}>→ Боб  0.8 ₿</div>
+        <div style={{ padding: "8px 18px", borderRadius: 999, background: `${theme.success}18`, border: `2px solid ${theme.success}`, color: theme.success, fontFamily: theme.font, fontSize: 22, fontWeight: 800 }}>ПРИНЯТА</div>
+      </div>
+      <div style={{ position: "absolute", left: 544, top: 660, width: 460, height: 320, ...card(theme.danger), opacity: enter * (0.5 + rejectP * 0.5), transform: `scale(${0.92 + rejectP * 0.08})`, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12 }}>
+        <IconGlyph name="ban" size={44} color={theme.danger} strokeWidth={1.8} />
+        <div style={{ ...mono, fontSize: 20, color: theme.danger }}>ТРАНЗАКЦИЯ #2</div>
+        <div style={{ fontFamily: theme.mono, fontSize: 26, fontWeight: 800, color: theme.text }}>→ Алиса  0.8 ₿</div>
+        <div style={{ padding: "8px 18px", borderRadius: 999, background: `${theme.danger}18`, border: `2px solid ${theme.danger}`, color: theme.danger, fontFamily: theme.font, fontSize: 22, fontWeight: 800, opacity: 0.7 + rejectP * 0.3 }}>ОТВЕРГНУТА</div>
+      </div>
+      <div style={{ position: "absolute", left: 536, top: 820, color: theme.subtext, fontSize: 36, opacity: enter }}>×</div>
+      <div style={{ position: "absolute", left: W / 2, top: 1060, transform: "translateX(-50%)", display: "flex", alignItems: "center", gap: 12, color: theme.subtext, ...mono, fontSize: 22, opacity: enter * (0.4 + rejectP * 0.6), whiteSpace: "nowrap" }}>
+        <IconGlyph name="users" size={28} color={theme.accent2} strokeWidth={1.8} />
+        <span>ТЫСЯЧИ УЗЛОВ · ВТОРОЙ РАСХОД НЕ ПРОЙДЁТ</span>
+      </div>
+      <PulseRing x={W / 2} y={740} triggerFrame={impactLocal} tone="danger" size={180} />
     </>
   );
 };
@@ -10221,6 +10330,7 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     "incognito-session": { scale: 0.92, y: -20 },
     "context-window": { scale: 0.9, y: -20 },
     "attention-cost": { scale: 0.9, y: -20 },
+    "wallet-copy": { scale: 0.92, y: -20 },
   };
   const cur = cams[slot.beat.visual] ?? { scale: 1, y: 0 };
   const prev = idx > 0 ? cams[slots[idx - 1].beat.visual] ?? cur : cur;
@@ -11067,6 +11177,15 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             fps={fps}
             impactLocal={impactLocal}
             phase={(slot.beat.params?.phase as AttentionCostPhase | undefined) ?? "pairs"}
+          />
+        );
+      case "wallet-copy":
+        return (
+          <WalletCopyVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as WalletCopyPhase | undefined) ?? "copy"}
           />
         );
       default:
