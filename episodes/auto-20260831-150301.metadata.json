@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "slug": "auto-20260831-150301",
+  "targets": {
+    "youtube": {
+      "title": "Почему QR-код не боится царапин?",
+      "description": "Почему QR-код продолжает читаться после повреждения: избыточные кодовые слова и коррекция Рида–Соломона.",
+      "tags": ["QR-код", "технологии", "как это работает", "коррекция ошибок"],
+      "category_id": "28",
+      "privacy_status": "public",
+      "made_for_kids": false,
+      "contains_synthetic_media": true,
+      "notify_subscribers": false
+    },
+    "instagram": {
+      "caption": "Почему QR-код не боится царапин? Избыточные кодовые слова помогают восстановить повреждённые данные. #технологии #qrкод",
+      "share_to_feed": true
+    }
+  }
+}
