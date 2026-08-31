@@ -107,6 +107,11 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
     if (beat.visual === "fft-wave")
       impact = start + Math.round(dur * (beat.params?.phase === "square" ? 0.85 : 0.5));
     if (beat.visual === "qr-repair") impact = start + Math.round(dur * 0.6);
+    if (beat.visual === "qr-phone-scan") impact = start + Math.round(dur * 0.68);
+    if (beat.visual === "redundancy-note") {
+      const phase = beat.params?.phase;
+      impact = start + Math.round(dur * (phase === "repair" ? 0.68 : 0.58));
+    }
     if (beat.visual === "hll-estimate") impact = start + Math.round(dur * 0.58);
     if (beat.visual === "bloom-bitarray") impact = start + Math.round(dur * 0.72);
     if (beat.visual === "bloom-probe") impact = start + Math.round(dur * 0.55);
@@ -373,6 +378,10 @@ export const storySfx = (
       const ph = s.beat.params?.phase;
       const sound = ph === "restore" ? "ding" : ph === "encode" ? "click" : "pop";
       events.push({ frame: s.impact, sound });
+    }
+    if (s.beat.visual === "qr-phone-scan") events.push({ frame: s.impact, sound: "ding" });
+    if (s.beat.visual === "redundancy-note") {
+      events.push({ frame: s.impact, sound: s.beat.params?.phase === "repair" ? "ding" : "pop" });
     }
     if (s.beat.visual === "hll-estimate") events.push({ frame: s.impact, sound: "pop" });
     if (s.beat.visual === "bloom-bitarray") events.push({ frame: s.impact, sound: "ding" });
@@ -6557,6 +6566,509 @@ const QrRepair: React.FC<{
   );
 };
 
+/** Телефон сканирует повреждённый QR и открывает ссылку по уцелевшим модулям. */
+const QrPhoneScanVisual: React.FC<{
+  local: number;
+  fps: number;
+  impactLocal: number;
+  url?: string;
+  damaged?: number;
+}> = ({ local, fps, impactLocal, url = "example.com", damaged = 0.28 }) => {
+  const enter = spring({ frame: local, fps, config: { damping: 15, mass: 0.8 } });
+  const done = local >= impactLocal;
+  const scanP = smooth(clamp01((local - 8) / Math.max(impactLocal - 8, 1)));
+  const linkP = done ? spring({ frame: local - impactLocal, fps, config: { damping: 11, mass: 0.7 } }) : 0;
+  const cx = W / 2;
+  const qrCenterX = 300;
+  const qrCenterY = 720;
+  const phoneX = 662;
+  const phoneY = 438;
+  const phoneW = 300;
+  const phoneH = 570;
+  const S = 21;
+  const m = 15;
+  const qrSize = S * m;
+  const qrCard = qrSize + 2 * m;
+  const qrDark = "#1A2130";
+  const qrCardColor = "#F7F9FE";
+  const mono: React.CSSProperties = { fontFamily: theme.mono, fontWeight: 800, letterSpacing: 2 };
+
+  const isFinderZone = (r: number, c: number) =>
+    (r < 7 && c < 7) || (r < 7 && c >= S - 7) || (r >= S - 7 && c < 7);
+  const isDark = (r: number, c: number) => !isFinderZone(r, c) && random(`qr-phone-${r}-${c}`) > 0.45;
+  const cornerCut = (frac: number) => {
+    let k = 0;
+    const want = S * S * Math.min(1, Math.max(0, frac));
+    while ((k * (k + 1)) / 2 < want && k < 2 * S) k++;
+    return k;
+  };
+  const cutK = cornerCut(damaged);
+  const isCut = (r: number, c: number) => (S - 1 - r) + (S - 1 - c) < cutK;
+  const finder = (x: number, y: number) => (
+    <div
+      style={{
+        position: "absolute",
+        left: x,
+        top: y,
+        width: 7 * m,
+        height: 7 * m,
+        background: qrDark,
+        borderRadius: 3 * m,
+      }}
+    >
+      <div style={{ position: "absolute", left: m, top: m, width: 5 * m, height: 5 * m, background: qrCardColor }} />
+      <div style={{ position: "absolute", left: 2 * m, top: 2 * m, width: 3 * m, height: 3 * m, background: qrDark, borderRadius: m }} />
+    </div>
+  );
+
+  return (
+    <>
+      <div
+        style={{
+          position: "absolute",
+          left: cx,
+          top: 250,
+          transform: "translateX(-50%)",
+          ...mono,
+          fontSize: 25,
+          color: theme.subtext,
+          opacity: enter,
+        }}
+      >
+        ТЕЛЕФОН СКАНИРУЕТ УЦЕЛЕВШЕЕ
+      </div>
+      <div
+        style={{
+          position: "absolute",
+          left: qrCenterX - qrCard / 2,
+          top: qrCenterY - qrCard / 2,
+          width: qrCard,
+          height: qrCard,
+          padding: m,
+          boxSizing: "border-box",
+          background: qrCardColor,
+          borderRadius: 24,
+          boxShadow: "0 30px 90px rgba(0,0,0,0.55)",
+          opacity: enter,
+        }}
+      >
+        <div style={{ position: "relative", width: qrSize, height: qrSize }}>
+          {finder(0, 0)}
+          {finder((S - 7) * m, 0)}
+          {finder(0, (S - 7) * m)}
+          {Array.from({ length: S }).flatMap((_, r) =>
+            Array.from({ length: S }).map((__, c) => {
+              const erased = isCut(r, c);
+              const scanned = r <= Math.round(scanP * (S - 1));
+              return (
+                <div
+                  key={`${r}-${c}`}
+                  style={{
+                    position: "absolute",
+                    left: c * m,
+                    top: r * m,
+                    width: m,
+                    height: m,
+                    background: scanned && !erased ? `${theme.accent}24` : "transparent",
+                  }}
+                >
+                  {erased ? (
+                    <div
+                      style={{
+                        position: "absolute",
+                        inset: 2,
+                        border: `1.5px dashed ${theme.danger}`,
+                        borderRadius: 3,
+                        background: `${theme.danger}18`,
+                      }}
+                    />
+                  ) : !isFinderZone(r, c) && isDark(r, c) ? (
+                    <div
+                      style={{
+                        position: "absolute",
+                        inset: 2,
+                        background: qrDark,
+                        borderRadius: 3,
+                      }}
+                    />
+                  ) : null}
+                </div>
+              );
+            })
+          )}
+          <div
+            style={{
+              position: "absolute",
+              left: -8,
+              top: Math.min(qrSize - 5, Math.max(0, qrSize * scanP)),
+              width: qrSize + 16,
+              height: 5,
+              borderRadius: 999,
+              background: theme.accent,
+              boxShadow: `0 0 26px ${theme.accent}`,
+              opacity: scanP < 0.99 ? 0.9 : 0.35,
+            }}
+          />
+        </div>
+      </div>
+      <div
+        style={{
+          position: "absolute",
+          left: qrCenterX - 150,
+          top: qrCenterY + qrCard / 2 + 30,
+          width: 300,
+          textAlign: "center",
+          fontFamily: theme.mono,
+          fontSize: 22,
+          color: theme.danger,
+          opacity: enter,
+        }}
+      >
+        СТЁРТОЕ · ПРОПУСК
+      </div>
+      <div
+        style={{
+          position: "absolute",
+          left: qrCenterX + qrCard / 2 + 32,
+          top: qrCenterY - 3,
+          width: 265,
+          height: 7,
+          borderRadius: 999,
+          transformOrigin: "left center",
+          transform: `scaleX(${scanP})`,
+          background: `linear-gradient(90deg, ${theme.accent}, ${theme.success})`,
+          boxShadow: `0 0 22px ${theme.accent}88`,
+          opacity: enter,
+        }}
+      />
+      <div
+        style={{
+          position: "absolute",
+          left: phoneX - 12,
+          top: phoneY + 235,
+          opacity: enter,
+        }}
+      >
+        <IconGlyph name="scan-line" size={42} color={theme.accent} strokeWidth={2} />
+      </div>
+      <div
+        style={{
+          position: "absolute",
+          left: phoneX,
+          top: phoneY,
+          width: phoneW,
+          height: phoneH,
+          borderRadius: 38,
+          background: "#0A101A",
+          border: `3px solid ${theme.panelBorder}`,
+          boxShadow: `0 28px 80px rgba(0,0,0,0.55), 0 0 35px ${theme.accent}18`,
+          opacity: enter,
+        }}
+      >
+        <div
+          style={{
+            position: "absolute",
+            left: 18,
+            top: 24,
+            width: phoneW - 36,
+            height: phoneH - 48,
+            borderRadius: 25,
+            background: `linear-gradient(150deg, ${theme.panel}, #0F1724)`,
+            overflow: "hidden",
+            padding: "28px 20px",
+            boxSizing: "border-box",
+          }}
+        >
+          <div style={{ ...mono, fontSize: 18, color: theme.subtext, textAlign: "center" }}>СКАНЕР</div>
+          <div
+            style={{
+              marginTop: 66,
+              height: 90,
+              borderRadius: 18,
+              border: `2px solid ${done ? theme.success : theme.accent}88`,
+              background: `${done ? theme.success : theme.accent}12`,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 8,
+              color: done ? theme.success : theme.accent,
+              fontFamily: theme.mono,
+              fontSize: 19,
+              fontWeight: 800,
+            }}
+          >
+            <IconGlyph name={done ? "check-check" : "scan-line"} size={30} color={done ? theme.success : theme.accent} strokeWidth={2} />
+            {done ? "СВЯЗЬ НАЙДЕНА" : "ИЩУ ДАННЫЕ…"}
+          </div>
+          <div
+            style={{
+              position: "absolute",
+              left: 18,
+              right: 18,
+              top: 280,
+              transform: `translateY(${(1 - linkP) * 26}px) scale(${0.86 + 0.14 * linkP})`,
+              transformOrigin: "center top",
+              opacity: linkP,
+              padding: "18px 10px",
+              borderRadius: 16,
+              background: `${theme.success}18`,
+              border: `2px solid ${theme.success}88`,
+              textAlign: "center",
+            }}
+          >
+            <div style={{ fontFamily: theme.mono, fontSize: 16, color: theme.subtext }}>ССЫЛКА</div>
+            <div style={{ marginTop: 8, fontFamily: theme.font, fontSize: 27, fontWeight: 800, color: theme.text, whiteSpace: "nowrap" }}>{url}</div>
+          </div>
+        </div>
+      </div>
+      <div
+        style={{
+          position: "absolute",
+          left: cx,
+          top: 1220,
+          transform: "translateX(-50%)",
+          ...mono,
+          fontSize: 24,
+          color: done ? theme.success : theme.subtext,
+          opacity: enter,
+          whiteSpace: "nowrap",
+        }}
+      >
+        {done ? "УЦЕЛЕВШЕЕ → ССЫЛКА ОТКРЫТА" : "ЛУЧ ПРОХОДИТ ПО УЦЕЛЕВШИМ МОДУЛЯМ"}
+      </div>
+      {done ? <PulseRing x={phoneX + phoneW / 2} y={phoneY + 235} triggerFrame={impactLocal} tone="success" size={300} /> : null}
+    </>
+  );
+};
+
+type RedundancyNotePhase = "setup" | "repair";
+
+/** Бумажная аналогия: запасные строки помогают восстановить смазанную строку. */
+const RedundancyNoteVisual: React.FC<{
+  local: number;
+  fps: number;
+  impactLocal: number;
+  phase?: RedundancyNotePhase;
+}> = ({ local, fps, impactLocal, phase = "setup" }) => {
+  const enter = spring({ frame: local, fps, config: { damping: 15, mass: 0.8 } });
+  const done = local >= impactLocal;
+  const repairP = phase === "repair" ? smooth(clamp01((local - 8) / Math.max(impactLocal - 8, 1))) : 0;
+  const badgeP = phase === "repair" && done ? spring({ frame: local - impactLocal, fps, config: { damping: 11, mass: 0.7 } }) : 0;
+  const cx = W / 2;
+  const noteX = 96;
+  const noteY = 430;
+  const noteW = 512;
+  const noteH = 590;
+  const spareX = 660;
+  const spareY = 472;
+  const spareW = 324;
+  const rowYs = [586, 692, 798, 904];
+  const items = ["МОЛОКО", "ХЛЕБ", "ЯБЛОКИ", "СЫР"];
+  const mono: React.CSSProperties = { fontFamily: theme.mono, fontWeight: 800, letterSpacing: 2 };
+
+  return (
+    <>
+      <div
+        style={{
+          position: "absolute",
+          left: cx,
+          top: 250,
+          transform: "translateX(-50%)",
+          ...mono,
+          fontSize: 25,
+          color: theme.subtext,
+          opacity: enter,
+        }}
+      >
+        БЫТОВАЯ АНАЛОГИЯ · ЗАПИСКА
+      </div>
+      <div
+        style={{
+          position: "absolute",
+          left: noteX,
+          top: noteY,
+          width: noteW,
+          height: noteH,
+          borderRadius: 26,
+          background: "#F4F0E7",
+          boxShadow: "0 28px 80px rgba(0,0,0,0.48)",
+          opacity: enter,
+          transform: `rotate(-1.2deg) translateY(${(1 - enter) * 35}px)`,
+          color: "#263142",
+          padding: "36px 38px",
+          boxSizing: "border-box",
+        }}
+      >
+        <div style={{ fontFamily: theme.font, fontSize: 30, fontWeight: 800 }}>СПИСОК ПОКУПОК</div>
+        <div style={{ marginTop: 26, height: 3, background: "#26314233" }} />
+        {items.map((item, i) => {
+          const smudged = phase === "repair" && i === 1;
+          const blur = smudged ? 8 * (1 - repairP) : 0;
+          const rowOpacity = smudged ? 0.38 + 0.62 * repairP : 1;
+          return (
+            <div
+              key={item}
+              style={{
+                position: "absolute",
+                left: 38,
+                top: rowYs[i] - noteY,
+                width: noteW - 76,
+                height: 54,
+                display: "flex",
+                alignItems: "center",
+                borderBottom: "2px solid #2631422A",
+                opacity: rowOpacity,
+              }}
+            >
+              <div
+                style={{
+                  width: 22,
+                  height: 22,
+                  borderRadius: 6,
+                  border: `3px solid ${smudged && !done ? theme.danger : theme.accent2}`,
+                  background: smudged && done ? `${theme.success}55` : "transparent",
+                }}
+              />
+              <div
+                style={{
+                  marginLeft: 18,
+                  fontFamily: theme.font,
+                  fontSize: 31,
+                  fontWeight: 700,
+                  filter: `blur(${blur}px)`,
+                  color: smudged && !done ? theme.danger : "#263142",
+                }}
+              >
+                {item}
+              </div>
+              {smudged && !done ? (
+                <div
+                  style={{
+                    position: "absolute",
+                    left: 50,
+                    top: 22,
+                    width: 190,
+                    height: 8,
+                    borderRadius: 999,
+                    background: `${theme.danger}AA`,
+                    transform: "rotate(-7deg)",
+                    boxShadow: `0 0 16px ${theme.danger}88`,
+                  }}
+                />
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+      <div
+        style={{
+          position: "absolute",
+          left: spareX,
+          top: spareY,
+          width: spareW,
+          height: 450,
+          borderRadius: 24,
+          background: `${theme.accent2}12`,
+          border: `3px solid ${theme.accent2}88`,
+          boxShadow: `0 20px 60px ${theme.accent2}16`,
+          opacity: enter,
+          padding: "30px 26px",
+          boxSizing: "border-box",
+        }}
+      >
+        <div style={{ ...mono, fontSize: 21, color: theme.accent2 }}>ДОП. СТРОКИ</div>
+        <div style={{ marginTop: 28, display: "flex", flexDirection: "column", gap: 18 }}>
+          {["A · 2", "B · 7", "C · 4"].map((line, i) => {
+            const lineP = smooth(clamp01((local - 8 - i * 8) / 15));
+            const active = phase === "repair" && (i === 1 || done);
+            return (
+              <div
+                key={line}
+                style={{
+                  height: 64,
+                  borderRadius: 16,
+                  border: `2px solid ${active ? theme.success : theme.accent2}66`,
+                  background: active ? `${theme.success}18` : `${theme.panel}AA`,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontFamily: theme.mono,
+                  fontSize: 26,
+                  color: active ? theme.success : theme.accent2,
+                  opacity: lineP,
+                  transform: `translateX(${(1 - lineP) * 24}px)`,
+                }}
+              >
+                {line}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+      {phase === "repair" ? (
+        <>
+          <div
+            style={{
+              position: "absolute",
+              left: 552,
+              top: rowYs[1] + 16,
+              width: 98,
+              height: 7,
+              borderRadius: 999,
+              background: `linear-gradient(90deg, ${theme.success}, ${theme.accent2})`,
+              transformOrigin: "right center",
+              transform: `scaleX(${repairP})`,
+              opacity: enter,
+            }}
+          />
+          <div style={{ position: "absolute", left: 566, top: rowYs[1] - 7, opacity: repairP * enter }}>
+            <IconGlyph name="arrow-left" size={40} color={theme.success} strokeWidth={2.2} />
+          </div>
+        </>
+      ) : null}
+      <div
+        style={{
+          position: "absolute",
+          left: cx,
+          top: 1230,
+          transform: "translateX(-50%)",
+          ...mono,
+          fontSize: 24,
+          color: phase === "repair" && done ? theme.success : theme.subtext,
+          opacity: enter,
+          whiteSpace: "nowrap",
+        }}
+      >
+        {phase === "repair" && done ? "ВОССТАНОВЛЕНО ПО ГРУППЕ · НЕ УГАДЫВАЕМ" : "ДОПОЛНИТЕЛЬНЫЕ СТРОКИ ХРАНЯТ ПРОВЕРКУ"}
+      </div>
+      {phase === "repair" && done ? <PulseRing x={noteX + 210} y={rowYs[1]} triggerFrame={impactLocal} tone="success" size={240} /> : null}
+      {phase === "repair" && done ? (
+        <div
+          style={{
+            position: "absolute",
+            left: cx,
+            top: 1110,
+            transform: `translateX(-50%) scale(${badgeP})`,
+            padding: "14px 28px",
+            borderRadius: 999,
+            border: `2px solid ${theme.success}`,
+            background: `${theme.success}18`,
+            color: theme.success,
+            fontFamily: theme.font,
+            fontSize: 27,
+            fontWeight: 800,
+            opacity: badgeP,
+            whiteSpace: "nowrap",
+          }}
+        >
+          ПРОПУСК ВОССТАНОВЛЕН
+        </div>
+      ) : null}
+    </>
+  );
+};
+
 /** HyperLogLog буквально: 64-битный хэш, ведущие нули, 16384×6-битные регистры, гармоническое среднее, 12 КБ и 2^64. */
 const HllEstimate: React.FC<{
   local: number;
@@ -10290,6 +10802,8 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     "fft-wave": { scale: 0.94, y: -30 },
     "orbit-fft-groups": { scale: 0.88, y: -30 },
     "qr-repair": { scale: 0.9, y: -30 },
+    "qr-phone-scan": { scale: 0.9, y: -25 },
+    "redundancy-note": { scale: 0.9, y: -20 },
     "hll-estimate": { scale: 0.92, y: -20 },
     "bloom-bitarray": { scale: 0.88, y: -30 },
     "bloom-probe": { scale: 0.88, y: -20 },
@@ -10509,6 +11023,25 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             damaged={slot.beat.params?.damaged as number | undefined}
             label={slot.beat.params?.label as string | undefined}
             weather={slot.beat.params?.weather as boolean | undefined}
+          />
+        );
+      case "qr-phone-scan":
+        return (
+          <QrPhoneScanVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            url={slot.beat.params?.url as string | undefined}
+            damaged={slot.beat.params?.damaged as number | undefined}
+          />
+        );
+      case "redundancy-note":
+        return (
+          <RedundancyNoteVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as RedundancyNotePhase | undefined) ?? "setup"}
           />
         );
       case "hll-estimate":

@@ -87,6 +87,8 @@ export interface StoryBeat {
     | "fft-wave"
     | "orbit-fft-groups"
     | "qr-repair"
+    | "qr-phone-scan"
+    | "redundancy-note"
     | "hll-estimate"
     | "bloom-bitarray"
     | "bloom-probe"
