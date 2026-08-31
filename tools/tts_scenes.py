@@ -199,17 +199,42 @@ def tokens_to_words(tokens, say_timings):
 
 # ---------- main ----------
 
+def parse_scenes_arg(raw: str, n: int) -> set:
+    idx = {int(x) for x in raw.split(",") if x.strip() != ""}
+    bad = [i for i in idx if not (0 <= i < n)]
+    if bad:
+        sys.exit(f"--scenes: индекс(ы) вне диапазона 0..{n - 1}: {bad}")
+    return idx
+
+
 async def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("episode")
     ap.add_argument("--out", required=True)
     ap.add_argument("--lang", default="ru")
+    ap.add_argument("--scenes", default=None,
+                     help="точечная пере-озвучка: индексы через запятую (0-based), напр. 2,5. "
+                          "Остальные сцены берутся из существующего meta.json — если у сцены "
+                          "поменялся только show-текст (say-слова те же), подпись обновляется "
+                          "in place на старых таймингах без пере-синтеза; иначе сцена остаётся "
+                          "как была и печатается предупреждение.")
     args = ap.parse_args()
 
     episode = json.loads(Path(args.episode).read_text())
     out = Path(args.out)
     (out / "audio").mkdir(parents=True, exist_ok=True)
-    key = gemini_key()
+
+    n_scenes = len(episode["scenes"])
+    target = parse_scenes_arg(args.scenes, n_scenes) if args.scenes else set(range(n_scenes))
+
+    old_meta = {}
+    if args.scenes:
+        meta_path = out / "meta.json"
+        if not meta_path.exists():
+            sys.exit(f"--scenes задан, но нет {meta_path} для слияния")
+        old_meta = {m["index"]: m for m in json.loads(meta_path.read_text())}
+
+    key = gemini_key() if target else None
 
     meta = []
     for i, scene in enumerate(episode["scenes"]):
@@ -220,17 +245,40 @@ async def main():
         say_words = [w for w in spoken.split() if ALNUM_RE.search(w)]
         mp3 = out / "audio" / f"scene-{i}.mp3"
 
-        synth_gemini(spoken, mp3, key)
-        time.sleep(2)  # не долбить preview-квоту
-        heard = whisper_words(mp3)
-        timings = align(say_words, heard, mp3_duration(mp3))
-        print(f"scene {i}: whisper услышал {len(heard)} слов, ожидалось {len(say_words)}",
-              file=sys.stderr)
+        if i in target:
+            synth_gemini(spoken, mp3, key)
+            time.sleep(2)  # не долбить preview-квоту
+            heard = whisper_words(mp3)
+            timings = align(say_words, heard, mp3_duration(mp3))
+            print(f"scene {i}: whisper услышал {len(heard)} слов, ожидалось {len(say_words)}",
+                  file=sys.stderr)
+            meta.append({"index": i, "duration": round(mp3_duration(mp3), 3),
+                         "words": tokens_to_words(tokens, timings)})
+            print(f"scene {i}: пере-озвучена, {meta[-1]['duration']}s, {len(meta[-1]['words'])} слов")
+        else:
+            prev = old_meta.get(i)
+            if prev is None:
+                sys.exit(f"scene {i}: нет в старом meta.json и не в --scenes — нечем заполнить")
+            if len(prev["words"]) == len(tokens):
+                # say-текст не менялся (то же число токенов) — переносим тайминги,
+                # обновляем только show-текст (ловит правки вида SHOW→термин без пере-синтеза).
+                words = [{"text": t["show"], "start": w["start"], "end": w["end"]}
+                         for t, w in zip(tokens, prev["words"])]
+                changed = [n for n, o in zip(words, prev["words"]) if n["text"] != o["text"]]
+                meta.append({"index": i, "duration": prev["duration"], "words": words})
+                if changed:
+                    print(f"scene {i}: не пере-озвучена, обновлена подпись "
+                          f"({len(changed)} слов) на старых таймингах")
+                else:
+                    print(f"scene {i}: без изменений (взята из старого meta.json)")
+            else:
+                print(f"scene {i}: ВНИМАНИЕ — число say-токенов изменилось "
+                      f"({len(prev['words'])} → {len(tokens)}), но сцена не в --scenes — "
+                      f"оставляю как была, тайминги могут не совпадать с новым текстом",
+                      file=sys.stderr)
+                meta.append(prev)
 
-        meta.append({"index": i, "duration": round(mp3_duration(mp3), 3),
-                     "words": tokens_to_words(tokens, timings)})
-        print(f"scene {i}: {meta[-1]['duration']}s, {len(meta[-1]['words'])} слов")
-
+    meta.sort(key=lambda m: m["index"])
     (out / "meta.json").write_text(json.dumps(meta, ensure_ascii=False, indent=1))
     total = sum(m["duration"] for m in meta)
     print(f"OK: {len(meta)} сцен, {total:.1f}s аудио (gemini) → {out}/meta.json")
