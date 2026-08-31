@@ -148,6 +148,7 @@ export interface StoryBeat {
     | "usb-pd-negotiation"
     | "convolution-stencil"
   | "wifi-airtime"
+  | "wifi-signal-vs-airtime"
   | "file-delete-recovery"
   | "tls-handshake"
 | "block-chain"

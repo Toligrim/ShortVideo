@@ -47,6 +47,7 @@ import { BgpRerouteVisual, type BgpReroutePhase } from "./BgpRerouteVisual";
 import { UsbPdNegotiationVisual, type UsbPdNegotiationPhase } from "./UsbPdNegotiationVisual";
 import { ConvolutionStencilVisual, type ConvolutionStencilPhase } from "./ConvolutionStencilVisual";
 import { WifiAirtimeVisual, type WifiAirtimePhase } from "./WifiAirtimeVisual";
+import { WifiSignalVsAirtimeVisual } from "./WifiSignalVsAirtimeVisual";
 import { FileDeleteRecoveryVisual, type FileDeleteRecoveryPhase } from "./FileDeleteRecovery";
 import { BlockChainVisual, type BlockChainPhase } from "./BlockChainVisual";
 import { MempoolRbfVisual, type MempoolRbfPhase } from "./MempoolRbfVisual";
@@ -264,6 +265,7 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
               : 0.55)
         );
     }
+    if (beat.visual === "wifi-signal-vs-airtime") impact = start + Math.round(dur * 0.64);
     if (beat.visual === "file-delete-recovery") {
       const phase = beat.params?.phase;
       impact = start + Math.round(dur * (phase === "overwrite" ? 0.62 : phase === "trim" ? 0.64 : phase === "cloud" ? 0.58 : phase === "recovered" ? 0.58 : 0.55));
@@ -575,6 +577,7 @@ export const storySfx = (
           : "click";
       events.push({ frame: s.impact, sound });
     }
+    if (s.beat.visual === "wifi-signal-vs-airtime") events.push({ frame: s.impact, sound: "ding" });
     if (s.beat.visual === "file-delete-recovery") {
       const phase = s.beat.params?.phase;
       const sound = phase === "overwrite" ? "slam" : phase === "trim" ? "pop" : phase === "cloud" ? "ding" : phase === "recovered" ? "ding" : "click";
@@ -10325,6 +10328,7 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     "usb-pd-negotiation": { scale: 0.92, y: -20 },
     "convolution-stencil": { scale: 0.92, y: -20 },
     "wifi-airtime": { scale: 0.92, y: -20 },
+    "wifi-signal-vs-airtime": { scale: 0.9, y: -20 },
     "diffusion-denoise": { scale: 0.92, y: -20 },
     "tls-handshake": { scale: 0.92, y: -20 },
     "incognito-session": { scale: 0.92, y: -20 },
@@ -11086,6 +11090,8 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             phase={(slot.beat.params?.phase as WifiAirtimePhase | undefined) ?? "signal"}
           />
         );
+      case "wifi-signal-vs-airtime":
+        return <WifiSignalVsAirtimeVisual local={local} fps={fps} impactLocal={impactLocal} />;
       case "file-delete-recovery":
         return (
           <FileDeleteRecoveryVisual
