@@ -6432,7 +6432,7 @@ const QrRepair: React.FC<{
           style={{
             position: "absolute",
             left: cx,
-            top: 300,
+            top: 360,
             transform: "translateX(-50%)",
             ...mono,
             fontSize: 25,
@@ -6627,7 +6627,7 @@ const QrPhoneScanVisual: React.FC<{
         style={{
           position: "absolute",
           left: cx,
-          top: 250,
+          top: 360,
           transform: "translateX(-50%)",
           ...mono,
           fontSize: 25,
@@ -6873,7 +6873,7 @@ const RedundancyNoteVisual: React.FC<{
         style={{
           position: "absolute",
           left: cx,
-          top: 250,
+          top: 360,
           transform: "translateX(-50%)",
           ...mono,
           fontSize: 25,
