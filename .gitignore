@@ -6,6 +6,7 @@ video/.remotion/
 *.mp4
 __pycache__/
 var/publisher/
+var/codex-shim/
 secrets/
 credentials/
 *.token.json

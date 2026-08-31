@@ -48,7 +48,7 @@ def main():
         if isinstance(narr, dict):
             narr = narr.get("ru", "")
         total_words += len(narr.split())
-        # onWord должен существовать в реплике (в форме SHOW)
+        # onWord должен существовать в реплике (в форме показа)
         shows = " ".join(
             m.group(1) if m.group(1) else m.group(3)
             for m in re.finditer(r"\{([^|{}]+)\|([^{}]+)\}|(\S+)", narr)
@@ -65,7 +65,21 @@ def main():
         bare = re.sub(r"\{[^{}]+\}", "", narr)
         latin = re.findall(r"[A-Za-z]{2,}", bare)
         if latin:
-            errors.append(f"сцена {i}: латиница без разметки {{SHOW|скажи}}: {latin}")
+            errors.append(f"сцена {i}: латиница без разметки {{форма-показа|форма-озвучки}}: {latin}")
+        # буквальный «SHOW» вместо реальной формы показа — inцидент
+        # auto-20260831-050001 (31.08.2026): делегат скопировал слово SHOW из
+        # doc-нотации {SHOW|скажи} в animator/SKILL.md буквально, оно дошло
+        # до экрана вместо термина («SHOW —» вместо «биткоин —»). SHOW —
+        # placeholder только в документации, никогда не легальное значение
+        # show-части разметки.
+        for m in re.finditer(r"\{([^|{}]+)\|([^{}]+)\}", narr):
+            show_part = m.group(1).strip()
+            if show_part.upper() == "SHOW":
+                errors.append(
+                    f"сцена {i}: буквальный «SHOW» в разметке "
+                    f"{{{m.group(1)}|{m.group(2)}}} — подставь реальную форму показа, "
+                    f"напр. {{{m.group(2)}|{m.group(2)}}}"
+                )
 
     if len(scenes) <= 8:  # шортс
         if not 95 <= total_words <= 150:
