@@ -58,6 +58,7 @@ import { BatteryChargeLimitVisual, type ChargeLimitPhase } from "./BatteryCharge
 import { IncognitoSessionVisual, type IncognitoSessionPhase } from "./IncognitoSessionVisual";
 import { ContextWindowVisual, type ContextWindowPhase } from "./ContextWindowVisual";
 import { AttentionCostVisual, type AttentionCostPhase } from "./AttentionCostVisual";
+import { MultiFrameStackVisual, type MultiFrameStackPhase } from "./MultiFrameStackVisual";
 
 /* ──────────────────────────── расписание битов ──────────────────────────── */
 
@@ -327,6 +328,10 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
     if (beat.visual === "wallet-copy") {
       const phase = beat.params?.phase;
       impact = start + Math.round(dur * (phase === "double" ? 0.62 : 0.58));
+    }
+    if (beat.visual === "multi-frame-stack") {
+      const phase = beat.params?.phase as MultiFrameStackPhase | undefined;
+      impact = start + Math.round(dur * (phase === "reject" ? 0.68 : phase === "capture" ? 0.55 : 0.62));
     }
     return { beat, start, end, impact };
   });
@@ -632,6 +637,11 @@ export const storySfx = (
     if (s.beat.visual === "wallet-copy") {
       const ph = s.beat.params?.phase;
       events.push({ frame: s.impact, sound: ph === "double" ? "slam" : "pop" });
+    }
+    if (s.beat.visual === "multi-frame-stack") {
+      const ph = s.beat.params?.phase as MultiFrameStackPhase | undefined;
+      const sound = ph === "reject" ? "slam" : ph === "average" ? "ding" : ph === "align" ? "pop" : "click";
+      events.push({ frame: s.impact, sound });
     }
   }
   return events;
@@ -10335,6 +10345,7 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     "context-window": { scale: 0.9, y: -20 },
     "attention-cost": { scale: 0.9, y: -20 },
     "wallet-copy": { scale: 0.92, y: -20 },
+    "multi-frame-stack": { scale: 0.9, y: -20 },
   };
   const cur = cams[slot.beat.visual] ?? { scale: 1, y: 0 };
   const prev = idx > 0 ? cams[slots[idx - 1].beat.visual] ?? cur : cur;
@@ -11192,6 +11203,15 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             fps={fps}
             impactLocal={impactLocal}
             phase={(slot.beat.params?.phase as WalletCopyPhase | undefined) ?? "copy"}
+          />
+        );
+      case "multi-frame-stack":
+        return (
+          <MultiFrameStackVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as MultiFrameStackPhase | undefined) ?? "capture"}
           />
         );
       default:

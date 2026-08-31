@@ -160,7 +160,8 @@ export interface StoryBeat {
    | "incognito-session"
   | "context-window"
   | "attention-cost"
-  | "wallet-copy";
+  | "wallet-copy"
+  | "multi-frame-stack";
   onWord?: string; // бит начинается на этом слове реплики
   params?: Record<string, unknown>;
 }
