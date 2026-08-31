@@ -675,7 +675,31 @@ class TelegramReviewService:
         # Answer before the state transaction and UI edits so Telegram stops
         # showing its spinner even if those subsequent durable operations take
         # a moment.  apply_telegram_action remains the sole state transition.
-        self.api.answer_callback_query(callback_id, text="Action received")
+        #
+        # The ack itself is best-effort only: incident 2026-08-31 — a host
+        # network blip (see CLAUDE.md notes on wlan0/VPN route flapping)
+        # queued updates while the bot's getUpdates long-poll was down, and
+        # by the time it drained the backlog Telegram rejected the ack with
+        # "query is too old" (a real HTTP error from answer_callback_query,
+        # raised as TelegramError). That exception used to propagate straight
+        # out of this method, so apply_telegram_action below never ran and
+        # the Approve press was silently dropped — poll_once's outer handler
+        # still advanced the cursor past it (by design, so one bad update
+        # can't wedge the queue), so it was never retried either: the button
+        # visibly did nothing. A stale/failed ack does not mean the actual
+        # write below would also fail — apply_telegram_action is a pure local
+        # DB transaction, no network involved — so never let a failed ack
+        # skip it.
+        try:
+            self.api.answer_callback_query(callback_id, text="Action received")
+        except TelegramError as exc:
+            print(
+                f"answerCallbackQuery failed for callback {callback_id} "
+                f"(update {update_id}), applying the action anyway: "
+                f"{self._safe_error_text(exc)}",
+                file=sys.stderr,
+                flush=True,
+            )
         result = self.store.apply_telegram_action(
             update_id=update_id,
             action_token=token,

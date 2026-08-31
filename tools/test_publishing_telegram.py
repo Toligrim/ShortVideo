@@ -434,6 +434,40 @@ class TelegramApprovalTests(unittest.TestCase):
         self.assertTrue(any(item.state is OutboxState.PENDING for item in status_rows))
         self.assertEqual(self.store.get_publication(publication.id).state, PublicationState.APPROVED)
 
+    def test_stale_ack_does_not_drop_the_approve_action(self):
+        """Incident 2026-08-31: a host network blip queued the Approve tap's
+        callback update while getUpdates long-polling was down; by the time
+        the bot drained the backlog, Telegram rejected answerCallbackQuery
+        with "query is too old" (TelegramError). That used to propagate out
+        of _process_callback before apply_telegram_action ran, so the button
+        press was silently dropped and poll_once's outer handler still
+        advanced the cursor past it (by design) — never retried. The ack is
+        best-effort; the actual state transition must happen regardless."""
+        publication, _delivery_api = self.deliver()
+        approve = self.store.issue_telegram_action(publication.id, "approve")
+
+        class StaleAckApi(FakeTelegramApi):
+            def answer_callback_query(self, callback_query_id, *, text=None, show_alert=False):
+                self.calls.append(("answer_callback_query", callback_query_id))
+                raise TelegramError(
+                    "Telegram API: Bad Request: query is too old and response "
+                    "timeout expired or query ID is invalid"
+                )
+
+        api = StaleAckApi(updates=[self.callback_update(150, callback_data(approve))])
+        service = self.service(api)
+        processed = service.poll_once(timeout=0)
+
+        self.assertEqual(processed, 1)
+        self.assertEqual(self.store.get_publication(publication.id).state, PublicationState.APPROVED)
+        self.assertIsNotNone(self.store.get_telegram_action(approve.token).consumed_at)
+        targets = self.store.list_targets(publication.id)
+        self.assertTrue(targets)
+        outbox = [
+            item for item in self.store.list_outbox(publication_id=publication.id) if item.kind == "target.publish"
+        ]
+        self.assertTrue(outbox)
+
     def test_message_not_modified_completes_status_delivery_idempotently(self):
         publication, _delivery_api = self.deliver()
         approve = self.store.issue_telegram_action(publication.id, "approve")
