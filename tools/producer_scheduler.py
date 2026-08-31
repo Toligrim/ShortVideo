@@ -219,8 +219,59 @@ def make_slug(now: int, episodes_dir: Path) -> str:
     return slug
 
 
+def collect_past_episode_titles(root: Path) -> list[str]:
+    """YouTube titles of every episode already produced, oldest first.
+
+    Deterministic replacement for "агент сам сходит и посмотрит ls episodes/":
+    slugs are bare timestamps (auto-20260820-193301.json) and carry zero topic
+    information, so an agent would have to open every metadata.json itself to
+    learn what was already covered — expensive, unenforced, and in practice
+    not reliably done (incident 2026-08-31: the QR-code error-correction fact
+    shipped three times — 20.08, 30.08, 31.08 — under three different titles,
+    "оторванным углом" / "часть закрыта" / "не боится царапин", none of them a
+    literal repeat, none of them consecutive). Collecting titles here in
+    Python is cheap (~76 small JSON reads) and gives the agent the full
+    history up front instead of relying on it to rediscover the list itself.
+    A single unreadable/malformed metadata.json is skipped, not fatal — this
+    list is an advisory de-dup aid, not a correctness-critical input, and one
+    bad file must not block every future production run.
+    """
+    titles: list[str] = []
+    episodes_dir = root / "episodes"
+    if not episodes_dir.is_dir():
+        return titles
+    for meta_path in sorted(episodes_dir.glob("*.metadata.json")):
+        try:
+            data = json.loads(meta_path.read_text(encoding="utf-8"))
+            title = data["targets"]["youtube"]["title"]
+        except (OSError, ValueError, KeyError, TypeError):
+            continue
+        if isinstance(title, str) and title.strip():
+            titles.append(title.strip())
+    return titles
+
+
 def build_prompt(root: Path, slug: str, topic_label: str) -> str:
     skill_path = root / ".claude" / "skills" / "produce" / "SKILL.md"
+    past_titles = collect_past_episode_titles(root)
+    if past_titles:
+        listing = "\n".join(f"  - {t}" for t in past_titles)
+        past_titles_block = (
+            f"Уже выпущенные заголовки — ВСЕ {len(past_titles)} эпизодов, не только "
+            "последние (собрано автоматически из episodes/*.metadata.json, актуально "
+            "на момент запуска):\n"
+            f"{listing}\n\n"
+            "Сравнивай новую тему с этим списком ПО СУТИ факта/механизма, а не по "
+            "тексту заголовка — перефразированный повтор запрещён так же, как "
+            "буквальный (прецедент: «читается даже с оторванным углом» / "
+            "«читается, даже если часть закрыта» / «не боится царапин» — три разных "
+            "заголовка про один и тот же факт избыточности QR-кода, разнесённые на "
+            "10+ дней, ни разу не пойманные проверкой «не повторяй последние два "
+            "подряд»). Если тема ниже пересекается по сути с чем-то из списка — выбери "
+            "другую, даже если формулировка кажется свежей."
+        )
+    else:
+        past_titles_block = "Уже выпущенных эпизодов нет — это первый запуск."
     return f"""Ты — автономный продюсер конвейера ShortVideo, запущенный планировщиком
 без присмотра оператора. Выполни ПОЛНЫЙ одобряемый (approval-gated) workflow снизу
 доверху и в конце выдай сводку: тема, длительность, число новых визуалов, вердикт
@@ -254,8 +305,13 @@ def build_prompt(root: Path, slug: str, topic_label: str) -> str:
    Ariane 5: взрыв ракеты как вход, конкретное переполнение при преобразовании
    числа как механизм). Посмотри, что уже сделано (ls episodes/ и
    episodes/drafts/) и НЕ повторяй последние эпизоды — ни конкретную тему, ни (два
-   ролика подряд) один и тот же хайповый кластер. Разрешены WebSearch/WebFetch для
-   ресёрча. Тема задаётся переданным slug — он уже занят только тобой.
+   ролика подряд) один и тот же хайповый кластер. Список ниже — уже не «сходи
+   посмотри», а готовый: сверься с ним ОБЯЗАТЕЛЬНО, это не опция. Разрешены
+   WebSearch/WebFetch для ресёрча. Тема задаётся переданным slug — он уже
+   занят только тобой.
+
+{past_titles_block}
+
 2. Сценарист → режиссёр → озвучка → критик → рендер — все шаги скилла produce,
    включая проверки и право вето (gap-скан ≤3 без новых визуалов — не пропускай).
    СЦЕНАРИСТА и РЕЖИССЁРА можно делегировать — но ТОЛЬКО через MCP-сервер
