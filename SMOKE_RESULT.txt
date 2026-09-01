@@ -1,5 +1,0 @@
-smoke-ok: marker-value-e2e-audit-9f2c
-backticks: `inline code` and literal ${not_an_expression}
-quotes: "double" and 'single'; slashes: C:\tmp\file
-многострочный русский текст — ёжик и символы: ✓ 🚀
-incident regression: `totp-window`
