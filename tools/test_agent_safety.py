@@ -361,6 +361,48 @@ def test_shell_of_unwraps_codex_tool_call():
     assert episode_story.shell_of(wrapped) == "git stash push -u"
 
 
+def test_detail_flag_shows_everything_default_truncates(sandbox):
+    """Запрос оператора 2026-09-01: по умолчанию рассказ обрезает середину
+    (первые 6 реплик / 12 команд) — удобно для быстрого чтения, но теряет
+    детали. --detail обязан показывать всё."""
+    import episode_story
+    importlib.reload(episode_story)
+    run_dir = sandbox["run_dir"]
+    agents_dir = run_dir / "agents" / "s1"
+    agents_dir.mkdir(parents=True)
+    (run_dir / "agents" / "index.json").write_text(json.dumps({"sessions": [
+        {"session_id": "s1", "is_delegate": True, "source": "mcp",
+         "cwd": "/x", "started_at": "2026-09-01T08:00:00Z",
+         "actions_total": 30, "tool_calls": 20, "agent_messages": 10,
+         "reasoning_items": 0},
+    ]}))
+    actions = []
+    for i in range(10):
+        actions.append({"kind": "agent_message", "ts": f"2026-09-01T08:{i:02d}:00Z",
+                        "text": f"реплика номер {i}"})
+    for i in range(20):
+        actions.append({"kind": "tool_call", "ts": f"2026-09-01T08:{i:02d}:30Z",
+                        "input": f'tools.exec_command({{cmd:"echo command-{i}"}})'})
+    (agents_dir / "actions.jsonl").write_text(
+        "\n".join(json.dumps(a, ensure_ascii=False) for a in actions) + "\n")
+
+    plain = episode_story.RunStory(run_dir, detail=False).render()
+    detailed = episode_story.RunStory(run_dir, detail=True).render()
+
+    assert "реплика номер 0" in plain and "реплика номер 9" not in plain
+    assert "и ещё 4 реплик" in plain
+    assert "echo command-0" in plain and "echo command-19" in plain  # head+tail
+    assert "echo command-9" not in plain  # где-то в середине, обрезано
+    assert "… ещё" in plain
+
+    for i in range(10):
+        assert f"реплика номер {i}" in detailed
+    for i in range(20):
+        assert f"echo command-{i}" in detailed
+    assert "… ещё" not in detailed
+    assert "и ещё" not in detailed
+
+
 # ---------------------------------------------------------------------------
 # Изоляция в worktree
 # ---------------------------------------------------------------------------

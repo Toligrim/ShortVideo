@@ -133,8 +133,13 @@ def shell_of(tool_input: str | None) -> str | None:
     return tool_input.strip().splitlines()[0] if tool_input.strip() else None
 
 
-def summarize_commands(actions: list[dict[str, Any]], limit: int = 12) -> list[str]:
-    """Короткая выжимка того, что делегат реально запускал."""
+def summarize_commands(actions: list[dict[str, Any]], limit: int | None = 12,
+                       char_limit: int = 150) -> list[str]:
+    """Короткая выжимка того, что делегат реально запускал.
+
+    limit=None — без обрезки середины (весь список команд, только по
+    char_limit на строку); используется в режиме --detail.
+    """
     lines: list[str] = []
     for act in actions:
         if act.get("kind") != "tool_call":
@@ -143,8 +148,8 @@ def summarize_commands(actions: list[dict[str, Any]], limit: int = 12) -> list[s
         if not cmd:
             continue
         first = cmd.strip().splitlines()[0].strip()
-        lines.append(f"{hhmm(act.get('ts'))}  {first[:150]}")
-    if len(lines) <= limit:
+        lines.append(f"{hhmm(act.get('ts'))}  {first[:char_limit]}")
+    if limit is None or len(lines) <= limit:
         return lines
     head = lines[: limit // 2]
     tail = lines[-(limit - len(head)):]
@@ -153,8 +158,9 @@ def summarize_commands(actions: list[dict[str, Any]], limit: int = 12) -> list[s
 
 
 class RunStory:
-    def __init__(self, run_dir: Path) -> None:
+    def __init__(self, run_dir: Path, *, detail: bool = False) -> None:
         self.dir = run_dir
+        self.detail = detail
         self.events = read_jsonl(run_dir / "events.jsonl")
         self.manifest = read_json(run_dir / "manifest.json") or {}
         self.agents_index = read_json(run_dir / "agents" / "index.json") or {}
@@ -298,12 +304,19 @@ class RunStory:
                 out.append("")
                 out.append("Что говорила по ходу дела:")
                 out.append("")
-                for m in msgs[:6]:
-                    text = " ".join(str(m["text"]).split())[:400]
+                shown_msgs = msgs if self.detail else msgs[:6]
+                msg_char_limit = 1500 if self.detail else 400
+                for m in shown_msgs:
+                    text = " ".join(str(m["text"]).split())[:msg_char_limit]
                     out.append(f"> {hhmm(m.get('ts'))} — {text}")
                     out.append("")
+                if not self.detail and len(msgs) > 6:
+                    out.append(f"_(и ещё {len(msgs) - 6} реплик — смотри `--detail`)_")
+                    out.append("")
 
-            cmds = summarize_commands(actions)
+            cmd_limit = None if self.detail else 12
+            cmd_char_limit = 300 if self.detail else 150
+            cmds = summarize_commands(actions, limit=cmd_limit, char_limit=cmd_char_limit)
             if cmds:
                 out.append("Что запускала:")
                 out.append("")
@@ -490,7 +503,7 @@ def cmd_run(args: argparse.Namespace) -> int:
     if not run_dir.is_dir():
         print(f"нет каталога прогона {run_dir}", file=sys.stderr)
         return 2
-    story = RunStory(run_dir)
+    story = RunStory(run_dir, detail=args.detail)
     text = story.brief() if args.brief else story.render()
     out = Path(args.out) if args.out else (None if args.brief else run_dir / "STORY.md")
     write_out(text, out)
@@ -508,11 +521,11 @@ def cmd_slug(args: argparse.Namespace) -> int:
         chunks.append("Один и тот же эпизод производился несколько раз. "
                       "Ниже — все попытки по порядку.\n")
     for d in dirs:
-        chunks.append(RunStory(d).render())
+        chunks.append(RunStory(d, detail=args.detail).render())
         chunks.append("\n---\n")
     text = "\n".join(chunks)
     if args.brief:
-        text = RunStory(dirs[-1]).brief() if len(dirs) == 1 else \
+        text = RunStory(dirs[-1], detail=args.detail).brief() if len(dirs) == 1 else \
             ("Ниже — хронологии всех прогонов одного эпизода.\n\n" + text)
     out = Path(args.out) if args.out else None
     write_out(text, out)
@@ -546,11 +559,15 @@ def build_parser() -> argparse.ArgumentParser:
     r.add_argument("--out", default=None)
     r.add_argument("--brief", action="store_true",
                    help="напечатать бриф для LLM вместо готового рассказа")
+    r.add_argument("--detail", action="store_true",
+                   help="все реплики и все команды каждой сессии, не только "
+                        "первые 6 реплик / 12 команд с обрезкой середины")
 
     s = sub.add_parser("slug", help="рассказ по всем прогонам эпизода")
     s.add_argument("--slug", required=True)
     s.add_argument("--out", default=None)
     s.add_argument("--brief", action="store_true")
+    s.add_argument("--detail", action="store_true")
 
     l = sub.add_parser("list", help="прогоны и есть ли в них аномалии")
     l.add_argument("--limit", type=int, default=20)
