@@ -310,8 +310,14 @@ def test_import_preserves_original_anomaly_timestamp(sandbox):
                      "call_id": "c1"}},
     ]) + "\n")
 
+    # Явный --since/--until вместо запасного окна "сейчас минус 6 часов":
+    # без events.jsonl с run_start в этом сэндбоксе run_window() всё равно
+    # падает на этот фолбэк, а он зависит от реального времени часов —
+    # фиксированный original_ts рано или поздно вываливается за его край.
     code = csi.main(["import", "--run-id", sandbox["run_dir"].name,
-                     "--sessions-dir", str(sessions_dir)])
+                     "--sessions-dir", str(sessions_dir),
+                     "--since", "2026-09-01T00:00:00Z",
+                     "--until", "2026-09-01T23:59:59Z"])
     assert code == 0
 
     events = [json.loads(line) for line in

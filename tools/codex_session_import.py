@@ -56,6 +56,7 @@ from typing import Any, Iterator
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import pipeline_log  # noqa: E402
+from delegate_worktree import WORKTREES_ROOT  # noqa: E402
 
 ROOT = pipeline_log.ROOT
 DEFAULT_SESSIONS_DIR = Path.home() / ".codex" / "sessions"
@@ -329,7 +330,11 @@ def cmd_import(args: argparse.Namespace) -> int:
     since = since or win_start
     until = until or win_end
 
-    prefixes = [str(ROOT)] + (args.cwd_prefix or [])
+    # Делегаты этапа 3 (worktree-изоляция) работают не в ROOT, а в своей
+    # изолированной копии repo под WORKTREES_ROOT/<run_id>/<agent_id> — без
+    # этого префикса их сессии тихо выпадали из отбора: select_sessions()
+    # проверяет cwd на префикс, а cwd делегата больше не начинается с ROOT.
+    prefixes = [str(ROOT), str(WORKTREES_ROOT / run_dir.name)] + (args.cwd_prefix or [])
     sessions = select_sessions(Path(args.sessions_dir), since, until, prefixes)
 
     agents_dir = run_dir / "agents"
@@ -410,7 +415,9 @@ def cmd_scan(args: argparse.Namespace) -> int:
     since = parse_iso(args.since) if args.since else \
         datetime.now(timezone.utc) - timedelta(hours=6)
     until = parse_iso(args.until) if args.until else datetime.now(timezone.utc)
-    prefixes = [str(ROOT)] + (args.cwd_prefix or [])
+    # cmd_scan не привязан к конкретному run_id, поэтому берёт весь корень
+    # воркри целиком, а не поддиректорию одного прогона (см. cmd_import).
+    prefixes = [str(ROOT), str(WORKTREES_ROOT)] + (args.cwd_prefix or [])
     sessions = select_sessions(Path(args.sessions_dir), since, until, prefixes)
     if not sessions:
         print("сессий в окне не найдено")
