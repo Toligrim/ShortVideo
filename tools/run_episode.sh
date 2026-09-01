@@ -97,7 +97,9 @@ on_kill_signal() {
   NOTIFIED_KILLED=1
   set +e
   python3 tools/pipeline_log.py finish --status killed \
-    --exit-code "$((128 + sig_num))" > "$RUN_DIR/manifest.json" 2>/dev/null
+    --exit-code "$((128 + sig_num))" \
+    --result-class infrastructure_failure --error-code mcp_transport_timeout \
+    > "$RUN_DIR/manifest.json" 2>/dev/null
   python3 tools/codex_session_import.py import --run-id "$RUN_ID" >/dev/null 2>&1
   python3 tools/episode_story.py run --run-id "$RUN_ID" >/dev/null 2>&1
   (
@@ -123,6 +125,51 @@ export SV_CLI="$RUNNER"
 export SV_MODEL="$MODEL"
 export SV_EFFORT="$EFFORT"
 export SV_ORCHESTRATION="$ORCH"
+export SV_SANDBOX_POLICY="danger-full-access"
+
+# Host-side Codex sandbox preflight.  This is intentionally after run-start
+# (so the refusal is durable in the manifest) and before the first Codex
+# process or delegate worktree can be created.  A non-zero doctor result is an
+# infrastructure failure, never a semantic attempt.
+DOCTOR_JSON="$RUN_DIR/codex-sandbox-doctor.json"
+set +e
+python3 tools/codex_sandbox_doctor.py > "$DOCTOR_JSON"
+DOCTOR_RC=$?
+set -e
+DOCTOR_CLASS=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8")).get("error_class", "bwrap_unknown_failure"))' "$DOCTOR_JSON" 2>/dev/null || true)
+DOCTOR_VERSION=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8")).get("codex_version") or "")' "$DOCTOR_JSON" 2>/dev/null || true)
+[[ -n "$DOCTOR_CLASS" ]] || DOCTOR_CLASS="bwrap_unknown_failure"
+export SV_CODEX_VERSION="$DOCTOR_VERSION"
+DOCTOR_PASSED=0
+if [[ "$DOCTOR_RC" -eq 0 && "$DOCTOR_CLASS" == ok ]]; then
+  DOCTOR_PASSED=1
+fi
+python3 tools/pipeline_log.py event sandbox_preflight --stage other \
+  --severity "$([[ "$DOCTOR_PASSED" -eq 1 ]] && echo info || echo error)" \
+  --detail "$DOCTOR_CLASS" \
+  --data "doctor_exit_code=$DOCTOR_RC" \
+  --data "error_class=$DOCTOR_CLASS" || true
+if [[ "$DOCTOR_PASSED" -ne 1 ]]; then
+  python3 tools/pipeline_log.py finish --status failed --exit-code 78 \
+    --result-class infrastructure_failure --error-code codex_sandbox_unavailable \
+    > "$RUN_DIR/manifest.json"
+  echo "Codex sandbox preflight failed: class=$DOCTOR_CLASS (see $DOCTOR_JSON)" >&2
+  exit 78
+fi
+
+# The producer prompt remains a normal file value.  The protocol is appended
+# only after the host preflight and is read from disk by codex exec; nested
+# delegation itself is further constrained by delegate_invoke.py.
+CODEX_PROMPT_FILE="$PROMPT_FILE"
+if [[ "$RUNNER" == codex ]]; then
+  CODEX_PROMPT_FILE="$RUN_DIR/orchestrator-prompt.md"
+  {
+    cat "$PROMPT_FILE"
+    printf '\n\n--- ShortVideo deterministic delegate invocation protocol ---\n\n'
+    cat "$ROOT/docs/delegate-invocation-protocol.md"
+  } > "$CODEX_PROMPT_FILE"
+  chmod 600 "$CODEX_PROMPT_FILE"
+fi
 
 set +e
 case "$RUNNER" in
@@ -161,7 +208,7 @@ SHIM
       -m "$MODEL" \
       -c model_reasoning_effort="$EFFORT" \
       --sandbox danger-full-access \
-      - < "$PROMPT_FILE" \
+      - < "$CODEX_PROMPT_FILE" \
       > "$RUN_DIR/cli-stdout.log" 2> "$RUN_DIR/cli-stderr.log" &
     CLI_PID=$!
     wait "$CLI_PID"
@@ -181,10 +228,35 @@ set -e
 python3 tools/pipeline_log.py snapshot --label after
 
 STATUS="ok"
+RESULT_CLASS="success"
+ERROR_CODE=""
 if [[ $CODE -ne 0 ]]; then
   STATUS="failed"
+  RESULT_CLASS="semantic_failure"
+  # Classification is based only on process exit status and host/runtime
+  # stderr, never on an LLM-authored --note or free-form summary.
+  if rg -qi 'RTM_NEWADDR|Failed to create network namespace|bwrap|user namespace' \
+      "$RUN_DIR/cli-stderr.log"; then
+    RESULT_CLASS="infrastructure_failure"
+    ERROR_CODE="codex_sandbox_unavailable"
+  elif [[ $CODE -eq 124 ]] || rg -qi 'timed out|timeout' "$RUN_DIR/cli-stderr.log"; then
+    RESULT_CLASS="infrastructure_failure"
+    ERROR_CODE="mcp_transport_timeout"
+  elif rg -qi 'unknown model|model .*(not found|unavailable|invalid)|invalid.*model' \
+      "$RUN_DIR/cli-stderr.log"; then
+    RESULT_CLASS="infrastructure_failure"
+    ERROR_CODE="model_unavailable"
+  elif rg -qi 'MCP tool call requires approval|SyntaxError|Unexpected identifier|mcp_invocation_invalid' \
+      "$RUN_DIR/cli-stderr.log"; then
+    RESULT_CLASS="control_plane_failure"
+    ERROR_CODE="mcp_invocation_invalid"
+  fi
 fi
-python3 tools/pipeline_log.py finish --status "$STATUS" --exit-code "$CODE" > "$RUN_DIR/manifest.json"
+FINISH_ARGS=(--status "$STATUS" --exit-code "$CODE" --result-class "$RESULT_CLASS")
+if [[ -n "$ERROR_CODE" ]]; then
+  FINISH_ARGS+=(--error-code "$ERROR_CODE")
+fi
+python3 tools/pipeline_log.py finish "${FINISH_ARGS[@]}" > "$RUN_DIR/manifest.json"
 
 # Наблюдаемость (docs/agent-safety-architecture.md, этап 1.2): втянуть сессии
 # делегатов Codex за этот прогон в runs/$RUN_ID/agents/ и собрать рассказ.

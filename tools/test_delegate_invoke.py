@@ -1,0 +1,372 @@
+#!/usr/bin/env python3
+"""Regression tests for the deterministic nested-delegate bridge."""
+from __future__ import annotations
+
+import json
+import os
+import shutil
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+import pytest
+
+TOOLS = Path(__file__).resolve().parent
+sys.path.insert(0, str(TOOLS))
+
+import agent_log  # noqa: E402
+import delegate_invoke  # noqa: E402
+
+
+@pytest.fixture()
+def delegation(tmp_path, monkeypatch):
+    """A real git worktree path with a synthetic active run/lease."""
+
+    marker = delegate_invoke.ROOT / ".delegate-base"
+    if not marker.is_file():
+        pytest.skip("the isolated worktree has no delegate base marker")
+    base = marker.read_text(encoding="utf-8").strip()
+    run_dir = tmp_path / "run-bridge"
+    run_dir.mkdir()
+    (run_dir / "mono_start").write_text(repr(time.monotonic()), encoding="utf-8")
+    prompt_dir = run_dir / "delegate-prompts"
+    prompt_dir.mkdir()
+    prompt_file = prompt_dir / "agent-1.md"
+    claim = {
+        "agent_id": "agent-1",
+        "task_id": "scriptwriter:serialization",
+        "role": "scriptwriter",
+        "attempt": 1,
+        "state": "running",
+        "claimed_at": time.time(),
+        "expires_at": time.time() + 600,
+        "heartbeat_at": time.time(),
+        "lease_sec": 600,
+        "worktree": str(delegate_invoke.ROOT),
+        "base_sha": base,
+        "semantic_attempt": None,
+        "infrastructure_attempt": 1,
+        "semantic_counted": False,
+        "infrastructure_counted": False,
+        "delegate_started": False,
+    }
+    with agent_log.Registry(run_dir) as registry:
+        registry.claims["agent-1"] = claim
+        registry.save()
+    monkeypatch.setenv("SV_RUN_DIR", str(run_dir))
+    monkeypatch.setenv("SV_RUN_ID", run_dir.name)
+    return run_dir, prompt_file, claim
+
+
+def _render(delegation, prompt: str, capsys) -> tuple[str, Path]:
+    run_dir, prompt_file, _ = delegation
+    prompt_file.write_text(prompt, encoding="utf-8")
+    rc = delegate_invoke.main([
+        "render",
+        "--task-id",
+        "scriptwriter:serialization",
+        "--agent-id",
+        "agent-1",
+        "--role",
+        "scriptwriter",
+        "--prompt-file",
+        str(prompt_file),
+    ])
+    captured = capsys.readouterr()
+    assert rc == 0, captured.err
+    assert captured.err == ""
+    source = captured.out
+    js_file = run_dir / "generated.js"
+    js_file.write_text(source, encoding="utf-8")
+    return source, js_file
+
+
+def _node() -> str:
+    node = shutil.which("node") or "/home/toligrim/.local/bin/node"
+    if not Path(node).is_file():
+        pytest.skip("node is not available")
+    return node
+
+
+def test_explicit_run_id_honors_isolated_run_dir(delegation, monkeypatch):
+    run_dir, _, _ = delegation
+    wrong_runs = run_dir.parent / "wrong-runs"
+    wrong_dir = wrong_runs / run_dir.name
+    wrong_dir.mkdir(parents=True)
+    (wrong_dir / "delegations.json").write_text('{"claims": {}}', encoding="utf-8")
+    monkeypatch.setattr(delegate_invoke.pipeline_log, "RUNS", wrong_runs)
+
+    assert delegate_invoke.resolve_run_dir(run_dir.name) == run_dir.resolve()
+
+
+def test_registered_base_sha_is_valid_fallback_without_marker(tmp_path, monkeypatch):
+    worktree = tmp_path / "worktree"
+    worktree.mkdir()
+    monkeypatch.setattr(delegate_invoke, "_git", lambda _cwd, _args: "")
+    base = "a" * 40
+    assert delegate_invoke._read_base_sha(worktree, base) == base
+
+
+def test_prompt_serialization_survives_node_check_and_runtime(delegation, capsys):
+    prompt = (
+        "backticks: `inline code` and literal ${not_an_expression}\n"
+        "quotes: \"double\" and 'single'; slashes: C:\\\\tmp\\file\n"
+        "многострочный русский текст — ёжик и символы: ✓ 🚀\n"
+        '{"json": ["value", {"nested": true}]}\n'
+        "shell: $(echo do-not-run); `printf no`; && || |\n"
+        "incident regression: `totp-window`\n"
+    )
+    source, js_file = _render(delegation, prompt, capsys)
+    assert "promptReadCommand" in source
+    assert "cat --" in source
+    assert "readFileSync" not in source
+    assert prompt not in source
+    assert "gpt-5.2-codex" not in source
+    assert 'model: "gpt-5.6-luna"' in source
+
+    node = _node()
+    checked = subprocess.run([node, "--check", str(js_file)], capture_output=True, text=True)
+    assert checked.returncode == 0, checked.stderr
+
+    runner = r'''
+const fs = require("fs");
+const outputs = [];
+globalThis.text = (value) => outputs.push(String(value));
+globalThis.tools = {
+  exec_command: async ({cmd}) => ({
+    exit_code: 0,
+    output: cmd.includes("cat --") ? fs.readFileSync(process.env.PROMPT_FILE, "utf8") : ""
+  }),
+  mcp__codex__codex: async ({prompt}) => ({content: [{type: "text", text: prompt}]})
+};
+require(process.env.GENERATED_JS);
+setTimeout(() => process.stdout.write(JSON.stringify(outputs)), 100);
+'''
+    executed = subprocess.run(
+        [node, "-e", runner],
+        env={**os.environ, "GENERATED_JS": str(js_file), "PROMPT_FILE": str(delegation[1])},
+        capture_output=True,
+        text=True,
+    )
+    assert executed.returncode == 0, executed.stderr
+    outputs = json.loads(executed.stdout)
+    assert outputs[0] == prompt
+    assert json.loads(outputs[-1])["result_class"] == "success"
+
+
+def test_startup_control_failure_is_classified_before_close(delegation, capsys):
+    run_dir, prompt_file, _ = delegation
+    prompt_file.write_text("safe", encoding="utf-8")
+    source, js_file = _render(delegation, "safe", capsys)
+    assert "failBeforeRequest" in source
+
+    node = _node()
+    runner = r'''
+const outputs = [];
+const commands = [];
+globalThis.text = (value) => outputs.push(String(value));
+globalThis.tools = {
+  exec_command: async ({cmd}) => {
+    commands.push(cmd);
+    return {exit_code: cmd.includes("mark-started") ? 1 : 0, output: "safe"};
+  },
+  mcp__codex__codex: async () => { throw new Error("must not be called"); }
+};
+require(process.env.GENERATED_JS);
+setTimeout(() => process.stdout.write(JSON.stringify({outputs, commands})), 100);
+'''
+    executed = subprocess.run(
+        [node, "-e", runner],
+        env={**os.environ, "GENERATED_JS": str(js_file)},
+        capture_output=True,
+        text=True,
+    )
+    assert executed.returncode == 0, executed.stderr
+    result = json.loads(executed.stdout)
+    outputs = result["outputs"]
+    assert json.loads(outputs[-1])["result_class"] == "control_plane_failure"
+    assert any(
+        "delegate_invoke.py result " in command
+        and "control_plane_failure" in command
+        and "mcp_invocation_invalid" in command
+        for command in result["commands"]
+    )
+
+
+def test_model_sandbox_and_cwd_are_not_bridge_arguments(delegation):
+    run_dir, prompt_file, _ = delegation
+    prompt_file.write_text("safe", encoding="utf-8")
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(TOOLS / "delegate_invoke.py"),
+            "render",
+            "--task-id",
+            "scriptwriter:serialization",
+            "--agent-id",
+            "agent-1",
+            "--role",
+            "scriptwriter",
+            "--prompt-file",
+            str(prompt_file),
+            "--model",
+            "gpt-5.2-codex",
+        ],
+        env={**os.environ, "SV_RUN_DIR": str(run_dir), "SV_RUN_ID": run_dir.name},
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 2
+    assert result.stdout == ""
+
+
+def test_policy_and_worktree_refusals_emit_no_javascript(delegation, capsys):
+    run_dir, prompt_file, claim = delegation
+    prompt_file.write_text("safe", encoding="utf-8")
+
+    rc = delegate_invoke.main([
+        "render",
+        "--task-id",
+        claim["task_id"],
+        "--agent-id",
+        claim["agent_id"],
+        "--role",
+        "unapproved-role",
+        "--prompt-file",
+        str(prompt_file),
+    ])
+    captured = capsys.readouterr()
+    assert rc == 21
+    assert captured.out == ""
+    assert json.loads(captured.err)["error_code"] == "role_not_allowed"
+
+    with agent_log.Registry(run_dir) as registry:
+        registry.claims[claim["agent_id"]]["worktree"] = str(run_dir / "missing-worktree")
+        registry.save()
+    rc = delegate_invoke.main([
+        "render",
+        "--task-id",
+        claim["task_id"],
+        "--agent-id",
+        claim["agent_id"],
+        "--role",
+        claim["role"],
+        "--prompt-file",
+        str(prompt_file),
+    ])
+    captured = capsys.readouterr()
+    assert rc == 22
+    assert captured.out == ""
+    assert json.loads(captured.err)["error_code"] == "worktree_missing"
+
+
+def test_success_and_semantic_attempts_are_separate_from_infrastructure(tmp_path, monkeypatch, capsys):
+    run_dir = tmp_path / "run-budget"
+    run_dir.mkdir()
+    (run_dir / "mono_start").write_text(repr(time.monotonic()), encoding="utf-8")
+    monkeypatch.setenv("SV_RUN_DIR", str(run_dir))
+    monkeypatch.setenv("SV_RUN_ID", run_dir.name)
+    task = "scriptwriter:budget"
+
+    assert agent_log.main([
+        "delegate-claim", "--task-id", task, "--role", "scriptwriter", "--agent-id", "no-start"
+    ]) == 0
+    capsys.readouterr()
+    assert agent_log.main([
+        "delegate-release", "--agent-id", "no-start", "--status", "failed", "--note", "runtime note"
+    ]) == 0
+    capsys.readouterr()
+
+    assert agent_log.main([
+        "delegate-claim", "--task-id", task, "--role", "scriptwriter", "--agent-id", "semantic"
+    ]) == 0
+    capsys.readouterr()
+    assert agent_log.main(["delegate-start", "--agent-id", "semantic"]) == 0
+    capsys.readouterr()
+    assert agent_log.main([
+        "delegate-result", "--agent-id", "semantic", "--result-class", "semantic_failure"
+    ]) == 0
+    capsys.readouterr()
+    assert agent_log.main([
+        "delegate-release", "--agent-id", "semantic", "--status", "failed"
+    ]) == 0
+    capsys.readouterr()
+
+    assert agent_log.main([
+        "delegate-claim", "--task-id", task, "--role", "scriptwriter", "--agent-id", "infra-1"
+    ]) == 0
+    capsys.readouterr()
+    assert agent_log.main([
+        "delegate-result", "--agent-id", "infra-1", "--result-class", "infrastructure_failure",
+        "--error-code", "mcp_transport_timeout",
+    ]) == 0
+    capsys.readouterr()
+    assert agent_log.main([
+        "delegate-release", "--agent-id", "infra-1", "--status", "failed"
+    ]) == 0
+    capsys.readouterr()
+
+    with agent_log.Registry(run_dir) as registry:
+        semantic, infrastructure, codes = agent_log.task_counters(registry.claims, task)
+    assert semantic == 1
+    assert infrastructure == 1
+    assert codes == ["mcp_transport_timeout"]
+
+
+def test_repeated_infrastructure_errors_open_the_circuit(tmp_path, monkeypatch, capsys):
+    run_dir = tmp_path / "run-circuit"
+    run_dir.mkdir()
+    (run_dir / "mono_start").write_text(repr(time.monotonic()), encoding="utf-8")
+    monkeypatch.setenv("SV_RUN_DIR", str(run_dir))
+    monkeypatch.setenv("SV_RUN_ID", run_dir.name)
+    task = "critic:circuit"
+
+    for index in (1, 2):
+        agent_id = f"infra-{index}"
+        assert agent_log.main([
+            "delegate-claim", "--task-id", task, "--role", "critic", "--agent-id", agent_id
+        ]) == 0
+        capsys.readouterr()
+        assert agent_log.main([
+            "delegate-result", "--agent-id", agent_id,
+            "--result-class", "infrastructure_failure",
+            "--error-code", "mcp_transport_timeout",
+        ]) == 0
+        capsys.readouterr()
+        assert agent_log.main([
+            "delegate-release", "--agent-id", agent_id, "--status", "failed"
+        ]) == 0
+        capsys.readouterr()
+
+    rc = agent_log.main([
+        "delegate-claim", "--task-id", task, "--role", "critic", "--agent-id", "infra-3"
+    ])
+    captured = capsys.readouterr()
+    assert rc == 7
+    assert json.loads(captured.out)["error_code"] == "infrastructure_budget_exhausted"
+
+
+def test_worktree_close_failure_cannot_be_hidden_by_pending_success(tmp_path, monkeypatch, capsys):
+    run_dir = tmp_path / "run-close-failure"
+    run_dir.mkdir()
+    (run_dir / "mono_start").write_text(repr(time.monotonic()), encoding="utf-8")
+    monkeypatch.setenv("SV_RUN_DIR", str(run_dir))
+    monkeypatch.setenv("SV_RUN_ID", run_dir.name)
+    task = "scriptwriter:close-failure"
+    assert agent_log.main([
+        "delegate-claim", "--task-id", task, "--role", "scriptwriter", "--agent-id", "close-1"
+    ]) == 0
+    capsys.readouterr()
+    assert agent_log.main(["delegate-start", "--agent-id", "close-1"]) == 0
+    capsys.readouterr()
+    assert agent_log.main([
+        "delegate-result", "--agent-id", "close-1", "--result-class", "success"
+    ]) == 0
+    capsys.readouterr()
+    assert agent_log.main([
+        "delegate-release", "--agent-id", "close-1", "--status", "failed", "--note", "merge conflict"
+    ]) == 0
+    result = json.loads(capsys.readouterr().out)
+    assert result["result_class"] == "policy_failure"
+    assert result["error_code"] == "policy_violation"

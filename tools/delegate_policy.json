@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "approval_policy": "never",
+  "timeout_seconds": 300,
+  "max_infrastructure_attempts": 3,
+  "infrastructure_circuit_repeat": 2,
+  "roles": {
+    "scriptwriter": {
+      "model": "gpt-5.6-luna",
+      "sandbox": "workspace-write"
+    },
+    "animation-director": {
+      "model": "gpt-5.6-luna",
+      "sandbox": "danger-full-access"
+    },
+    "critic": {
+      "model": "gpt-5.6-luna",
+      "sandbox": "read-only"
+    }
+  }
+}

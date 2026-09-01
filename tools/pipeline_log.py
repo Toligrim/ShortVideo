@@ -10,6 +10,7 @@
     pipeline_log.py stage-end   STAGE [--status ok|failed|skipped] [--data k=v ...] [--note "..."]
     pipeline_log.py wrap        STAGE [--allow-fail] -- <команда...>
     pipeline_log.py event       KIND  [--stage S] [--severity ...] [--detail "..."] [--data k=v]
+    pipeline_log.py telemetry   EVENT [structured delegate lifecycle fields]
     pipeline_log.py verdict     --round N --verdict accepted|revisions --issues N [--report PATH]
     pipeline_log.py snapshot    --label before|after
     pipeline_log.py finish      [--status ok|failed] [--exit-code N]
@@ -40,6 +41,63 @@ STAGES = {
     "critic", "render", "telegram", "publish", "commit", "other",
 }
 
+# These are the lifecycle boundaries that are safe for the caller to record.
+# MCP-internal progress is not exposed by the current code-mode API; callers
+# use the response boundary events below and mark that fact in ``observability``.
+DELEGATE_TELEMETRY_EVENTS = frozenset({
+    "delegate_requested",
+    "worktree_opened",
+    "delegate_invocation_started",
+    "mcp_request_started",
+    "delegate_started",
+    "delegate_first_event",
+    "delegate_last_event",
+    "delegate_completed",
+    "delegate_failed",
+    "worktree_close_started",
+    "worktree_closed",
+    "worktree_abandoned",
+})
+
+# Existing delegate_worktree.py emits the short historical names.  Keep the
+# source compatibility of that CLI while making events.jsonl use the stable
+# production names requested by the control-plane contract.
+TELEMETRY_KIND_ALIASES = {
+    "worktree_open": "worktree_opened",
+    "worktree_close": "worktree_closed",
+    "worktree_abandon": "worktree_abandoned",
+}
+
+TELEMETRY_FIELDS = (
+    "timestamp",
+    "run_id",
+    "task_id",
+    "agent_id",
+    "role",
+    "infrastructure_attempt",
+    "semantic_attempt",
+    "worktree_path",
+    "base_sha",
+    "codex_version",
+    "effective_model",
+    "effective_sandbox_policy",
+    "phase",
+    "duration_ms",
+    "result_class",
+    "error_code",
+    "timeout_seconds",
+    "observability",
+    "prompt_path",
+)
+
+RESULT_CLASSES = frozenset({
+    "success",
+    "semantic_failure",
+    "infrastructure_failure",
+    "control_plane_failure",
+    "policy_failure",
+})
+
 INCIDENT_PATTERNS = [
     (re.compile(r"429.{0,40}(пробую|fallback|следующ)", re.I), "tts", "fallback"),
     (re.compile(r"gemini synth failed", re.I), "tts", "error"),
@@ -49,8 +107,8 @@ INCIDENT_PATTERNS = [
 
 
 def now_iso() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.") + \
-        f"{datetime.now(timezone.utc).microsecond // 1000:03d}Z"
+    now = datetime.now(timezone.utc)
+    return now.strftime("%Y-%m-%dT%H:%M:%S.") + f"{now.microsecond // 1000:03d}Z"
 
 
 def warn(msg: str) -> None:
@@ -133,24 +191,142 @@ def next_seq(d: Path) -> int:
     return n + 1
 
 
+def _claim_for_event(d: Path, fields: dict[str, Any]) -> dict[str, Any]:
+    """Read a small, non-secret claim snapshot to enrich lifecycle events."""
+
+    actor = fields.get("agent_id") or fields.get("actor")
+    if not actor:
+        return {}
+    try:
+        registry = json.loads((d / "delegations.json").read_text(encoding="utf-8"))
+        claims = registry.get("claims") if isinstance(registry, dict) else {}
+        claim = claims.get(actor) if isinstance(claims, dict) else None
+        return claim if isinstance(claim, dict) else {}
+    except (OSError, ValueError, TypeError):
+        return {}
+
+
+def _role_policy(role: str | None) -> dict[str, Any]:
+    """Read the bridge policy for lifecycle enrichment when possible.
+
+    ``delegate_worktree.py`` emits ``worktree_open`` immediately after the
+    claim, before the bridge has had a chance to persist effective policy on
+    that claim.  Reading the same project policy here keeps that first event
+    truthful without importing the bridge (which would create a cycle).
+    """
+
+    if not role:
+        return {}
+    try:
+        raw = json.loads((ROOT / "tools" / "delegate_policy.json").read_text(encoding="utf-8"))
+        roles = raw.get("roles") if isinstance(raw, dict) else None
+        policy = roles.get(role) if isinstance(roles, dict) else None
+        return policy if isinstance(policy, dict) else {}
+    except (OSError, ValueError, TypeError):
+        return {}
+
+
+def _normalize_telemetry_fields(d: Path, fields: dict[str, Any]) -> dict[str, Any]:
+    """Normalize old lifecycle records into the structured event schema.
+
+    This function intentionally copies values and only fills metadata from the
+    local delegation registry/environment.  It never reads prompt contents or
+    emits credentials.
+    """
+
+    out = dict(fields)
+    old_kind = out.get("kind")
+    canonical_kind = TELEMETRY_KIND_ALIASES.get(old_kind, old_kind)
+    if canonical_kind != old_kind:
+        out["legacy_kind"] = old_kind
+        out["kind"] = canonical_kind
+
+    if canonical_kind not in DELEGATE_TELEMETRY_EVENTS:
+        return out
+
+    claim = _claim_for_event(d, out)
+    actor = out.get("agent_id") or out.get("actor")
+    role = out.get("role") or claim.get("role")
+    role_policy = _role_policy(role)
+    if actor is not None and out.get("agent_id") is None:
+        out["agent_id"] = actor
+
+    def fill_if_missing(name: str, value: Any) -> None:
+        if out.get(name) is None and value is not None:
+            out[name] = value
+
+    fill_if_missing("task_id", claim.get("task_id"))
+    fill_if_missing("role", role)
+    fill_if_missing("worktree_path", out.get("worktree") or claim.get("worktree"))
+    fill_if_missing("base_sha", out.get("base") or claim.get("base_sha"))
+    fill_if_missing("infrastructure_attempt", claim.get("infrastructure_attempt"))
+    fill_if_missing("semantic_attempt", claim.get("semantic_attempt"))
+    fill_if_missing(
+        "codex_version",
+        claim.get("codex_version") or os.environ.get("SV_CODEX_VERSION"),
+    )
+    fill_if_missing(
+        "effective_model",
+        claim.get("effective_model")
+        or role_policy.get("model")
+        or out.get("model")
+        or os.environ.get("SV_MODEL"),
+    )
+    fill_if_missing(
+        "effective_sandbox_policy",
+        claim.get("effective_sandbox_policy")
+        or role_policy.get("sandbox")
+        or os.environ.get("SV_SANDBOX_POLICY"),
+    )
+
+    if out.get("duration_ms") is None:
+        for source in ("wall_sec", "held_sec"):
+            value = out.get(source)
+            if isinstance(value, (int, float)):
+                out["duration_ms"] = round(float(value) * 1_000)
+                break
+
+    # All fields are present on structured lifecycle events.  ``None`` means
+    # that the caller genuinely could not know the value at that boundary.
+    for key in TELEMETRY_FIELDS:
+        out.setdefault(key, None)
+    return out
+
+
 def append_event(d: Path, fields: dict[str, Any]) -> dict[str, Any]:
     ev = d / "events.jsonl"
     d.mkdir(parents=True, exist_ok=True)
+    fields = _normalize_telemetry_fields(d, fields)
     with ev.open("a", encoding="utf-8") as f:
         fcntl.flock(f.fileno(), fcntl.LOCK_EX)
         try:
             seq = next_seq(d)
+            timestamp = now_iso()
             record = {
                 "seq": seq,
-                "ts": now_iso(),
+                "ts": timestamp,
                 "mono": round(time.monotonic() - mono_start(d), 3),
                 "run_id": d.name,
                 **fields,
             }
+            if record.get("kind") in DELEGATE_TELEMETRY_EVENTS:
+                record["run_id"] = d.name
+                if record.get("timestamp") is None:
+                    record["timestamp"] = timestamp
+                for key in TELEMETRY_FIELDS:
+                    record.setdefault(key, None)
             f.write(json.dumps(record, ensure_ascii=False) + "\n")
         finally:
             fcntl.flock(f.fileno(), fcntl.LOCK_UN)
     return record
+
+
+def append_telemetry(d: Path, event: str, **fields: Any) -> dict[str, Any]:
+    """Append one validated-name delegate lifecycle event."""
+
+    if event not in DELEGATE_TELEMETRY_EVENTS:
+        raise ValueError(f"unknown delegate telemetry event: {event}")
+    return append_event(d, {"kind": event, **fields})
 
 
 def parse_kv(pairs: list[str] | None) -> dict[str, str]:
@@ -321,6 +497,32 @@ def cmd_event(args: argparse.Namespace) -> None:
         "kind": args.kind, "stage": args.stage, "severity": args.severity,
         "detail": args.detail, "data": parse_kv(args.data),
     })
+
+
+def cmd_telemetry(args: argparse.Namespace) -> None:
+    d = ensure_run()
+    if args.result_class and args.result_class not in RESULT_CLASSES:
+        die_soft(f"неизвестный result class '{args.result_class}'")
+    fields: dict[str, Any] = {
+        "task_id": args.task_id,
+        "agent_id": args.agent_id,
+        "role": args.role,
+        "infrastructure_attempt": args.infrastructure_attempt,
+        "semantic_attempt": args.semantic_attempt,
+        "worktree_path": args.worktree_path,
+        "base_sha": args.base_sha,
+        "codex_version": args.codex_version,
+        "effective_model": args.effective_model,
+        "effective_sandbox_policy": args.effective_sandbox_policy,
+        "phase": args.phase,
+        "duration_ms": args.duration_ms,
+        "result_class": args.result_class,
+        "error_code": args.error_code,
+        "timeout_seconds": args.timeout_seconds,
+        "observability": args.observability,
+        "prompt_path": args.prompt_path,
+    }
+    append_telemetry(d, args.event, **fields)
 
 
 def cmd_verdict(args: argparse.Namespace) -> None:
@@ -509,6 +711,8 @@ def build_artifacts(slug: str | None) -> dict[str, Any]:
 
 def cmd_finish(args: argparse.Namespace) -> None:
     d = ensure_run(create_if_missing=False)
+    if args.result_class is None:
+        args.result_class = "success" if args.status == "ok" else "semantic_failure"
     open_stages = load_open_stages(d)
     for stage, start_mono in open_stages.items():
         append_event(d, {
@@ -520,6 +724,8 @@ def cmd_finish(args: argparse.Namespace) -> None:
 
     finish_rec = append_event(d, {
         "kind": "run_end", "status": args.status, "exit_code": args.exit_code,
+        "result_class": args.result_class,
+        "error_code": args.error_code,
     })
 
     events = [json.loads(line) for line in (d / "events.jsonl").read_text().splitlines() if line.strip()]
@@ -555,6 +761,9 @@ def cmd_finish(args: argparse.Namespace) -> None:
         "run_id": d.name,
         "slug": slug,
         "status": args.status,
+        "result_class": args.result_class,
+        "error_code": args.error_code,
+        "result": {"class": args.result_class, "error_code": args.error_code},
         "episode": {"topic": topic},
         "runner": runner,
         "timing": {
@@ -645,6 +854,26 @@ def build_parser() -> argparse.ArgumentParser:
     ev.add_argument("--detail", default=None)
     ev.add_argument("--data", action="append")
 
+    tl = sub.add_parser("telemetry", help="записать структурированное событие делегата")
+    tl.add_argument("event", choices=sorted(DELEGATE_TELEMETRY_EVENTS))
+    tl.add_argument("--task-id", default=None)
+    tl.add_argument("--agent-id", default=None)
+    tl.add_argument("--role", default=None)
+    tl.add_argument("--infrastructure-attempt", type=int, default=None)
+    tl.add_argument("--semantic-attempt", type=int, default=None)
+    tl.add_argument("--worktree-path", default=None)
+    tl.add_argument("--base-sha", default=None)
+    tl.add_argument("--codex-version", default=None)
+    tl.add_argument("--effective-model", default=None)
+    tl.add_argument("--effective-sandbox-policy", default=None)
+    tl.add_argument("--phase", default=None)
+    tl.add_argument("--duration-ms", type=int, default=None)
+    tl.add_argument("--result-class", default=None)
+    tl.add_argument("--error-code", default=None)
+    tl.add_argument("--timeout-seconds", type=float, default=None)
+    tl.add_argument("--observability", default=None)
+    tl.add_argument("--prompt-path", default=None)
+
     vd = sub.add_parser("verdict")
     vd.add_argument("--round", type=int, required=True)
     vd.add_argument("--verdict", required=True, choices=["accepted", "revisions"])
@@ -657,6 +886,8 @@ def build_parser() -> argparse.ArgumentParser:
     fn = sub.add_parser("finish")
     fn.add_argument("--status", default="ok", choices=["ok", "failed", "killed"])
     fn.add_argument("--exit-code", type=int, default=0)
+    fn.add_argument("--result-class", choices=sorted(RESULT_CLASSES), default=None)
+    fn.add_argument("--error-code", default=None)
 
     return p
 
@@ -669,6 +900,7 @@ def main() -> int:
         "stage-end": cmd_stage_end,
         "wrap": cmd_wrap,
         "event": cmd_event,
+        "telemetry": cmd_telemetry,
         "verdict": cmd_verdict,
         "snapshot": cmd_snapshot,
         "finish": cmd_finish,
