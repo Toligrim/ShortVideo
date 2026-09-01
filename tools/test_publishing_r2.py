@@ -101,6 +101,65 @@ class R2TemporaryMediaTests(unittest.TestCase):
         with self.assertRaises(R2OperationError):
             R2TemporaryMedia(self.config, client=EvilR2()).stage(publication_id="pub", target_id="instagram", asset_path=self.asset, asset_sha256=self.digest)
 
+    def test_custom_endpoint_override_supports_non_cloudflare_s3_providers(self) -> None:
+        """Backblaze B2 (and any other S3-compatible provider) has neither a
+        Cloudflare-shaped 32-hex account id nor the r2.cloudflarestorage.com
+        host, so an explicit endpoint override must bypass both."""
+        config = R2Config.from_environment({
+            "SHORTVIDEO_R2_ENDPOINT_URL": "https://s3.us-west-004.backblazeb2.com",
+            "SHORTVIDEO_R2_REGION": "us-west-004",
+            "SHORTVIDEO_R2_BUCKET": "shortvideo-media",
+            "SHORTVIDEO_R2_ACCESS_KEY_ID": "b2-key-id",
+            "SHORTVIDEO_R2_SECRET_ACCESS_KEY": "b2-application-key",
+            "SHORTVIDEO_R2_TTL": "120",
+        })
+        self.assertEqual(config.endpoint_url, "https://s3.us-west-004.backblazeb2.com")
+        self.assertEqual(config.region, "us-west-004")
+        self.assertEqual(config.account_id, "")
+
+        class FakeB2(FakeR2):
+            def generate_presigned_url(self, *args, **kwargs):
+                return "https://shortvideo-media.s3.us-west-004.backblazeb2.com/signed?secret=not-for-repr"
+
+        asset = Path(self.tmp.name) / "b2 asset.mp4"
+        asset.write_bytes(b"more immutable mp4 bytes")
+        digest = sha256(asset.read_bytes()).hexdigest()
+        media = R2TemporaryMedia(config, client=FakeB2())
+        staged = media.stage(publication_id="pub_b2", target_id="instagram", asset_path=asset, asset_sha256=digest)
+        self.assertTrue(staged.signed_url.startswith("https://shortvideo-media.s3.us-west-004.backblazeb2.com/"))
+
+    def test_missing_account_id_without_endpoint_override_is_incomplete(self) -> None:
+        with self.assertRaises(R2ConfigurationError):
+            R2Config.from_environment({
+                "SHORTVIDEO_R2_BUCKET": "shortvideo-media",
+                "SHORTVIDEO_R2_ACCESS_KEY_ID": "a", "SHORTVIDEO_R2_SECRET_ACCESS_KEY": "b",
+            })
+
+    def test_invalid_endpoint_override_is_rejected(self) -> None:
+        with self.assertRaises(R2ConfigurationError):
+            R2Config.from_environment({
+                "SHORTVIDEO_R2_ENDPOINT_URL": "http://not-https.example",
+                "SHORTVIDEO_R2_BUCKET": "shortvideo-media",
+                "SHORTVIDEO_R2_ACCESS_KEY_ID": "a", "SHORTVIDEO_R2_SECRET_ACCESS_KEY": "b",
+            })
+
+    def test_signed_url_from_wrong_provider_host_is_rejected_even_with_override(self) -> None:
+        config = R2Config.from_environment({
+            "SHORTVIDEO_R2_ENDPOINT_URL": "https://s3.us-west-004.backblazeb2.com",
+            "SHORTVIDEO_R2_BUCKET": "shortvideo-media",
+            "SHORTVIDEO_R2_ACCESS_KEY_ID": "a", "SHORTVIDEO_R2_SECRET_ACCESS_KEY": "b",
+        })
+
+        class WrongHostR2(FakeR2):
+            def generate_presigned_url(self, *args, **kwargs):
+                return "https://" + "a" * 32 + ".r2.cloudflarestorage.com/signed"
+
+        with self.assertRaises(R2OperationError):
+            R2TemporaryMedia(config, client=WrongHostR2()).stage(
+                publication_id="pub", target_id="instagram",
+                asset_path=self.asset, asset_sha256=self.digest,
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

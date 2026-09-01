@@ -303,6 +303,24 @@ class InstagramDoctorTests(unittest.TestCase):
         )
         self.assertNotIn(self.fake_token, repr(result))
 
+    def test_non_cloudflare_s3_provider_with_endpoint_override_is_ok(self):
+        """Backblaze B2 (or any other S3-compatible provider) has no
+        Cloudflare-shaped account id — doctor must not demand one once an
+        explicit endpoint override is present."""
+        env = dict(self.env)
+        del env["SHORTVIDEO_R2_ACCOUNT_ID"]
+        env["SHORTVIDEO_R2_ENDPOINT_URL"] = "https://s3.us-west-004.backblazeb2.com"
+        env["SHORTVIDEO_R2_REGION"] = "us-west-004"
+        result = instagram_doctor(state_dir=self.state, environ=env)
+        self.assertEqual(result["r2_configured"], True)
+
+    def test_endpoint_override_must_be_a_bare_https_url(self):
+        env = dict(self.env)
+        del env["SHORTVIDEO_R2_ACCOUNT_ID"]
+        env["SHORTVIDEO_R2_ENDPOINT_URL"] = "http://s3.us-west-004.backblazeb2.com"
+        error = self.doctor_error(env)
+        self.assertIn("r2_endpoint_url_invalid", error.reason_codes)
+
     def test_each_configuration_problem_has_a_specific_reason_code(self):
         cases = {
             "instagram_user_id_placeholder": ("SHORTVIDEO_INSTAGRAM_USER_ID", "REPLACE_WITH_PROFESSIONAL_ACCOUNT_ID"),

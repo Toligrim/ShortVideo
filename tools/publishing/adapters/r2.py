@@ -56,6 +56,12 @@ class R2Config:
     access_key_id: str = field(repr=False)
     secret_access_key: str = field(repr=False)
     ttl_seconds: int = 900
+    # Both default so existing positional construction (tests, callers) keeps
+    # working unchanged. Set only when the provider is not Cloudflare R2 —
+    # e.g. Backblaze B2's S3-compatible API, which has neither a Cloudflare-
+    # shaped 32-hex account id nor the r2.cloudflarestorage.com host.
+    endpoint_url_override: str | None = field(default=None, repr=False)
+    region: str = "auto"
 
     @classmethod
     def from_environment(cls, environment: Mapping[str, str] | None = None) -> "R2Config":
@@ -71,22 +77,39 @@ class R2Config:
             ttl = int(raw_ttl)
         except ValueError as exc:
             raise R2ConfigurationError("R2 TTL must be an integer") from exc
+        endpoint_override = str(source.get("SHORTVIDEO_R2_ENDPOINT_URL", "")).strip() or None
+        region = str(source.get("SHORTVIDEO_R2_REGION", "")).strip() or "auto"
+        # Cloudflare R2's account id is a fixed-shape 32-hex identifier baked
+        # into its endpoint hostname. A custom endpoint (e.g. Backblaze B2)
+        # has no such value, so account id is only required when there is no
+        # override to derive the endpoint from instead.
+        account_id = str(source.get("SHORTVIDEO_R2_ACCOUNT_ID", "")).strip()
+        if not account_id and not endpoint_override:
+            raise R2ConfigurationError("R2 configuration is incomplete")
         config = cls(
-            account_id=required("SHORTVIDEO_R2_ACCOUNT_ID"),
+            account_id=account_id,
             bucket=required("SHORTVIDEO_R2_BUCKET"),
             access_key_id=required("SHORTVIDEO_R2_ACCESS_KEY_ID"),
             secret_access_key=required("SHORTVIDEO_R2_SECRET_ACCESS_KEY"),
             ttl_seconds=ttl,
+            endpoint_url_override=endpoint_override,
+            region=region,
         )
         config.validate()
         return config
 
     @property
     def endpoint_url(self) -> str:
+        if self.endpoint_url_override is not None:
+            return self.endpoint_url_override
         return f"https://{self.account_id}.r2.cloudflarestorage.com"
 
     def validate(self) -> None:
-        if not _ACCOUNT_ID_RE.fullmatch(self.account_id):
+        if self.endpoint_url_override is not None:
+            parsed = urlsplit(self.endpoint_url_override)
+            if parsed.scheme != "https" or not parsed.hostname or parsed.path not in ("", "/"):
+                raise R2ConfigurationError("R2 endpoint URL is invalid")
+        elif not _ACCOUNT_ID_RE.fullmatch(self.account_id):
             raise R2ConfigurationError("R2 account ID is invalid")
         if not _BUCKET_RE.fullmatch(self.bucket) or ".." in self.bucket:
             raise R2ConfigurationError("R2 bucket name is invalid")
@@ -111,7 +134,7 @@ def _r2_client(config: R2Config) -> R2Client:
     return boto3.client(
         "s3",
         endpoint_url=config.endpoint_url,
-        region_name="auto",
+        region_name=config.region,
         aws_access_key_id=config.access_key_id,
         aws_secret_access_key=config.secret_access_key,
     )
@@ -144,7 +167,10 @@ class R2TemporaryMedia:
             port = parsed.port
         except ValueError:
             raise R2OperationError("R2 did not return a secure temporary media URL") from None
-        expected = f"{self._config.account_id.lower()}.r2.cloudflarestorage.com"
+        base_host = urlsplit(self._config.endpoint_url).hostname
+        if not base_host:
+            raise R2OperationError("R2 did not return a secure temporary media URL")
+        expected = base_host.lower()
         bucket_expected = f"{self._config.bucket.lower()}.{expected}"
         if (
             parsed.scheme != "https"

@@ -9,6 +9,7 @@ from dataclasses import dataclass
 import os
 from pathlib import Path
 from typing import Callable, Mapping
+from urllib.parse import urlsplit
 
 from .base import PermanentPublishError, PublishAdapter
 from .instagram import (
@@ -140,6 +141,11 @@ _ISSUE_DETAILS: dict[str, tuple[str, str]] = {
         "SHORTVIDEO_R2_TTL is outside the adapter's allowed range.",
         f"Set SHORTVIDEO_R2_TTL between {MIN_TTL_SECONDS} and {MAX_TTL_SECONDS} seconds.",
     ),
+    "r2_endpoint_url_invalid": (
+        "SHORTVIDEO_R2_ENDPOINT_URL is set but is not a valid https:// URL.",
+        "Set SHORTVIDEO_R2_ENDPOINT_URL to the provider's S3-compatible endpoint, e.g. "
+        "https://s3.us-west-004.backblazeb2.com for Backblaze B2, with no path/query/fragment.",
+    ),
     "r2_configuration_check_failed": (
         "An R2 configuration check failed.",
         "Review the local R2 environment settings and rerun `publish.py doctor instagram`.",
@@ -220,6 +226,8 @@ def _reason_code_from_exception(exc: BaseException) -> str:
         return "instagram_token_file_unsafe"
     if isinstance(exc, R2ConfigurationError):
         message = str(exc).lower()
+        if "endpoint url" in message:
+            return "r2_endpoint_url_invalid"
         if "account id" in message and "invalid" in message:
             return "r2_account_id_invalid"
         if "bucket" in message and "invalid" in message:
@@ -354,12 +362,23 @@ def _collect_r2_issues(source: Mapping[str, str]) -> list[_DoctorIssue]:
     bucket = _environment_text(source, "SHORTVIDEO_R2_BUCKET")
     access_key_id = _environment_text(source, "SHORTVIDEO_R2_ACCESS_KEY_ID")
     secret_access_key = _environment_text(source, "SHORTVIDEO_R2_SECRET_ACCESS_KEY")
+    # A non-Cloudflare S3-compatible provider (e.g. Backblaze B2) has neither
+    # a 32-hex account id nor the r2.cloudflarestorage.com host, so an
+    # explicit endpoint override makes account id optional and is validated
+    # in its place instead.
+    endpoint_override = _environment_text(source, "SHORTVIDEO_R2_ENDPOINT_URL")
 
-    required_fields = (account_id, bucket, access_key_id, secret_access_key)
+    required_fields = (bucket, access_key_id, secret_access_key)
+    if not endpoint_override:
+        required_fields = (account_id,) + required_fields
     if any(not value or looks_like_configuration_placeholder(value) for value in required_fields):
         _append_issue(issues, "r2_configuration_incomplete")
     else:
-        if not _ACCOUNT_ID_RE.fullmatch(account_id):
+        if endpoint_override:
+            parsed = urlsplit(endpoint_override)
+            if parsed.scheme != "https" or not parsed.hostname or parsed.path not in ("", "/"):
+                _append_issue(issues, "r2_endpoint_url_invalid")
+        elif not _ACCOUNT_ID_RE.fullmatch(account_id):
             _append_issue(issues, "r2_account_id_invalid")
         if not _BUCKET_RE.fullmatch(bucket) or ".." in bucket:
             _append_issue(issues, "r2_bucket_invalid")
