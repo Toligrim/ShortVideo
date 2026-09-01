@@ -59,6 +59,7 @@ import { IncognitoSessionVisual, type IncognitoSessionPhase } from "./IncognitoS
 import { ContextWindowVisual, type ContextWindowPhase } from "./ContextWindowVisual";
 import { AttentionCostVisual, type AttentionCostPhase } from "./AttentionCostVisual";
 import { MultiFrameStackVisual, type MultiFrameStackPhase } from "./MultiFrameStackVisual";
+import { TotpWindowVisual, type TotpWindowPhase } from "./TotpWindowVisual";
 
 /* ──────────────────────────── расписание битов ──────────────────────────── */
 
@@ -345,6 +346,10 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
     if (beat.visual === "mail-server-handoff") {
       const phase = beat.params?.phase as MailServerHandoffPhase | undefined;
       impact = start + Math.round(dur * (phase === "mailbox" ? 0.68 : phase === "relay" ? 0.62 : 0.58));
+    }
+    if (beat.visual === "totp-window") {
+      const phase = beat.params?.phase as TotpWindowPhase | undefined;
+      impact = start + Math.round(dur * (phase === "hmac" ? 0.68 : phase === "match" ? 0.72 : phase === "mismatch" ? 0.7 : phase === "sealed-result" ? 0.62 : phase === "tolerance" ? 0.62 : phase === "skew" ? 0.58 : 0.58));
     }
     return { beat, start, end, impact };
   });
@@ -668,6 +673,11 @@ export const storySfx = (
     if (s.beat.visual === "mail-server-handoff") {
       const ph = s.beat.params?.phase as MailServerHandoffPhase | undefined;
       const sound = ph === "mailbox" ? "ding" : ph === "relay" ? "whoosh" : "pop";
+      events.push({ frame: s.impact, sound });
+    }
+    if (s.beat.visual === "totp-window") {
+      const ph = s.beat.params?.phase as TotpWindowPhase | undefined;
+      const sound = ph === "mismatch" || (ph === "tolerance" && s.beat.params?.wide === true) ? "slam" : ph === "hmac" || ph === "match" || ph === "sealed-result" ? "ding" : "pop";
       events.push({ frame: s.impact, sound });
     }
   }
@@ -11587,6 +11597,7 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     "multi-frame-stack": { scale: 0.9, y: -20 },
     "mail-queue": { scale: 0.9, y: -20 },
     "mail-server-handoff": { scale: 0.9, y: -20 },
+    "totp-window": { scale: 0.9, y: -20 },
   };
   const cur = cams[slot.beat.visual] ?? { scale: 1, y: 0 };
   const prev = idx > 0 ? cams[slots[idx - 1].beat.visual] ?? cur : cur;
@@ -12490,6 +12501,18 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             fps={fps}
             impactLocal={impactLocal}
             phase={(slot.beat.params?.phase as MailServerHandoffPhase | undefined) ?? "accept"}
+          />
+        );
+      case "totp-window":
+        return (
+          <TotpWindowVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as TotpWindowPhase | undefined) ?? "offline"}
+            windowSeconds={slot.beat.params?.windowSeconds as number | undefined}
+            clockOffset={slot.beat.params?.clockOffset as number | undefined}
+            wide={slot.beat.params?.wide as boolean | undefined}
           />
         );
       default:

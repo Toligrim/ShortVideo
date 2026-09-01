@@ -165,7 +165,8 @@ export interface StoryBeat {
   | "wallet-copy"
   | "multi-frame-stack"
   | "mail-queue"
-  | "mail-server-handoff";
+  | "mail-server-handoff"
+  | "totp-window";
   onWord?: string; // бит начинается на этом слове реплики
   params?: Record<string, unknown>;
 }
