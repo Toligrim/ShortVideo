@@ -39,8 +39,9 @@ import argparse
 import dataclasses
 import fcntl
 import json
+import math
 import os
-import shutil
+import re
 import stat
 import subprocess
 import sys
@@ -62,6 +63,10 @@ ROOT = pipeline_log.ROOT
 # основным деревом.
 WORKTREES_ROOT = Path.home() / ".local/share/shortvideo/worktrees"
 ALLOC_LOCK = Path.home() / ".local/share/shortvideo/worktree-alloc.lock"
+# Keep the lock outside ROOT so it cannot become a repository change, while
+# deriving it from ROOT so test/sandbox repositories do not need home access.
+INTEGRATION_LOCK = ROOT.parent / f".{ROOT.name}.worktree-integration.lock"
+IDENTITY_MARKER = "delegate-identity"
 
 
 def _run_git(args: list[str], cwd: Path | None = None) -> subprocess.CompletedProcess[bytes]:
@@ -143,6 +148,20 @@ class AllocLock:
         os.close(self._fd)
 
 
+class IntegrationLock:
+    """Serialize ROOT validation, apply, staging, and commit transactions."""
+
+    def __enter__(self) -> "IntegrationLock":
+        INTEGRATION_LOCK.parent.mkdir(parents=True, exist_ok=True)
+        self._fd = os.open(INTEGRATION_LOCK, os.O_CREAT | os.O_RDWR, 0o600)
+        fcntl.flock(self._fd, fcntl.LOCK_EX)
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        fcntl.flock(self._fd, fcntl.LOCK_UN)
+        os.close(self._fd)
+
+
 def run_dir() -> Path:
     return pipeline_log.ensure_run()
 
@@ -197,6 +216,7 @@ class Change:
 
 
 SUPPORTED_FILE_KINDS = {"missing", "file"}
+SHA_RE = re.compile(r"[0-9a-fA-F]{40}|[0-9a-fA-F]{64}")
 
 
 def _base_tree_header(base: str, rel: str, cwd: Path) -> bytes | None:
@@ -316,8 +336,327 @@ def _unsupported_details(changes: list[Change], main_states: dict[str, FileState
     return details
 
 
+@dataclasses.dataclass(frozen=True)
+class IndexSnapshot:
+    path: Path
+    exists: bool
+    content: bytes | None
+    mode: int | None
+
+
+class CloseValidationError(RuntimeError):
+    """A close request is unsafe to integrate and must fail closed."""
+
+    def __init__(self, error_code: str, reason: str, **details: Any) -> None:
+        super().__init__(reason)
+        self.error_code = error_code
+        self.reason = reason
+        self.details = details
+
+
+def _release_claim_locked(
+    reg: agent_log.Registry,
+    rd: Path,
+    agent_id: str,
+    status: str,
+    *,
+    note: str,
+    error_code: str | None = None,
+) -> dict[str, Any] | None:
+    """Release a close claim while ``reg`` remains locked."""
+
+    info = agent_log.release_claim_locked(
+        reg, agent_id, status,
+        result_class="policy_failure" if error_code else None,
+        error_code=error_code,
+        note=note,
+    )
+    if info is None:
+        return None
+    claim = info["claim"]
+    agent_log.emit(rd, {
+        "kind": "delegation_release", "actor": agent_id,
+        "task_id": info["task_id"], "status": info["status"],
+        "detail": info["note"], "held_sec": info["held_sec"],
+        "thread_id": info["thread_id"], "role": info["role"],
+        "worktree_path": info["worktree"], "base_sha": info["base_sha"],
+        "result_class": info["result_class"], "error_code": info["error_code"],
+        "infrastructure_attempt": claim.get("infrastructure_attempt"),
+        "semantic_attempt": claim.get("semantic_attempt"),
+    })
+    return info
+
+
+def _validate_claim(args: argparse.Namespace, rd: Path, claim: dict[str, Any]) -> Path:
+    """Validate lease state and bind the claim to this close invocation."""
+
+    if claim.get("agent_id") != args.agent_id:
+        raise CloseValidationError(
+            "worktree_lease_identity_mismatch", "claim agent identity mismatch",
+        )
+    state = claim.get("state")
+    if state in agent_log.TERMINAL_STATES:
+        raise CloseValidationError(
+            "worktree_lease_invalid", "terminal lease cannot be merged",
+            lease_state=state,
+        )
+    if state != "running":
+        raise CloseValidationError(
+            "worktree_lease_invalid", "claim is not an active lease",
+            lease_state=state,
+        )
+    try:
+        expires_at = float(claim["expires_at"])
+    except (KeyError, TypeError, ValueError) as exc:
+        raise CloseValidationError(
+            "worktree_lease_invalid", "claim has no valid lease expiry",
+        ) from exc
+    if not math.isfinite(expires_at) or time.time() >= expires_at:
+        raise CloseValidationError(
+            "worktree_lease_expired", "lease has expired",
+            expires_at=expires_at,
+        )
+
+    for argument, field in (("task_id", "task_id"), ("role", "role"), ("attempt", "attempt")):
+        expected = getattr(args, argument, None)
+        if expected is not None and claim.get(field) != expected:
+            raise CloseValidationError(
+                "worktree_lease_identity_mismatch", f"claim {field} mismatch",
+                field=field, expected=expected, actual=claim.get(field),
+            )
+
+    expected_worktree = worktree_path(rd.name, args.agent_id).resolve()
+    registered_worktree = claim.get("worktree")
+    if not isinstance(registered_worktree, str) or not registered_worktree:
+        raise CloseValidationError(
+            "worktree_lease_invalid", "claim has no registered worktree",
+        )
+    worktree = Path(registered_worktree).resolve()
+    if worktree != expected_worktree:
+        raise CloseValidationError(
+            "worktree_lease_identity_mismatch", "claim worktree identity mismatch",
+            expected=str(expected_worktree), actual=str(worktree),
+        )
+    return worktree
+
+
+def _claim_identity(claim: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "agent_id": claim.get("agent_id"),
+        "task_id": claim.get("task_id"),
+        "role": claim.get("role"),
+        "attempt": claim.get("attempt"),
+        "base_sha": claim.get("base_sha"),
+    }
+
+
+def _identity_marker_path(wt: Path) -> Path:
+    raw_git_dir = Path(git(["rev-parse", "--git-dir"], cwd=wt))
+    git_dir = raw_git_dir if raw_git_dir.is_absolute() else (wt / raw_git_dir).resolve()
+    return git_dir / IDENTITY_MARKER
+
+
+def _validate_identity_marker(claim: dict[str, Any], wt: Path) -> None:
+    """Reject a stale/reused claim whose worktree identity no longer matches."""
+
+    try:
+        marker = _identity_marker_path(wt)
+    except RuntimeError as exc:
+        raise CloseValidationError(
+            "worktree_lease_identity_mismatch", "cannot locate worktree identity marker",
+        ) from exc
+    try:
+        info = marker.lstat()
+    except (FileNotFoundError, OSError) as exc:
+        raise CloseValidationError(
+            "worktree_lease_identity_mismatch", "delegate identity marker is missing",
+        ) from exc
+    if not stat.S_ISREG(info.st_mode):
+        raise CloseValidationError(
+            "worktree_lease_identity_mismatch", "delegate identity marker is not regular",
+        )
+    try:
+        marker_identity = json.loads(marker.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, ValueError) as exc:
+        raise CloseValidationError(
+            "worktree_lease_identity_mismatch", "delegate identity marker is invalid",
+        ) from exc
+    if marker_identity != _claim_identity(claim):
+        raise CloseValidationError(
+            "worktree_lease_identity_mismatch", "delegate identity marker disagrees with claim",
+        )
+
+
+def _canonical_base(claim: dict[str, Any], wt: Path) -> str:
+    """Return the validated registry baseline; the marker is only a check."""
+
+    base_value = claim.get("base_sha")
+    if not isinstance(base_value, str) or SHA_RE.fullmatch(base_value) is None:
+        raise CloseValidationError(
+            "worktree_base_missing", "claim has no canonical base SHA",
+        )
+    base = base_value.lower()
+    try:
+        resolved = git(["rev-parse", "--verify", f"{base}^{{commit}}"], cwd=ROOT)
+    except RuntimeError as exc:
+        raise CloseValidationError(
+            "worktree_base_invalid", "claim base SHA is not a commit",
+        ) from exc
+    if resolved.lower() != base:
+        raise CloseValidationError(
+            "worktree_base_invalid", "claim base SHA is not canonical",
+            resolved=resolved,
+        )
+
+    marker = wt / ".delegate-base"
+    try:
+        marker_info = marker.lstat()
+    except FileNotFoundError:
+        marker_info = None
+    except OSError as exc:
+        raise CloseValidationError(
+            "worktree_base_mismatch", "cannot inspect delegate base marker",
+        ) from exc
+    if marker_info is not None:
+        if not stat.S_ISREG(marker_info.st_mode):
+            raise CloseValidationError(
+                "worktree_base_mismatch", "delegate base marker is not a regular file",
+            )
+        try:
+            marker_base = marker.read_text(encoding="utf-8").strip().lower()
+        except (OSError, UnicodeError) as exc:
+            raise CloseValidationError(
+                "worktree_base_mismatch", "cannot read delegate base marker",
+            ) from exc
+        if marker_base != base:
+            raise CloseValidationError(
+                "worktree_base_mismatch", "delegate base marker disagrees with registry",
+                marker_base=marker_base,
+                registry_base=base,
+            )
+    return base
+
+
+def _index_snapshot() -> IndexSnapshot:
+    raw_path = Path(git(["rev-parse", "--git-path", "index"], cwd=ROOT))
+    path = raw_path if raw_path.is_absolute() else ROOT / raw_path
+    try:
+        info = path.lstat()
+    except FileNotFoundError:
+        return IndexSnapshot(path, False, None, None)
+    if not stat.S_ISREG(info.st_mode):
+        raise RuntimeError(f"git index path is not a regular file: {path}")
+    return IndexSnapshot(path, True, path.read_bytes(), stat.S_IMODE(info.st_mode))
+
+
+def _remove_path_without_following(path: Path) -> None:
+    try:
+        info = path.lstat()
+    except FileNotFoundError:
+        return
+    if stat.S_ISDIR(info.st_mode):
+        path.rmdir()
+    else:
+        path.unlink()
+
+
+def _restore_file_state(rel: str, state: FileState) -> None:
+    path = ROOT / rel
+    if not state.exists:
+        # A missing path may also be a parent of another restored path; only
+        # remove regular-file artifacts here. Newly created directories are
+        # handled separately by _rollback_transaction.
+        try:
+            info = path.lstat()
+        except FileNotFoundError:
+            return
+        if stat.S_ISDIR(info.st_mode):
+            return
+        path.unlink()
+        return
+    if state.kind != "file" or state.content is None:
+        raise RuntimeError(f"cannot restore unsupported pre-state for {rel!r}")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        info = path.lstat()
+    except FileNotFoundError:
+        info = None
+    if info is not None and not stat.S_ISREG(info.st_mode):
+        _remove_path_without_following(path)
+    path.write_bytes(state.content)
+    os.chmod(path, 0o755 if state.mode == "100755" else 0o644)
+
+
+def _restore_index(snapshot: IndexSnapshot) -> None:
+    if not snapshot.exists:
+        _remove_path_without_following(snapshot.path)
+        return
+    snapshot.path.parent.mkdir(parents=True, exist_ok=True)
+    snapshot.path.write_bytes(snapshot.content or b"")
+    if snapshot.mode is not None:
+        os.chmod(snapshot.path, snapshot.mode)
+
+
+def _rollback_transaction(
+    main_states: dict[str, FileState],
+    index: IndexSnapshot,
+    created_dirs: set[Path],
+) -> list[str]:
+    """Restore only this close's paths and index; never reset the repository."""
+
+    errors: list[str] = []
+    for rel, state in main_states.items():
+        try:
+            _restore_file_state(rel, state)
+        except (OSError, RuntimeError) as exc:
+            errors.append(f"{rel}: {exc}")
+    for directory in sorted(created_dirs, key=lambda path: len(path.parts), reverse=True):
+        try:
+            if directory.exists():
+                directory.rmdir()
+        except OSError as exc:
+            errors.append(f"{directory}: {exc}")
+    try:
+        _restore_index(index)
+    except (OSError, RuntimeError) as exc:
+        errors.append(f"{index.path}: {exc}")
+    return errors
+
+
+def _ensure_parent_dirs(path: Path) -> set[Path]:
+    missing: list[Path] = []
+    parent = path.parent
+    while parent != ROOT:
+        try:
+            info = parent.lstat()
+        except FileNotFoundError:
+            missing.append(parent)
+            parent = parent.parent
+            continue
+        if not stat.S_ISDIR(info.st_mode):
+            raise RuntimeError(f"parent is not a regular directory: {parent}")
+        break
+    path.parent.mkdir(parents=True, exist_ok=True)
+    return set(missing)
+
+
+def _apply_change(change: Change, created_dirs: set[Path]) -> None:
+    dst = ROOT / change.path
+    if change.change_type == "delete":
+        _remove_path_without_following(dst)
+        return
+    if change.change_type not in {"add", "modify"} or change.delegate.content is None:
+        raise RuntimeError(f"cannot apply unsupported change {change.path!r}")
+    created_dirs.update(_ensure_parent_dirs(dst))
+    # Apply the planned raw bytes, rather than rereading a possibly changing
+    # delegate path. The source was already checked for symlink/type safety.
+    dst.write_bytes(change.delegate.content)
+    os.chmod(dst, 0o755 if change.delegate.mode == "100755" else 0o644)
+
+
 def _report_unsupported_change_type(
     rd: Path, agent_id: str, wt: Path, details: list[dict[str, str]],
+    reg: agent_log.Registry,
 ) -> int:
     """Остановить close до слияния, сохранив worktree для оператора."""
     pipeline_log.append_event(rd, {
@@ -326,9 +665,11 @@ def _report_unsupported_change_type(
         "detail": "делегат изменил неподдерживаемый тип пути",
         "evidence": json.dumps(details, ensure_ascii=False),
     })
-    agent_log.main(["delegate-release", "--agent-id", agent_id,
-                    "--status", "failed",
-                    "--note", "обнаружен неподдерживаемый тип изменения, результат не влит"])
+    _release_claim_locked(
+        reg, rd, agent_id, "failed",
+        note="обнаружен неподдерживаемый тип изменения, результат не влит",
+        error_code="worktree_unsupported_change_type",
+    )
     print(json.dumps({
         "merged": False,
         "error": "worktree_unsupported_change_type",
@@ -345,11 +686,13 @@ def cmd_open(args: argparse.Namespace) -> int:
     rd = run_dir()
     agent_id = args.agent_id or f"{args.role}-{uuid.uuid4().hex[:8]}"
     wt = worktree_path(rd.name, agent_id)
+    base = git(["rev-parse", "HEAD"])
 
     # Сначала лиза, потом каталог: если задача уже занята, ничего не создаём.
     claim_rc = agent_log.main([
         "delegate-claim", "--task-id", args.task_id, "--role", args.role,
         "--agent-id", agent_id, "--worktree", str(wt),
+        "--base-sha", base,
         *(["--reason", args.reason] if args.reason else []),
         *(["--lease-sec", str(args.lease_sec)] if args.lease_sec else []),
         *(["--parallel-group", args.parallel_group] if args.parallel_group else []),
@@ -357,13 +700,23 @@ def cmd_open(args: argparse.Namespace) -> int:
     if claim_rc != 0:
         return claim_rc
 
+    with agent_log.Registry(rd) as reg:
+        claim = reg.claims.get(agent_id)
+        if claim is None:
+            print(f"delegate_worktree: claim {agent_id!r} исчез после открытия", file=sys.stderr)
+            return 2
+        identity = _claim_identity(claim)
+
     with AllocLock():
-        base = git(["rev-parse", "HEAD"])
         wt.parent.mkdir(parents=True, exist_ok=True)
         # --detach: делегату не нужна именованная ветка, а detached HEAD
         # исключает случайный захват ветки, на которой сидит основное дерево.
         git(["worktree", "add", "--detach", str(wt), base])
         (wt / ".delegate-base").write_text(base, encoding="utf-8")
+        _identity_marker_path(wt).write_text(
+            json.dumps(identity, ensure_ascii=False, sort_keys=True),
+            encoding="utf-8",
+        )
 
     pipeline_log.append_event(rd, {
         "kind": "worktree_open", "actor": agent_id, "task_id": args.task_id,
@@ -380,124 +733,259 @@ def cmd_open(args: argparse.Namespace) -> int:
 
 def cmd_close(args: argparse.Namespace) -> int:
     rd = run_dir()
-    registry = json.loads((rd / "delegations.json").read_text(encoding="utf-8")) \
-        if (rd / "delegations.json").is_file() else {"claims": {}}
-    claim = (registry.get("claims") or {}).get(args.agent_id)
-    if claim is None:
-        print(f"delegate_worktree: неизвестный agent_id {args.agent_id!r}", file=sys.stderr)
-        return 2
-    wt = Path(claim.get("worktree") or worktree_path(rd.name, args.agent_id))
-    if not wt.is_dir():
-        print(f"delegate_worktree: каталог {wt} отсутствует", file=sys.stderr)
-        return 2
+    removed = False
+    with IntegrationLock():
+        # Keep the registry lock for the whole close. A heartbeat/release
+        # cannot invalidate the lease between the final check and apply.
+        with agent_log.Registry(rd) as reg:
+            claim = reg.claims.get(args.agent_id)
+            if claim is None:
+                print(f"delegate_worktree: неизвестный agent_id {args.agent_id!r}", file=sys.stderr)
+                return 2
+            try:
+                wt = _validate_claim(args, rd, claim)
+            except CloseValidationError as exc:
+                payload: dict[str, Any] = {
+                    "merged": False, "error": exc.error_code,
+                    "error_code": exc.error_code, "reason": exc.reason,
+                    **exc.details,
+                }
+                print(json.dumps(payload, ensure_ascii=False, indent=1))
+                return 2
+            if not wt.is_dir():
+                print(f"delegate_worktree: каталог {wt} отсутствует", file=sys.stderr)
+                return 2
+            try:
+                _validate_identity_marker(claim, wt)
+            except CloseValidationError as exc:
+                _release_claim_locked(
+                    reg, rd, args.agent_id, "failed",
+                    note=f"close отклонён: {exc.reason}",
+                    error_code=exc.error_code,
+                )
+                print(json.dumps({
+                    "merged": False, "error": exc.error_code,
+                    "error_code": exc.error_code, "reason": exc.reason,
+                    "worktree": str(wt), **exc.details,
+                }, ensure_ascii=False, indent=1))
+                return 2
 
-    base = (wt / ".delegate-base").read_text(encoding="utf-8").strip() \
-        if (wt / ".delegate-base").is_file() else git(["rev-parse", "HEAD"])
-    tracked, untracked = changed_paths(wt, base)
-    untracked.discard(".delegate-base")
-    touched = sorted(tracked | untracked)
+            try:
+                base = _canonical_base(claim, wt)
+            except CloseValidationError as exc:
+                _release_claim_locked(
+                    reg, rd, args.agent_id, "failed",
+                    note=f"close отклонён: {exc.reason}",
+                    error_code=exc.error_code,
+                )
+                payload = {
+                    "merged": False, "error": exc.error_code,
+                    "error_code": exc.error_code, "reason": exc.reason,
+                    "worktree": str(wt), **exc.details,
+                }
+                print(json.dumps(payload, ensure_ascii=False, indent=1))
+                return 2
 
-    allowed = set(args.allow or [])
-    violations = [p for p in touched if p not in allowed]
+            try:
+                tracked, untracked = changed_paths(wt, base)
+                untracked.discard(".delegate-base")
+                touched = sorted(tracked | untracked)
+            except RuntimeError as exc:
+                _release_claim_locked(
+                    reg, rd, args.agent_id, "failed",
+                    note=f"не удалось построить change-set: {exc}",
+                    error_code="worktree_apply_failed",
+                )
+                print(json.dumps({
+                    "merged": False, "error": "worktree_apply_failed",
+                    "error_code": "worktree_apply_failed",
+                    "reason": "change-set validation failed",
+                    "detail": str(exc), "worktree": str(wt),
+                }, ensure_ascii=False, indent=1))
+                return 2
 
-    if violations:
-        # Ничего не вливаем. Результат делегата остаётся в его worktree —
-        # он не потерян, но и не попадает в основное дерево автоматически.
-        # Разбирается оператор, а не конвейер.
+            allowed = set(args.allow or [])
+            violations = [p for p in touched if p not in allowed]
+            if violations:
+                pipeline_log.append_event(rd, {
+                    "kind": "anomaly", "anomaly_kind": "worktree_path_violation",
+                    "actor": args.agent_id, "severity": "error",
+                    "detail": f"делегат изменил {len(violations)} путей вне разрешённых",
+                    "evidence": json.dumps(violations[:40], ensure_ascii=False),
+                })
+                _release_claim_locked(
+                    reg, rd, args.agent_id, "failed",
+                    note="изменены пути вне allowlist, результат не влит",
+                    error_code="worktree_path_violation",
+                )
+                print(json.dumps({
+                    "merged": False, "error": "worktree_path_violation",
+                    "error_code": "worktree_path_violation", "reason": "path_violation",
+                    "violations": violations[:40], "allowed": sorted(allowed),
+                    "worktree": str(wt),
+                    "hint": "worktree намеренно НЕ удалён — в нём лежит работа делегата. "
+                            "Разберись глазами, потом закрой `abandon`.",
+                }, ensure_ascii=False, indent=1))
+                return 6
+
+            changes = [_change_for(wt, base, rel) for rel in touched]
+            main_states = {change.path: _disk_file_state(ROOT / change.path)
+                           for change in changes}
+            unsupported = _unsupported_details(changes, main_states)
+            if unsupported:
+                return _report_unsupported_change_type(
+                    rd, args.agent_id, wt, unsupported, reg,
+                )
+
+            # This is the complete validation/plan phase. No ROOT file or
+            # index has been touched before this point, and every conflict is
+            # collected before phase 2 can start.
+            conflicts = [
+                change.path for change in changes
+                if main_states[change.path] != change.base
+            ]
+            change_types = {change.path: change.change_type for change in changes}
+            if conflicts:
+                pipeline_log.append_event(rd, {
+                    "kind": "anomaly", "anomaly_kind": "worktree_conflict",
+                    "actor": args.agent_id, "severity": "error",
+                    "detail": "целевые файлы изменились в основном дереве, пока делегат работал",
+                    "evidence": json.dumps(conflicts, ensure_ascii=False),
+                })
+                _release_claim_locked(
+                    reg, rd, args.agent_id, "failed",
+                    note=f"конфликтов: {len(conflicts)}",
+                    error_code="worktree_conflict",
+                )
+                print(json.dumps({
+                    "merged": False, "paths": [], "conflicts": conflicts,
+                    "commit": None, "worktree_removed": False,
+                    "change_types": change_types, "worktree": str(wt),
+                }, ensure_ascii=False, indent=1))
+                return 2
+
+            if not changes:
+                _release_claim_locked(
+                    reg, rd, args.agent_id, args.status,
+                    note="влито путей: 0",
+                )
+                # There is no transaction to roll back. Preserve the old
+                # cleanup behavior for an unchanged delegate worktree.
+                success = {"paths": [], "conflicts": [], "commit": None,
+                           "change_types": change_types}
+            else:
+                try:
+                    index_before = _index_snapshot()
+                except (OSError, RuntimeError) as exc:
+                    _release_claim_locked(
+                        reg, rd, args.agent_id, "failed",
+                        note=f"не удалось сохранить index: {exc}",
+                        error_code="worktree_apply_failed",
+                    )
+                    print(json.dumps({
+                        "merged": False, "error": "worktree_apply_failed",
+                        "error_code": "worktree_apply_failed",
+                        "reason": "cannot snapshot git index",
+                        "detail": str(exc), "worktree": str(wt),
+                    }, ensure_ascii=False, indent=1))
+                    return 2
+
+                applied: list[str] = []
+                created_dirs: set[Path] = set()
+                try:
+                    for change in changes:
+                        _apply_change(change, created_dirs)
+                        applied.append(change.path)
+                    git(["add", "--", *applied], cwd=ROOT)
+                except (OSError, RuntimeError) as exc:
+                    rollback_errors = _rollback_transaction(
+                        main_states, index_before, created_dirs,
+                    )
+                    error_code = (
+                        "worktree_rollback_failed" if rollback_errors
+                        else "worktree_apply_failed"
+                    )
+                    _release_claim_locked(
+                        reg, rd, args.agent_id, "failed",
+                        note=f"ошибка применения: {exc}", error_code=error_code,
+                    )
+                    print(json.dumps({
+                        "merged": False, "paths": [], "applied_paths": applied,
+                        "conflicts": [], "commit": None, "error": error_code,
+                        "error_code": error_code, "detail": str(exc),
+                        "rollback_errors": rollback_errors, "worktree": str(wt),
+                        "change_types": change_types,
+                    }, ensure_ascii=False, indent=1))
+                    return 2
+
+                commit_sha: str | None = None
+                if not args.no_commit:
+                    role = claim.get("role") or "делегат"
+                    msg = (f"{role}: результат делегата {args.agent_id}\n\n"
+                           f"Задача: {claim.get('task_id')}\n"
+                           f"Worktree: {wt}\nБаза: {base}\n"
+                           f"Влито путей: {len(applied)}\n")
+                    try:
+                        proc = subprocess.run(
+                            ["git", "commit", "-m", msg, "--", *applied],
+                            cwd=str(ROOT), capture_output=True, text=True,
+                        )
+                    except OSError as exc:
+                        proc = None
+                        detail = str(exc)
+                    else:
+                        raw_detail = proc.stderr or proc.stdout or "git commit failed"
+                        detail = (
+                            os.fsdecode(raw_detail) if isinstance(raw_detail, bytes)
+                            else str(raw_detail)
+                        ).strip()
+                    if proc is None or proc.returncode != 0:
+                        rollback_errors = _rollback_transaction(
+                            main_states, index_before, created_dirs,
+                        )
+                        error_code = (
+                            "worktree_rollback_failed" if rollback_errors
+                            else "worktree_commit_failed"
+                        )
+                        _release_claim_locked(
+                            reg, rd, args.agent_id, "failed",
+                            note=(
+                                "git commit завершился с кодом "
+                                f"{proc.returncode if proc is not None else 'exec-error'}"
+                            ),
+                            error_code=error_code,
+                        )
+                        print(json.dumps({
+                            "merged": False, "paths": [], "applied_paths": applied,
+                            "conflicts": [], "commit": None, "error": error_code,
+                            "error_code": error_code, "detail": detail,
+                            "rollback_errors": rollback_errors, "worktree": str(wt),
+                            "change_types": change_types,
+                        }, ensure_ascii=False, indent=1))
+                        return 2
+                    # A successful commit is a point of no return for ROOT;
+                    # only failures before it enter the rollback path.
+                    commit_sha = git(["rev-parse", "HEAD"], cwd=ROOT)
+
+                _release_claim_locked(
+                    reg, rd, args.agent_id, args.status,
+                    note=f"влито путей: {len(applied)}",
+                )
+                success = {"paths": applied, "conflicts": [],
+                           "commit": commit_sha, "change_types": change_types}
+
+        removed = _remove_worktree(wt)
         pipeline_log.append_event(rd, {
-            "kind": "anomaly", "anomaly_kind": "worktree_path_violation",
-            "actor": args.agent_id, "severity": "error",
-            "detail": f"делегат изменил {len(violations)} путей вне разрешённых",
-            "evidence": json.dumps(violations[:40], ensure_ascii=False),
+            "kind": "worktree_close", "actor": args.agent_id,
+            "merged": bool(success["paths"]), "conflicts": success["conflicts"],
+            "commit": success["commit"], "worktree_removed": removed,
         })
-        agent_log.main(["delegate-release", "--agent-id", args.agent_id,
-                        "--status", "failed",
-                        "--note", "изменены пути вне allowlist, результат не влит"])
         print(json.dumps({
-            "merged": False, "reason": "path_violation",
-            "violations": violations[:40], "allowed": sorted(allowed),
-            "worktree": str(wt),
-            "hint": "worktree намеренно НЕ удалён — в нём лежит работа делегата. "
-                    "Разберись глазами, потом закрой `abandon`.",
+            "merged": bool(success["paths"]), "paths": success["paths"],
+            "conflicts": success["conflicts"], "commit": success["commit"],
+            "worktree_removed": removed, "change_types": success["change_types"],
         }, ensure_ascii=False, indent=1))
-        return 6
-
-    changes = [_change_for(wt, base, rel) for rel in touched]
-    main_states = {change.path: _disk_file_state(ROOT / change.path)
-                   for change in changes}
-    unsupported = _unsupported_details(changes, main_states)
-    if unsupported:
-        return _report_unsupported_change_type(rd, args.agent_id, wt, unsupported)
-
-    merged: list[str] = []
-    conflicts: list[str] = []
-    for change in changes:
-        rel = change.path
-        src = wt / rel
-        dst = ROOT / rel
-        main_state = main_states[rel]
-
-        # Сравниваем явные состояния BASE и main, включая exists=False и
-        # content=b"". Это покрывает modify/add/delete и не превращает
-        # отсутствие файла в особый случай с пустой строкой.
-        if args.detect_conflicts and main_state != change.base:
-            conflicts.append(rel)
-            continue
-
-        if change.change_type == "delete":
-            # При включённом conflict detection main_state.exists здесь всегда
-            # True: если main уже удалил файл, это было бы конфликтом выше.
-            if main_state.exists:
-                dst.unlink()
-        elif change.change_type in {"add", "modify"}:
-            dst.parent.mkdir(parents=True, exist_ok=True)
-            # Источник проверен через lstat/read_bytes: symlink не может
-            # незаметно превратиться в копирование внешнего файла.
-            shutil.copy2(src, dst)
-        else:
-            # Изменённый путь с двумя отсутствующими состояниями невозможен
-            # для обычного git diff, но не должен молча менять main.
-            continue
-        merged.append(rel)
-
-    if conflicts:
-        pipeline_log.append_event(rd, {
-            "kind": "anomaly", "anomaly_kind": "worktree_conflict",
-            "actor": args.agent_id, "severity": "error",
-            "detail": "целевые файлы изменились в основном дереве, пока делегат работал",
-            "evidence": json.dumps(conflicts, ensure_ascii=False),
-        })
-
-    commit_sha = None
-    if merged and not args.no_commit:
-        git(["add", "--", *merged])
-        role = claim.get("role") or "делегат"
-        msg = (f"{role}: результат делегата {args.agent_id}\n\n"
-               f"Задача: {claim.get('task_id')}\n"
-               f"Worktree: {wt}\nБаза: {base}\n"
-               f"Влито путей: {len(merged)}\n")
-        proc = subprocess.run(["git", "commit", "-m", msg, "--", *merged],
-                              cwd=str(ROOT), capture_output=True, text=True)
-        if proc.returncode == 0:
-            commit_sha = git(["rev-parse", "HEAD"])
-
-    removed = _remove_worktree(wt)
-    agent_log.main(["delegate-release", "--agent-id", args.agent_id,
-                    "--status", "failed" if conflicts else args.status,
-                    "--note", f"влито путей: {len(merged)}"
-                              + (f", конфликтов: {len(conflicts)}" if conflicts else "")])
-    pipeline_log.append_event(rd, {
-        "kind": "worktree_close", "actor": args.agent_id,
-        "merged": merged, "conflicts": conflicts, "commit": commit_sha,
-        "worktree_removed": removed,
-    })
-    print(json.dumps({
-        "merged": bool(merged) and not conflicts, "paths": merged,
-        "conflicts": conflicts, "commit": commit_sha,
-        "worktree_removed": removed,
-        "change_types": {change.path: change.change_type for change in changes},
-    }, ensure_ascii=False, indent=1))
-    return 2 if conflicts else 0
+        return 0
 
 
 def _remove_worktree(wt: Path) -> bool:
@@ -597,6 +1085,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     c = sub.add_parser("close")
     c.add_argument("--agent-id", required=True)
+    c.add_argument("--task-id", default=None,
+                   help="optional identity binding for the registered claim")
+    c.add_argument("--role", default=None,
+                   help="optional identity binding for the registered claim")
+    c.add_argument("--attempt", type=int, default=None,
+                   help="optional identity binding for the registered claim")
     c.add_argument("--allow", action="append", required=True,
                    help="путь относительно корня репозитория, который делегату "
                         "разрешено было изменить. Всё остальное — нарушение.")

@@ -100,6 +100,16 @@ POLICY_ERROR_CODES = {
     "policy_violation",
     "worktree_path_violation",
     "worktree_conflict",
+    "worktree_unsupported_change_type",
+    "worktree_base_missing",
+    "worktree_base_invalid",
+    "worktree_base_mismatch",
+    "worktree_lease_invalid",
+    "worktree_lease_expired",
+    "worktree_lease_identity_mismatch",
+    "worktree_commit_failed",
+    "worktree_apply_failed",
+    "worktree_rollback_failed",
     "task_already_claimed",
 }
 
@@ -388,6 +398,7 @@ def cmd_delegate_claim(args: argparse.Namespace) -> int:
             "role": args.role,
             "attempt": attempt,
             "state": "running",
+            "base_sha": args.base_sha,
             "claimed_at": now,
             "expires_at": now + args.lease_sec,
             "heartbeat_at": now,
@@ -576,89 +587,135 @@ def cmd_delegate_result(args: argparse.Namespace) -> int:
     return 0
 
 
+def release_claim_locked(
+    reg: Registry,
+    agent_id: str,
+    status: str,
+    *,
+    result_class: str | None = None,
+    error_code: str | None = None,
+    note: str | None = None,
+    thread_id: str | None = None,
+    now: float | None = None,
+) -> dict[str, Any] | None:
+    """Release a claim while the caller already holds ``reg``'s lock.
+
+    ``delegate_worktree.close`` needs to keep the registry lock across lease
+    validation and the integration transaction.  Keeping the state mutation
+    here avoids reopening the registry (and accidentally allowing a stale
+    close to race a heartbeat or another lifecycle update).
+    """
+
+    now = now_epoch() if now is None else now
+    claim = _claim_or_error(reg, agent_id)
+    if claim is None:
+        return None
+    semantic_before, infrastructure_before, _ = task_counters(
+        reg.claims, claim.get("task_id")
+    )
+    explicit_result = result_class is not None
+    result_class = result_class or claim.get("pending_result_class")
+    error_code = error_code or claim.get("pending_error_code")
+    # The unchanged delegate_worktree.close CLI reports a merge/path
+    # failure only through status=failed and a free note.  If a bridge had
+    # already classified the nested MCP response as success, that pending
+    # result must not hide the later deterministic policy failure.  An
+    # explicit release classification still wins because it is the
+    # structured caller contract.
+    if not explicit_result and status == "failed" and result_class == "success":
+        result_class, error_code = "policy_failure", "policy_violation"
+    if not explicit_result and status == "abandoned" and result_class == "success":
+        result_class, error_code = default_result_for_status(
+            status, bool(claim.get("delegate_started"))
+        )
+    if result_class is None:
+        result_class, error_code = default_result_for_status(
+            status, bool(claim.get("delegate_started"))
+        )
+    validate_result(result_class, error_code)
+
+    semantic_counted = (
+        result_class in {"success", "semantic_failure"}
+        and bool(claim.get("delegate_started"))
+    )
+    infrastructure_counted = result_class == "infrastructure_failure"
+    claim["state"] = status
+    claim["released_at"] = now
+    claim["release_reason"] = note
+    claim["result_class"] = result_class
+    claim["error_code"] = error_code
+    claim["semantic_counted"] = semantic_counted
+    claim["infrastructure_counted"] = infrastructure_counted
+    if semantic_counted:
+        claim["semantic_attempt"] = semantic_before + 1
+    if infrastructure_counted:
+        claim["infrastructure_attempt"] = infrastructure_before + 1
+    if thread_id:
+        claim["thread_id"] = thread_id
+    reg.save()
+    task_id = claim.get("task_id")
+    semantic_after, infrastructure_after, _ = task_counters(reg.claims, task_id)
+    return {
+        "claim": claim,
+        "task_id": task_id,
+        "role": claim.get("role"),
+        "worktree": claim.get("worktree"),
+        "base_sha": claim.get("base_sha"),
+        "status": status,
+        "note": note,
+        "thread_id": thread_id,
+        "result_class": result_class,
+        "error_code": error_code,
+        "semantic_counted": semantic_counted,
+        "infrastructure_counted": infrastructure_counted,
+        "semantic_after": semantic_after,
+        "infrastructure_after": infrastructure_after,
+        "held_sec": round(now - claim.get("claimed_at", now), 3),
+    }
+
+
 def cmd_delegate_release(args: argparse.Namespace) -> int:
     run_dir = resolve_run_dir()
-    now = now_epoch()
-    with Registry(run_dir) as reg:
-        claim = _claim_or_error(reg, args.agent_id)
-        if claim is None:
-            return 5
-        semantic_before, infrastructure_before, _ = task_counters(
-            reg.claims, claim.get("task_id")
-        )
-        explicit_result = args.result_class is not None
-        result_class = args.result_class or claim.get("pending_result_class")
-        error_code = args.error_code or claim.get("pending_error_code")
-        # The unchanged delegate_worktree.close CLI reports a merge/path
-        # failure only through status=failed and a free note.  If a bridge had
-        # already classified the nested MCP response as success, that pending
-        # result must not hide the later deterministic policy failure.  An
-        # explicit release classification still wins because it is the
-        # structured caller contract.
-        if not explicit_result and args.status == "failed" and result_class == "success":
-            result_class, error_code = "policy_failure", "policy_violation"
-        if not explicit_result and args.status == "abandoned" and result_class == "success":
-            result_class, error_code = default_result_for_status(
-                args.status, bool(claim.get("delegate_started"))
+    try:
+        with Registry(run_dir) as reg:
+            info = release_claim_locked(
+                reg, args.agent_id, args.status,
+                result_class=args.result_class,
+                error_code=args.error_code,
+                note=args.note,
+                thread_id=args.thread_id,
             )
-        if result_class is None:
-            result_class, error_code = default_result_for_status(
-                args.status, bool(claim.get("delegate_started"))
-            )
-        try:
-            validate_result(result_class, error_code)
-        except ValueError as exc:
-            print(f"agent_log: {exc}", file=sys.stderr)
-            return 2
+    except ValueError as exc:
+        print(f"agent_log: {exc}", file=sys.stderr)
+        return 2
+    if info is None:
+        return 5
 
-        semantic_counted = (
-            result_class in {"success", "semantic_failure"}
-            and bool(claim.get("delegate_started"))
-        )
-        infrastructure_counted = result_class == "infrastructure_failure"
-        claim["state"] = args.status
-        claim["released_at"] = now
-        claim["release_reason"] = args.note
-        claim["result_class"] = result_class
-        claim["error_code"] = error_code
-        claim["semantic_counted"] = semantic_counted
-        claim["infrastructure_counted"] = infrastructure_counted
-        if semantic_counted:
-            claim["semantic_attempt"] = semantic_before + 1
-        if infrastructure_counted:
-            claim["infrastructure_attempt"] = infrastructure_before + 1
-        if args.thread_id:
-            claim["thread_id"] = args.thread_id
-        reg.save()
-        task_id = claim.get("task_id")
-        role = claim.get("role")
-        worktree = claim.get("worktree")
-        base = claim.get("base_sha")
-        semantic_after, infrastructure_after, _ = task_counters(reg.claims, task_id)
-        held_sec = round(now - claim.get("claimed_at", now), 3)
+    claim = info["claim"]
     emit(run_dir, {
-        "kind": "delegation_release", "actor": args.agent_id, "task_id": task_id,
-        "status": args.status, "detail": args.note, "held_sec": held_sec,
-        "thread_id": args.thread_id,
-        "role": role, "worktree_path": worktree, "base_sha": base,
-        "result_class": result_class, "error_code": error_code,
+        "kind": "delegation_release", "actor": args.agent_id,
+        "task_id": info["task_id"], "status": info["status"],
+        "detail": info["note"], "held_sec": info["held_sec"],
+        "thread_id": info["thread_id"], "role": info["role"],
+        "worktree_path": info["worktree"], "base_sha": info["base_sha"],
+        "result_class": info["result_class"], "error_code": info["error_code"],
         "infrastructure_attempt": claim.get("infrastructure_attempt"),
         "semantic_attempt": claim.get("semantic_attempt"),
     })
     print(json.dumps({
-        "agent_id": args.agent_id, "status": args.status,
-        "held_sec": held_sec, "result_class": result_class,
-        "error_code": error_code,
+        "agent_id": args.agent_id, "status": info["status"],
+        "held_sec": info["held_sec"], "result_class": info["result_class"],
+        "error_code": info["error_code"],
         "semantic_attempt": claim.get("semantic_attempt"),
         "infrastructure_attempt": claim.get("infrastructure_attempt"),
-        "semantic_attempts": semantic_after,
-        "infrastructure_attempts": infrastructure_after,
+        "semantic_attempts": info["semantic_after"],
+        "infrastructure_attempts": info["infrastructure_after"],
         "recommended_next_backoff_seconds": (
-            infrastructure_backoff_seconds(infrastructure_after)
-            if infrastructure_counted else 0
+            infrastructure_backoff_seconds(info["infrastructure_after"])
+            if info["infrastructure_counted"] else 0
         ),
-        "semantic_counted": semantic_counted,
-        "infrastructure_counted": infrastructure_counted,
+        "semantic_counted": info["semantic_counted"],
+        "infrastructure_counted": info["infrastructure_counted"],
     }, ensure_ascii=False))
     return 0
 
@@ -746,6 +803,8 @@ def build_parser() -> argparse.ArgumentParser:
     dc.add_argument("--role", required=True)
     dc.add_argument("--agent-id", default=None)
     dc.add_argument("--lease-sec", type=int, default=DEFAULT_LEASE_SEC)
+    dc.add_argument("--base-sha", default=None,
+                    help="canonical git baseline captured for this delegation")
     dc.add_argument("--parallel-group", default=None,
                     help="метка осознанной параллельности: разные task_id одной "
                          "группы допустимо гонять одновременно")

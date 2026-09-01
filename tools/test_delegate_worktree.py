@@ -14,6 +14,7 @@ import importlib
 import json
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -116,16 +117,36 @@ def sandbox(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict:
     worktrees = tmp_path / "worktrees"
     monkeypatch.setattr(delegate_worktree, "WORKTREES_ROOT", worktrees)
     monkeypatch.setattr(delegate_worktree, "ALLOC_LOCK", tmp_path / "worktree.lock")
+    monkeypatch.setattr(delegate_worktree, "INTEGRATION_LOCK", tmp_path / "integration.lock")
     return {"root": root, "run_dir": run_dir, "dw": delegate_worktree,
             "worktrees": worktrees}
 
 
-def open_delegate(sandbox: dict, capsys: pytest.CaptureFixture[str], agent_id: str = "a1") -> Path:
+def open_delegate(
+    sandbox: dict,
+    capsys: pytest.CaptureFixture[str],
+    agent_id: str = "a1",
+    task_id: str | None = None,
+) -> Path:
     dw = sandbox["dw"]
-    assert dw.main(["open", "--task-id", f"task:{agent_id}",
+    assert dw.main(["open", "--task-id", task_id or f"task:{agent_id}",
                     "--role", "tester", "--agent-id", agent_id]) == 0
     capsys.readouterr()
     return sandbox["worktrees"] / sandbox["run_dir"].name / agent_id
+
+
+def index_bytes(dw, root: Path) -> bytes:
+    path = Path(dw.git(["rev-parse", "--git-path", "index"], cwd=root))
+    if not path.is_absolute():
+        path = root / path
+    return path.read_bytes()
+
+
+def set_claim(sandbox: dict, agent_id: str, **updates: object) -> None:
+    path = sandbox["run_dir"] / "delegations.json"
+    registry = json.loads(path.read_text(encoding="utf-8"))
+    registry["claims"][agent_id].update(updates)
+    path.write_text(json.dumps(registry, indent=1), encoding="utf-8")
 
 
 def close_delegate(
@@ -143,7 +164,7 @@ def remove_clean_worktree(sandbox: dict, wt: Path) -> None:
     if not wt.is_dir():
         return
     marker = wt / ".delegate-base"
-    if marker.exists():
+    if marker.exists() or marker.is_symlink():
         marker.unlink()
     result = run_git(sandbox["root"], "worktree", "remove", str(wt), check=False)
     assert result.returncode == 0, result.stderr.decode(errors="replace")
@@ -434,3 +455,244 @@ def test_symlink_change_returns_machine_readable_unsupported_error(sandbox, caps
     assert wt.is_dir()
     (wt / "link.txt").unlink()
     remove_clean_worktree(sandbox, wt)
+
+
+def _assert_conflict_does_not_partially_merge(
+    sandbox: dict, capsys, clean_path: str, conflict_path: str,
+) -> None:
+    set_base_file(sandbox, clean_path, b"clean-base\n")
+    set_base_file(sandbox, conflict_path, b"conflict-base\n")
+    wt = open_delegate(sandbox, capsys)
+    (wt / clean_path).write_bytes(b"clean-delegate\n")
+    (wt / conflict_path).write_bytes(b"conflict-delegate\n")
+    (sandbox["root"] / conflict_path).write_bytes(b"main-wins\n")
+
+    dw = sandbox["dw"]
+    root = sandbox["root"]
+    before_index = index_bytes(dw, root)
+    before_status = status_raw(dw, root, clean_path, conflict_path)
+
+    rc, result, _ = close_delegate(
+        sandbox, capsys, "a1", clean_path, conflict_path,
+    )
+    assert rc == 2
+    assert result["merged"] is False
+    assert result["paths"] == []
+    assert result["conflicts"] == [conflict_path]
+    assert (root / clean_path).read_bytes() == b"clean-base\n"
+    assert (root / conflict_path).read_bytes() == b"main-wins\n"
+    assert index_bytes(dw, root) == before_index
+    assert status_raw(dw, root, clean_path, conflict_path) == before_status
+    assert wt.is_dir()
+
+    (wt / clean_path).write_bytes(b"clean-base\n")
+    (wt / conflict_path).write_bytes(b"conflict-base\n")
+    remove_clean_worktree(sandbox, wt)
+
+
+def test_conflict_does_not_partially_merge_when_clean_path_sorts_first(sandbox, capsys):
+    _assert_conflict_does_not_partially_merge(
+        sandbox, capsys, "a-clean.txt", "b-conflict.txt",
+    )
+
+
+def test_conflict_does_not_partially_merge_when_conflict_path_sorts_first(sandbox, capsys):
+    _assert_conflict_does_not_partially_merge(
+        sandbox, capsys, "b-clean.txt", "a-conflict.txt",
+    )
+
+
+def test_commit_failure_restores_root_and_index_and_keeps_worktree(
+    sandbox, capsys, monkeypatch,
+):
+    set_base_file(sandbox, "value.txt", b"base\n")
+    set_base_file(sandbox, "already-staged.txt", b"old\n")
+    root = sandbox["root"]
+    dw = sandbox["dw"]
+    (root / "already-staged.txt").write_bytes(b"staged-before\n")
+    run_git(root, "add", "--", "already-staged.txt")
+    wt = open_delegate(sandbox, capsys)
+    (wt / "value.txt").write_bytes(b"delegate\n")
+
+    before_index = index_bytes(dw, root)
+    before_status = status_raw(dw, root, "value.txt", "already-staged.txt")
+    original_run = dw.subprocess.run
+
+    def fail_commit(command, *args, **kwargs):
+        if len(command) >= 2 and command[0] == "git" and command[1] == "commit":
+            return subprocess.CompletedProcess(
+                command, 1, stdout="", stderr="forced commit failure",
+            )
+        return original_run(command, *args, **kwargs)
+
+    monkeypatch.setattr(dw.subprocess, "run", fail_commit)
+    rc, result, _ = close_delegate(sandbox, capsys, "a1", "value.txt")
+
+    assert rc == 2
+    assert result["merged"] is False
+    assert result["error_code"] == "worktree_commit_failed"
+    assert result["commit"] is None
+    assert (root / "value.txt").read_bytes() == b"base\n"
+    assert (root / "already-staged.txt").read_bytes() == b"staged-before\n"
+    assert index_bytes(dw, root) == before_index
+    assert status_raw(dw, root, "value.txt", "already-staged.txt") == before_status
+    assert wt.is_dir()
+
+    (wt / "value.txt").write_bytes(b"base\n")
+    remove_clean_worktree(sandbox, wt)
+
+
+def test_tampered_delegate_base_fails_closed(sandbox, capsys):
+    set_base_file(sandbox, "value.txt", b"base\n")
+    wt = open_delegate(sandbox, capsys)
+    (wt / "value.txt").write_bytes(b"delegate\n")
+    (wt / ".delegate-base").write_text("0" * 40, encoding="utf-8")
+    before = (sandbox["root"] / "value.txt").read_bytes()
+
+    rc, result, _ = close_delegate(sandbox, capsys, "a1", "value.txt")
+
+    assert rc == 2
+    assert result["error_code"] == "worktree_base_mismatch"
+    assert (sandbox["root"] / "value.txt").read_bytes() == before
+    assert wt.is_dir()
+    (wt / "value.txt").write_bytes(b"base\n")
+    remove_clean_worktree(sandbox, wt)
+
+
+def test_expired_lease_cannot_merge(sandbox, capsys):
+    wt = open_delegate(sandbox, capsys)
+    (wt / "expired.json").write_bytes(b"delegate\n")
+    set_claim(sandbox, "a1", expires_at=time.time() - 1)
+
+    rc, result, _ = close_delegate(sandbox, capsys, "a1", "expired.json")
+
+    assert rc == 2
+    assert result["error_code"] == "worktree_lease_expired"
+    assert not (sandbox["root"] / "expired.json").exists()
+    assert wt.is_dir()
+    (wt / "expired.json").unlink()
+    remove_clean_worktree(sandbox, wt)
+
+
+def test_terminal_lease_cannot_merge(sandbox, capsys):
+    wt = open_delegate(sandbox, capsys)
+    (wt / "terminal.json").write_bytes(b"delegate\n")
+    set_claim(sandbox, "a1", state="ok")
+
+    rc, result, _ = close_delegate(sandbox, capsys, "a1", "terminal.json")
+
+    assert rc == 2
+    assert result["error_code"] == "worktree_lease_invalid"
+    assert result["lease_state"] == "ok"
+    assert not (sandbox["root"] / "terminal.json").exists()
+    assert wt.is_dir()
+    (wt / "terminal.json").unlink()
+    remove_clean_worktree(sandbox, wt)
+
+
+def test_changed_claim_identity_cannot_merge(sandbox, capsys):
+    set_base_file(sandbox, "identity.txt", b"base\n")
+    wt = open_delegate(sandbox, capsys)
+    (wt / "identity.txt").write_bytes(b"delegate\n")
+    set_claim(sandbox, "a1", task_id="task:other")
+
+    rc, result, _ = close_delegate(sandbox, capsys, "a1", "identity.txt")
+
+    assert rc == 2
+    assert result["error_code"] == "worktree_lease_identity_mismatch"
+    assert (sandbox["root"] / "identity.txt").read_bytes() == b"base\n"
+    assert wt.is_dir()
+    (wt / "identity.txt").write_bytes(b"base\n")
+    remove_clean_worktree(sandbox, wt)
+
+
+def test_concurrent_closes_are_serialized_by_integration_lock(sandbox, capsys, monkeypatch):
+    set_base_file(sandbox, "one.txt", b"one-base\n")
+    set_base_file(sandbox, "two.txt", b"two-base\n")
+    wt1 = open_delegate(sandbox, capsys, "a1", task_id="task:one")
+    wt2 = open_delegate(sandbox, capsys, "a2", task_id="task:two")
+    (wt1 / "one.txt").write_bytes(b"one-delegate\n")
+    (wt2 / "two.txt").write_bytes(b"two-delegate\n")
+
+    dw = sandbox["dw"]
+    original_lock = dw.IntegrationLock
+    original_apply = dw._apply_change
+    state_lock = threading.Lock()
+    first_apply = threading.Event()
+    second_attempt = threading.Event()
+    release_first = threading.Event()
+    attempts = 0
+    active = 0
+    max_active = 0
+    apply_calls = 0
+
+    class TrackingIntegrationLock(original_lock):
+        def __enter__(self):
+            nonlocal attempts, active, max_active
+            with state_lock:
+                attempts += 1
+                if attempts == 2:
+                    second_attempt.set()
+            result = super().__enter__()
+            with state_lock:
+                active += 1
+                max_active = max(max_active, active)
+            return result
+
+        def __exit__(self, *exc):
+            nonlocal active
+            try:
+                return super().__exit__(*exc)
+            finally:
+                with state_lock:
+                    active -= 1
+
+    def hold_first_apply(change, created_dirs):
+        nonlocal apply_calls
+        with state_lock:
+            apply_calls += 1
+            is_first = apply_calls == 1
+        if is_first:
+            first_apply.set()
+            if not release_first.wait(5):
+                raise RuntimeError("test did not release first close")
+        return original_apply(change, created_dirs)
+
+    monkeypatch.setattr(dw, "IntegrationLock", TrackingIntegrationLock)
+    monkeypatch.setattr(dw, "_apply_change", hold_first_apply)
+    results: dict[str, int] = {}
+    errors: list[BaseException] = []
+
+    def close_in_thread(agent_id: str, path: str) -> None:
+        try:
+            results[agent_id] = dw.main([
+                "close", "--agent-id", agent_id, "--allow", path,
+            ])
+        except BaseException as exc:  # pragma: no cover - diagnostic guard
+            errors.append(exc)
+
+    first = threading.Thread(target=close_in_thread, args=("a1", "one.txt"))
+    second = threading.Thread(target=close_in_thread, args=("a2", "two.txt"))
+    first.start()
+    assert first_apply.wait(5)
+    second.start()
+    assert second_attempt.wait(5)
+    with state_lock:
+        assert active == 1
+    release_first.set()
+    first.join(10)
+    second.join(10)
+    capsys.readouterr()
+
+    assert not errors
+    assert not first.is_alive()
+    assert not second.is_alive()
+    assert results == {"a1": 0, "a2": 0}
+    assert max_active == 1
+    assert (sandbox["root"] / "one.txt").read_bytes() == b"one-delegate\n"
+    assert (sandbox["root"] / "two.txt").read_bytes() == b"two-delegate\n"
+
+    (wt1 / "one.txt").write_bytes(b"one-base\n")
+    (wt2 / "two.txt").write_bytes(b"two-base\n")
+    remove_clean_worktree(sandbox, wt1)
+    remove_clean_worktree(sandbox, wt2)
