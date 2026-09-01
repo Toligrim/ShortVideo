@@ -45,15 +45,70 @@ from ..security import (
 
 
 YOUTUBE_UPLOAD_SCOPE = "https://www.googleapis.com/auth/youtube.upload"
+YOUTUBE_READONLY_SCOPE = "https://www.googleapis.com/auth/youtube.readonly"
+YOUTUBE_REQUIRED_SCOPES = f"{YOUTUBE_UPLOAD_SCOPE} {YOUTUBE_READONLY_SCOPE}"
 OAUTH_AUTHORIZATION_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth"
 OAUTH_TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token"
 YOUTUBE_RESUMABLE_INITIATION_ENDPOINT = "https://www.googleapis.com/upload/youtube/v3/videos"
+YOUTUBE_VIDEOS_ENDPOINT = "https://www.googleapis.com/youtube/v3/videos"
 YOUTUBE_SESSION_HOSTS = frozenset({"www.googleapis.com", "youtube.googleapis.com", "upload.youtube.com"})
 DEFAULT_CHUNK_SIZE = 8 * 1024 * 1024
 MIN_CHUNK_SIZE = 256 * 1024
 LEASE_SAFETY_MARGIN_SECONDS = 5.0
+DEFAULT_PROCESSING_SLA_SECONDS = 45 * 60
+DEFAULT_PROCESSING_POLL_INTERVAL_SECONDS = 30
+DEFAULT_STATUS_PROBE_MAX_ATTEMPTS = 3
+DEFAULT_STATUS_PROBE_BASE_BACKOFF_SECONDS = 1.0
+DEFAULT_STATUS_PROBE_MAX_BACKOFF_SECONDS = 8.0
 VIDEO_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
 RANGE_RE = re.compile(r"^(?:bytes=)?(\d+)-(\d+)$")
+
+
+def _utc_now() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="microseconds").replace("+00:00", "Z")
+
+
+def _canonical_timestamp(value: object) -> str | None:
+    if isinstance(value, datetime):
+        parsed = value
+    elif isinstance(value, str):
+        try:
+            parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+    else:
+        return None
+    if parsed.tzinfo is None:
+        return None
+    return parsed.astimezone(timezone.utc).isoformat(timespec="microseconds").replace("+00:00", "Z")
+
+
+def _safe_exception_class(exc: BaseException) -> str:
+    """Return only a bounded exception type, never exception text."""
+    candidate = exc
+    # RequestsHttpTransport wraps optional-library exceptions in OSError.  The
+    # cause's type still gives operators useful diagnostics without exposing a
+    # URL, token, or provider error body.
+    if type(exc) is OSError and exc.__cause__ is not None:
+        candidate = exc.__cause__
+    name = candidate.__class__.__name__
+    return re.sub(r"[^A-Za-z0-9_.-]", "_", name)[:80] or "OSError"
+
+
+def _duration_is_strictly_zero(value: object) -> bool:
+    """Recognize the ISO-8601 zero duration returned by ``contentDetails``."""
+    if not isinstance(value, str):
+        return False
+    match = re.fullmatch(
+        r"P(?:(?P<days>\d+(?:\.\d+)?)D)?T"
+        r"(?:(?P<hours>\d+(?:\.\d+)?)H)?"
+        r"(?:(?P<minutes>\d+(?:\.\d+)?)M)?"
+        r"(?:(?P<seconds>\d+(?:\.\d+)?)S)?",
+        value,
+    )
+    if match is None:
+        return False
+    return all(float(match.group(name) or 0) == 0 for name in ("days", "hours", "minutes", "seconds"))
 
 
 class YouTubeConfigurationError(RuntimeError):
@@ -92,6 +147,19 @@ class HttpTransport(Protocol):
         """Execute one non-redirecting HTTP request or raise ``OSError``."""
 
 
+@dataclass(frozen=True)
+class YouTubeProcessingResult(PublishResult):
+    """A known video resource that still needs a later processing poll."""
+
+    processing_status: str = "processing"
+    processing_started_at: str = ""
+    processing_age_seconds: int = 0
+    next_poll_after_seconds: int = DEFAULT_PROCESSING_POLL_INTERVAL_SECONDS
+    poll_error_code: str | None = None
+    processing_failure_reason: str | None = None
+    transport_diagnostics: tuple[Mapping[str, object], ...] = ()
+
+
 class RequestsHttpTransport:
     """Production transport with redirects disabled for bearer-like session URLs."""
 
@@ -120,6 +188,8 @@ class RequestsHttpTransport:
                 timeout=timeout,
                 allow_redirects=False,
             )
+        except OSError:
+            raise
         except Exception as exc:  # requests is optional until a live command actually runs.
             raise OSError("YouTube HTTP transport failed") from exc
         return HttpResponse(
@@ -153,9 +223,12 @@ def _required_text(value: object, *, error: str) -> str:
     return value.strip()
 
 
-def _has_exact_upload_scope(value: object) -> bool:
-    """Accept only the one least-privilege scope this adapter requests."""
-    return isinstance(value, str) and set(value.split()) == {YOUTUBE_UPLOAD_SCOPE}
+def _has_required_youtube_scopes(value: object) -> bool:
+    """Require exactly the least-privilege scopes needed for upload and polling."""
+    return isinstance(value, str) and set(value.split()) == {
+        YOUTUBE_UPLOAD_SCOPE,
+        YOUTUBE_READONLY_SCOPE,
+    }
 
 
 def _is_within(path: Path, directory: Path) -> bool:
@@ -292,8 +365,10 @@ def _load_refresh_token_material(path: Path) -> tuple[str, str]:
     scope = payload.get("scope")
     if not isinstance(refresh_token, str) or not refresh_token.strip():
         raise YouTubeConfigurationError("YouTube token file has no refresh token")
-    if not _has_exact_upload_scope(scope):
-        raise YouTubeConfigurationError("YouTube token file must grant only the youtube.upload scope")
+    if not _has_required_youtube_scopes(scope):
+        raise YouTubeConfigurationError(
+            "YouTube token file must grant exactly youtube.upload and youtube.readonly scopes"
+        )
     return refresh_token.strip(), scope
 
 
@@ -315,8 +390,10 @@ def save_refresh_token(settings: YouTubeOAuthSettings, *, refresh_token: str, sc
     """Atomically persist only the refresh token, never a short-lived access token."""
     if not isinstance(refresh_token, str) or not refresh_token.strip():
         raise YouTubeConfigurationError("refusing to store an empty YouTube refresh token")
-    if not _has_exact_upload_scope(scope):
-        raise YouTubeConfigurationError("refusing to store a token without exactly youtube.upload scope")
+    if not _has_required_youtube_scopes(scope):
+        raise YouTubeConfigurationError(
+            "refusing to store a token without exactly youtube.upload and youtube.readonly scopes"
+        )
     token_file = _validated_token_file_location(settings)
     try:
         reject_symlink_chain(token_file, label="YouTube token file")
@@ -330,7 +407,7 @@ def save_refresh_token(settings: YouTubeOAuthSettings, *, refresh_token: str, sc
     except PrivatePathError as exc:
         raise YouTubeConfigurationError(str(exc)) from exc
     payload = json.dumps(
-        {"refresh_token": refresh_token.strip(), "scope": YOUTUBE_UPLOAD_SCOPE},
+        {"refresh_token": refresh_token.strip(), "scope": YOUTUBE_REQUIRED_SCOPES},
         ensure_ascii=False,
         sort_keys=True,
         separators=(",", ":"),
@@ -473,16 +550,16 @@ class YouTubeOAuthClient:
                 retryable=False,
             )
         scope = payload.get("scope")
-        if scope is not None and not _has_exact_upload_scope(scope):
+        if scope is not None and not _has_required_youtube_scopes(scope):
             raise YouTubeOAuthError(
                 "youtube_scope_not_granted",
-                "YouTube authorization did not grant youtube.upload",
+                "YouTube authorization did not grant the required upload and readonly scopes",
                 retryable=False,
             )
         if require_scope and not isinstance(scope, str):
             raise YouTubeOAuthError(
                 "youtube_scope_not_granted",
-                "YouTube authorization response did not prove youtube.upload",
+                "YouTube authorization response did not prove the required upload and readonly scopes",
                 retryable=False,
             )
         refresh = payload.get("refresh_token")
@@ -528,7 +605,7 @@ def build_authorization_request(
             "client_id": settings.client_id,
             "redirect_uri": redirect_uri,
             "response_type": "code",
-            "scope": YOUTUBE_UPLOAD_SCOPE,
+            "scope": YOUTUBE_REQUIRED_SCOPES,
             "code_challenge": challenge,
             "code_challenge_method": "S256",
             "state": state,
@@ -610,7 +687,7 @@ def youtube_doctor(settings: YouTubeOAuthSettings) -> dict[str, object]:
         "provider": "youtube",
         "oauth_client_configured": True,
         "refresh_token_configured": True,
-        "scope": YOUTUBE_UPLOAD_SCOPE,
+        "scope": YOUTUBE_REQUIRED_SCOPES,
     }
 
 
@@ -679,6 +756,13 @@ class YouTubeResumableAdapter:
         transport: HttpTransport | None = None,
         chunk_size: int = DEFAULT_CHUNK_SIZE,
         timeout_seconds: float = 60.0,
+        status_probe_max_attempts: int = DEFAULT_STATUS_PROBE_MAX_ATTEMPTS,
+        status_probe_base_backoff_seconds: float = DEFAULT_STATUS_PROBE_BASE_BACKOFF_SECONDS,
+        status_probe_max_backoff_seconds: float = DEFAULT_STATUS_PROBE_MAX_BACKOFF_SECONDS,
+        processing_sla_seconds: float = DEFAULT_PROCESSING_SLA_SECONDS,
+        processing_poll_interval_seconds: float = DEFAULT_PROCESSING_POLL_INTERVAL_SECONDS,
+        sleep: Callable[[float], None] | None = None,
+        clock: Callable[[], str | datetime] | None = None,
     ):
         if (
             isinstance(chunk_size, bool)
@@ -689,11 +773,31 @@ class YouTubeResumableAdapter:
             raise YouTubeConfigurationError("YouTube chunk size must be a positive multiple of 256 KiB")
         if timeout_seconds <= 0:
             raise YouTubeConfigurationError("YouTube HTTP timeout must be positive")
+        if (
+            isinstance(status_probe_max_attempts, bool)
+            or not isinstance(status_probe_max_attempts, int)
+            or status_probe_max_attempts < 1
+        ):
+            raise YouTubeConfigurationError("YouTube status-probe attempts must be positive")
+        if (
+            status_probe_base_backoff_seconds <= 0
+            or status_probe_max_backoff_seconds < status_probe_base_backoff_seconds
+        ):
+            raise YouTubeConfigurationError("YouTube status-probe backoff bounds are invalid")
+        if processing_sla_seconds <= 0 or processing_poll_interval_seconds <= 0:
+            raise YouTubeConfigurationError("YouTube processing SLA and poll interval must be positive")
         self.settings = settings
         self.transport = transport or RequestsHttpTransport()
         self.oauth = YouTubeOAuthClient(settings, transport=self.transport)
         self.chunk_size = chunk_size
         self.timeout_seconds = timeout_seconds
+        self.status_probe_max_attempts = status_probe_max_attempts
+        self.status_probe_base_backoff_seconds = status_probe_base_backoff_seconds
+        self.status_probe_max_backoff_seconds = status_probe_max_backoff_seconds
+        self.processing_sla_seconds = processing_sla_seconds
+        self.processing_poll_interval_seconds = processing_poll_interval_seconds
+        self.sleep = sleep or time.sleep
+        self.clock = clock or _utc_now
 
     def publish(self, request: PublishRequest) -> PublishResult:
         if request.platform != "youtube":
@@ -710,6 +814,15 @@ class YouTubeResumableAdapter:
             self._validate_lease_budget(request)
             target = self._target_metadata(request)
             expected_privacy_status = target["privacy_status"]
+            known_video_id = self._known_processing_video_id(request)
+            if known_video_id is not None:
+                return self._poll_processing(
+                    request,
+                    video_id=known_video_id,
+                    session_uri=session_uri,
+                    expected_privacy_status=expected_privacy_status,
+                    processing_started_at=getattr(request, "_youtube_processing_started_at", None),
+                )
             total_bytes = request.asset_path.stat().st_size
             if total_bytes < 1:
                 raise PermanentPublishError("youtube_empty_asset", "approved video asset is empty")
@@ -726,15 +839,18 @@ class YouTubeResumableAdapter:
         except OSError as exc:
             if final_checkpoint:
                 raise AmbiguousPublishError(
-                    "youtube_final_chunk_probe_unconfirmed",
+                    "youtube_final_chunk_outcome_unknown",
                     "YouTube final upload outcome could not be confirmed safely",
                     external_session_id=session_uri,
                 ) from exc
             raise PermanentPublishError("youtube_asset_unreadable", "approved video asset cannot be read") from exc
         except PermanentPublishError as exc:
-            if final_checkpoint:
+            if final_checkpoint and not (
+                exc.code.startswith("youtube_processing_")
+                or getattr(exc, "youtube_processing_event", None) is not None
+            ):
                 raise AmbiguousPublishError(
-                    "youtube_final_chunk_probe_unconfirmed",
+                    "youtube_final_chunk_outcome_unknown",
                     "YouTube final upload outcome could not be confirmed safely",
                     external_session_id=session_uri,
                 ) from exc
@@ -742,7 +858,7 @@ class YouTubeResumableAdapter:
         except YouTubeConfigurationError as exc:
             if final_checkpoint:
                 raise AmbiguousPublishError(
-                    "youtube_final_chunk_probe_unconfirmed",
+                    "youtube_final_chunk_outcome_unknown",
                     "YouTube final upload outcome could not be confirmed safely",
                     external_session_id=session_uri,
                 ) from exc
@@ -761,7 +877,7 @@ class YouTubeResumableAdapter:
                 ) from exc
             if final_checkpoint:
                 raise AmbiguousPublishError(
-                    "youtube_final_chunk_probe_unconfirmed",
+                    "youtube_final_chunk_outcome_unknown",
                     "YouTube final upload outcome could not be confirmed safely",
                     external_session_id=session_uri,
                 ) from exc
@@ -907,54 +1023,178 @@ class YouTubeResumableAdapter:
                 "stored YouTube resumable checkpoint cannot be safely resumed",
                 external_session_id=session_uri,
             )
-        try:
-            response = self._authorized_request(
-                request,
-                method="PUT",
-                url=session_uri,
-                headers={"Content-Length": "0", "Content-Range": f"bytes */{total_bytes}"},
-                body=b"",
-                session_uri=session_uri,
-            )
-        except OSError as exc:
-            raise RetryablePublishError(
-                "youtube_resume_probe_unavailable",
-                "YouTube upload session can be retried safely",
-                external_session_id=session_uri,
-            ) from exc
-        except (YouTubeConfigurationError, YouTubeOAuthError) as exc:
-            # Before this probe, the final PUT may have reached YouTube but
-            # lost its response.  A local credential failure cannot prove the
-            # final resource was not created, so do not clear/re-initiate the
-            # fenced session merely because the probe cannot authenticate.
-            if checkpoint.phase == "final_chunk_inflight" and (
-                isinstance(exc, YouTubeConfigurationError) or not exc.retryable
-            ):
-                raise AmbiguousPublishError(
-                    "youtube_final_chunk_probe_unconfirmed",
-                    "YouTube final upload outcome could not be confirmed safely",
+        response, diagnostics = self._probe_session(
+            request,
+            session_uri=session_uri,
+            total_bytes=total_bytes,
+            final_uncertain=checkpoint.phase == "final_chunk_inflight",
+        )
+        return self._handle_session_probe(
+            request,
+            session_uri=session_uri,
+            total_bytes=total_bytes,
+            mime_type=mime_type,
+            expected_privacy_status=expected_privacy_status,
+            response=response,
+            diagnostics=diagnostics,
+            final_uncertain=checkpoint.phase == "final_chunk_inflight",
+        )
+
+    def _probe_session(
+        self,
+        request: PublishRequest,
+        *,
+        session_uri: str,
+        total_bytes: int,
+        final_uncertain: bool,
+    ) -> tuple[HttpResponse, list[Mapping[str, object]]]:
+        """Probe one resumable session, retrying only transient probe outcomes."""
+        diagnostics: list[Mapping[str, object]] = []
+        for attempt in range(1, self.status_probe_max_attempts + 1):
+            started = time.monotonic()
+            try:
+                response = self._authorized_request(
+                    request,
+                    method="PUT",
+                    url=session_uri,
+                    headers={"Content-Length": "0", "Content-Range": f"bytes */{total_bytes}"},
+                    body=b"",
+                    session_uri=session_uri,
+                )
+            except OSError as exc:
+                self._capture_diagnostic(
+                    request,
+                    diagnostics,
+                    session_uri=session_uri,
+                    stage="resumable_status_probe",
+                    started=started,
+                    attempt=attempt,
+                    exc=exc,
+                )
+                if attempt < self.status_probe_max_attempts:
+                    self._sleep_probe_retry(attempt, None)
+                    continue
+                if final_uncertain:
+                    error = AmbiguousPublishError(
+                        "youtube_final_chunk_outcome_unknown",
+                        "YouTube final upload outcome could not be confirmed after status-probe retries",
+                        external_session_id=session_uri,
+                    )
+                    self._attach_diagnostics(error, diagnostics)
+                    raise error from exc
+                error = RetryablePublishError(
+                    "youtube_resume_probe_unavailable",
+                    "YouTube upload session can be retried safely",
                     external_session_id=session_uri,
-                ) from exc
-            raise
+                )
+                self._attach_diagnostics(error, diagnostics)
+                raise error from exc
+            except (YouTubeConfigurationError, YouTubeOAuthError) as exc:
+                # A credential/configuration failure cannot establish what a
+                # final PUT did.  Never turn that uncertainty into a fresh
+                # upload.  Retryable OAuth errors get the same bounded probe
+                # treatment as transport errors.
+                retryable_oauth = isinstance(exc, YouTubeOAuthError) and exc.retryable
+                if retryable_oauth and attempt < self.status_probe_max_attempts:
+                    self._sleep_probe_retry(attempt, exc.retry_after_seconds)
+                    continue
+                if final_uncertain:
+                    error = AmbiguousPublishError(
+                        "youtube_final_chunk_outcome_unknown",
+                        "YouTube final upload outcome could not be confirmed after status-probe retries",
+                        external_session_id=session_uri,
+                    )
+                    raise error from exc
+                raise
+
+            retry_after = _retry_after_seconds(response)
+            if response.status_code == 429 or 500 <= response.status_code <= 599:
+                self._capture_diagnostic(
+                    request,
+                    diagnostics,
+                    session_uri=session_uri,
+                    stage="resumable_status_probe",
+                    started=started,
+                    attempt=attempt,
+                    http_status=response.status_code,
+                )
+                if attempt < self.status_probe_max_attempts:
+                    self._sleep_probe_retry(attempt, retry_after)
+                    continue
+                if final_uncertain:
+                    error = AmbiguousPublishError(
+                        "youtube_final_chunk_outcome_unknown",
+                        "YouTube final upload outcome could not be confirmed after status-probe retries",
+                        external_session_id=session_uri,
+                    )
+                    self._attach_diagnostics(error, diagnostics)
+                    raise error
+                error = RetryablePublishError(
+                    "youtube_resume_probe_unavailable",
+                    "YouTube upload session can be retried safely",
+                    external_session_id=session_uri,
+                    retry_after_seconds=retry_after,
+                )
+                self._attach_diagnostics(error, diagnostics)
+                raise error
+            return response, diagnostics
+        raise AssertionError("status-probe loop did not return")
+
+    def _sleep_probe_retry(self, attempt: int, retry_after: int | None) -> None:
+        exponential = min(
+            self.status_probe_max_backoff_seconds,
+            self.status_probe_base_backoff_seconds * (2 ** (attempt - 1)),
+        )
+        self.sleep(max(exponential, float(retry_after or 0)))
+
+    def _handle_session_probe(
+        self,
+        request: PublishRequest,
+        *,
+        session_uri: str,
+        total_bytes: int,
+        mime_type: str,
+        expected_privacy_status: str,
+        response: HttpResponse,
+        diagnostics: list[Mapping[str, object]],
+        final_uncertain: bool,
+    ) -> PublishResult:
         if response.status_code in {200, 201}:
-            return self._result_from_success(response, session_uri, expected_privacy_status)
+            try:
+                result = self._result_from_success(response, session_uri, expected_privacy_status)
+                return self._post_upload_processing(request, result, expected_privacy_status, diagnostics)
+            except (PermanentPublishError, AmbiguousPublishError) as exc:
+                self._attach_diagnostics(exc, diagnostics)
+                raise
         if response.status_code == 308:
-            offset = self._offset_from_308(response, total_bytes, session_uri)
+            try:
+                offset = self._offset_from_308(response, total_bytes, session_uri)
+            except AmbiguousPublishError as exc:
+                self._attach_diagnostics(exc, diagnostics)
+                raise
             if offset >= total_bytes:
-                raise AmbiguousPublishError(
+                error = AmbiguousPublishError(
                     "youtube_completion_unknown",
                     "YouTube reported all bytes without a final video response",
                     external_session_id=session_uri,
                 )
-            self._record_progress(request, offset, "resuming", session_uri)
+                self._attach_diagnostics(error, diagnostics)
+                raise error
+            try:
+                self._record_progress(request, offset, "resuming", session_uri)
+            except AmbiguousPublishError as exc:
+                self._attach_diagnostics(exc, diagnostics)
+                raise
             retry_after = _retry_after_seconds(response)
             if retry_after is not None:
-                raise RetryablePublishError(
+                error = RetryablePublishError(
                     "youtube_retry_after",
                     "YouTube requested a later resumable-upload retry",
                     external_session_id=session_uri,
                     retry_after_seconds=retry_after,
                 )
+                self._attach_diagnostics(error, diagnostics)
+                raise error
             return self._upload_from_offset(
                 request,
                 session_uri,
@@ -962,20 +1202,29 @@ class YouTubeResumableAdapter:
                 mime_type,
                 expected_privacy_status,
                 offset,
+                diagnostics=diagnostics,
             )
-        if response.status_code == 404 and checkpoint.phase == "final_chunk_inflight":
-            raise AmbiguousPublishError(
-                "youtube_session_missing_after_final_chunk",
-                "YouTube session disappeared after an uncertain final chunk",
+        if response.status_code == 404 and final_uncertain:
+            error = AmbiguousPublishError(
+                "youtube_final_chunk_session_expired",
+                "YouTube session expired after an uncertain final upload chunk",
                 external_session_id=session_uri,
             )
-        if checkpoint.phase == "final_chunk_inflight" and 400 <= response.status_code <= 499:
-            raise AmbiguousPublishError(
-                "youtube_final_chunk_probe_unconfirmed",
+            self._attach_diagnostics(error, diagnostics)
+            raise error
+        if final_uncertain and 400 <= response.status_code <= 499:
+            error = AmbiguousPublishError(
+                "youtube_final_chunk_outcome_unknown",
                 "YouTube final upload outcome could not be confirmed safely",
                 external_session_id=session_uri,
             )
-        self._raise_upload_response(response, session_uri=session_uri, context="resume probe")
+            self._attach_diagnostics(error, diagnostics)
+            raise error
+        try:
+            self._raise_upload_response(response, session_uri=session_uri, context="resume probe")
+        except (PermanentPublishError, AmbiguousPublishError, RetryablePublishError) as exc:
+            self._attach_diagnostics(exc, diagnostics)
+            raise
         raise AssertionError("unreachable")
 
     def _upload_from_offset(
@@ -986,7 +1235,10 @@ class YouTubeResumableAdapter:
         mime_type: str,
         expected_privacy_status: str,
         offset: int,
+        *,
+        diagnostics: list[Mapping[str, object]] | None = None,
     ) -> PublishResult:
+        upload_diagnostics = diagnostics if diagnostics is not None else []
         try:
             handle = request.asset_path.open("rb")
         except OSError as exc:
@@ -1009,6 +1261,7 @@ class YouTubeResumableAdapter:
                 end = offset + length - 1
                 phase = "final_chunk_inflight" if end == total_bytes - 1 else "uploading"
                 self._record_progress(request, offset, phase, session_uri)
+                chunk_started = time.monotonic()
                 try:
                     response = self._authorized_request(
                         request,
@@ -1023,33 +1276,66 @@ class YouTubeResumableAdapter:
                         session_uri=session_uri,
                     )
                 except OSError as exc:
+                    self._capture_diagnostic(
+                        request,
+                        upload_diagnostics,
+                        session_uri=session_uri,
+                        stage="final_chunk_upload" if end == total_bytes - 1 else "upload_chunk",
+                        started=chunk_started,
+                        attempt=1,
+                        exc=exc,
+                    )
                     if end == total_bytes - 1:
-                        raise AmbiguousPublishError(
-                            "youtube_final_chunk_timeout",
-                            "YouTube final upload chunk has an unknown outcome",
-                            external_session_id=session_uri,
-                        ) from exc
-                    raise RetryablePublishError(
+                        return self._recover_final_chunk_outcome(
+                            request,
+                            session_uri=session_uri,
+                            total_bytes=total_bytes,
+                            mime_type=mime_type,
+                            expected_privacy_status=expected_privacy_status,
+                            diagnostics=upload_diagnostics,
+                            cause=exc,
+                        )
+                    error = RetryablePublishError(
                         "youtube_upload_unavailable",
                         "YouTube upload session can be retried safely",
                         external_session_id=session_uri,
-                    ) from exc
+                    )
+                    self._attach_diagnostics(error, upload_diagnostics)
+                    raise error from exc
                 if response.status_code in {200, 201}:
                     if end != total_bytes - 1:
-                        raise AmbiguousPublishError(
+                        error = AmbiguousPublishError(
                             "youtube_early_success_response",
                             "YouTube reported success before the approved file was fully sent",
                             external_session_id=session_uri,
                         )
-                    return self._result_from_success(response, session_uri, expected_privacy_status)
+                        self._attach_diagnostics(error, upload_diagnostics)
+                        raise error
+                    try:
+                        result = self._result_from_success(response, session_uri, expected_privacy_status)
+                        return self._post_upload_processing(
+                            request,
+                            result,
+                            expected_privacy_status,
+                            upload_diagnostics,
+                        )
+                    except (PermanentPublishError, AmbiguousPublishError) as exc:
+                        self._attach_diagnostics(exc, upload_diagnostics)
+                        raise
                 if response.status_code == 308:
-                    next_offset = self._offset_from_308(response, total_bytes, session_uri)
+                    try:
+                        next_offset = self._offset_from_308(response, total_bytes, session_uri)
+                    except AmbiguousPublishError as exc:
+                        self._attach_diagnostics(exc, upload_diagnostics)
+                        raise
                     if next_offset > end + 1:
-                        raise AmbiguousPublishError(
+                        error = AmbiguousPublishError(
                             "youtube_invalid_resume_range",
                             "YouTube returned an impossible resumable-upload range",
                             external_session_id=session_uri,
                         )
+                        self._attach_diagnostics(error, upload_diagnostics)
+                        raise error
                     # A 308 that confirms every byte of the final chunk but
                     # omits the required video resource leaves completion
                     # unknown.  Preserve the pre-send final-chunk marker so
@@ -1061,30 +1347,576 @@ class YouTubeResumableAdapter:
                     )
                     self._record_progress(request, next_offset, progress_phase, session_uri)
                     if next_offset >= total_bytes:
-                        raise AmbiguousPublishError(
+                        error = AmbiguousPublishError(
                             "youtube_completion_unknown",
                             "YouTube reported all bytes without a final video response",
                             external_session_id=session_uri,
                         )
+                        self._attach_diagnostics(error, upload_diagnostics)
+                        raise error
                     retry_after = _retry_after_seconds(response)
                     if retry_after is not None:
-                        raise RetryablePublishError(
+                        error = RetryablePublishError(
                             "youtube_retry_after",
                             "YouTube requested a later resumable-upload retry",
                             external_session_id=session_uri,
                             retry_after_seconds=retry_after,
                         )
+                        self._attach_diagnostics(error, upload_diagnostics)
+                        raise error
                     if next_offset <= offset:
-                        raise RetryablePublishError(
+                        error = RetryablePublishError(
                             "youtube_resume_stalled",
                             "YouTube did not confirm upload progress; session can be retried safely",
                             external_session_id=session_uri,
                             retry_after_seconds=_retry_after_seconds(response),
                         )
+                        self._attach_diagnostics(error, upload_diagnostics)
+                        raise error
                     offset = next_offset
                     continue
-                self._raise_upload_response(response, session_uri=session_uri, context="upload chunk")
+                try:
+                    self._raise_upload_response(response, session_uri=session_uri, context="upload chunk")
+                except (PermanentPublishError, AmbiguousPublishError, RetryablePublishError) as exc:
+                    self._attach_diagnostics(exc, upload_diagnostics)
+                    raise
         raise AssertionError("unreachable")
+
+    def _recover_final_chunk_outcome(
+        self,
+        request: PublishRequest,
+        *,
+        session_uri: str,
+        total_bytes: int,
+        mime_type: str,
+        expected_privacy_status: str,
+        diagnostics: list[Mapping[str, object]],
+        cause: OSError,
+    ) -> PublishResult:
+        """Resolve an uncertain final PUT before any retry can send bytes."""
+        try:
+            response, probe_diagnostics = self._probe_session(
+                request,
+                session_uri=session_uri,
+                total_bytes=total_bytes,
+                final_uncertain=True,
+            )
+        except (PermanentPublishError, AmbiguousPublishError, RetryablePublishError) as exc:
+            self._attach_diagnostics(exc, diagnostics)
+            raise exc from cause
+        diagnostics.extend(probe_diagnostics)
+        try:
+            return self._handle_session_probe(
+                request,
+                session_uri=session_uri,
+                total_bytes=total_bytes,
+                mime_type=mime_type,
+                expected_privacy_status=expected_privacy_status,
+                response=response,
+                diagnostics=diagnostics,
+                final_uncertain=True,
+            )
+        except (PermanentPublishError, AmbiguousPublishError, RetryablePublishError) as exc:
+            self._attach_diagnostics(exc, diagnostics)
+            raise exc from cause
+
+    @staticmethod
+    def _known_processing_video_id(request: PublishRequest) -> str | None:
+        value = getattr(request, "_youtube_existing_external_media_id", None)
+        if value is None:
+            return None
+        if not isinstance(value, str) or not VIDEO_ID_RE.fullmatch(value.strip()):
+            raise AmbiguousPublishError(
+                "youtube_processing_reference_invalid",
+                "stored YouTube processing video reference is invalid",
+            )
+        return value.strip()
+
+    def _post_upload_processing(
+        self,
+        request: PublishRequest,
+        result: PublishResult,
+        expected_privacy_status: str,
+        diagnostics: list[Mapping[str, object]],
+    ) -> PublishResult:
+        try:
+            polled = self._poll_processing(
+                request,
+                video_id=result.external_media_id,
+                session_uri=result.external_session_id,
+                expected_privacy_status=expected_privacy_status,
+                processing_started_at=getattr(request, "_youtube_processing_started_at", None),
+            )
+        except (PermanentPublishError, AmbiguousPublishError, RetryablePublishError) as exc:
+            self._attach_diagnostics(exc, diagnostics)
+            raise
+        return self._attach_diagnostics(polled, diagnostics)
+
+    def _poll_processing(
+        self,
+        request: PublishRequest,
+        *,
+        video_id: str,
+        session_uri: str | None,
+        expected_privacy_status: str,
+        processing_started_at: object,
+    ) -> PublishResult:
+        """Poll the known video resource once; pending work is worker-scheduled."""
+        if not VIDEO_ID_RE.fullmatch(video_id):
+            raise AmbiguousPublishError(
+                "youtube_processing_reference_invalid",
+                "YouTube processing video reference is invalid",
+                external_session_id=session_uri,
+            )
+        now = self._request_now(request)
+        started_at = _canonical_timestamp(processing_started_at) or now
+        age_seconds = self._processing_age_seconds(now, started_at)
+        video_url = f"https://www.youtube.com/shorts/{video_id}"
+        diagnostics: list[Mapping[str, object]] = []
+        last_retry_after: int | None = None
+        query = urlencode({"part": "processingDetails,contentDetails,status", "id": video_id})
+        for attempt in range(1, self.status_probe_max_attempts + 1):
+            started = time.monotonic()
+            try:
+                response = self._authorized_request(
+                    request,
+                    method="GET",
+                    url=f"{YOUTUBE_VIDEOS_ENDPOINT}?{query}",
+                    headers={"Accept": "application/json", "Content-Length": "0"},
+                    body=b"",
+                    session_uri=session_uri,
+                )
+            except OSError as exc:
+                self._capture_diagnostic(
+                    request,
+                    diagnostics,
+                    session_uri=session_uri,
+                    stage="processing_status_poll",
+                    started=started,
+                    attempt=attempt,
+                    exc=exc,
+                )
+                if attempt < self.status_probe_max_attempts:
+                    self._sleep_probe_retry(attempt, None)
+                    continue
+                return self._processing_pending_or_stuck(
+                    video_id=video_id,
+                    session_uri=session_uri,
+                    started_at=started_at,
+                    age_seconds=age_seconds,
+                    diagnostics=diagnostics,
+                    poll_error_code="youtube_processing_poll_unavailable",
+                )
+            except YouTubeConfigurationError as exc:
+                error = PermanentPublishError(
+                    "youtube_processing_configuration_invalid",
+                    "YouTube processing status cannot be authenticated safely",
+                    external_session_id=session_uri,
+                    external_media_id=video_id,
+                    external_url=video_url,
+                )
+                self._mark_processing_event(
+                    error,
+                    event_type="youtube_processing_failed",
+                    video_id=video_id,
+                    started_at=started_at,
+                    age_seconds=age_seconds,
+                    reason="configuration_invalid",
+                )
+                self._raise_processing_error(error, diagnostics, exc)
+            except YouTubeOAuthError as exc:
+                if exc.retryable and attempt < self.status_probe_max_attempts:
+                    self._sleep_probe_retry(attempt, exc.retry_after_seconds)
+                    last_retry_after = exc.retry_after_seconds
+                    continue
+                if exc.retryable:
+                    return self._processing_pending_or_stuck(
+                        video_id=video_id,
+                        session_uri=session_uri,
+                        started_at=started_at,
+                        age_seconds=age_seconds,
+                        diagnostics=diagnostics,
+                        poll_error_code="youtube_processing_poll_unavailable",
+                        retry_after=last_retry_after,
+                    )
+                error = PermanentPublishError(
+                    "youtube_processing_unauthorized",
+                    "YouTube processing status authorization was rejected",
+                    external_session_id=session_uri,
+                    external_media_id=video_id,
+                    external_url=video_url,
+                )
+                self._mark_processing_event(
+                    error,
+                    event_type="youtube_processing_failed",
+                    video_id=video_id,
+                    started_at=started_at,
+                    age_seconds=age_seconds,
+                    reason="unauthorized",
+                )
+                self._raise_processing_error(error, diagnostics, exc)
+
+            retry_after = _retry_after_seconds(response)
+            if response.status_code == 429 or 500 <= response.status_code <= 599:
+                self._capture_diagnostic(
+                    request,
+                    diagnostics,
+                    session_uri=session_uri,
+                    stage="processing_status_poll",
+                    started=started,
+                    attempt=attempt,
+                    http_status=response.status_code,
+                )
+                last_retry_after = retry_after
+                if attempt < self.status_probe_max_attempts:
+                    self._sleep_probe_retry(attempt, retry_after)
+                    continue
+                return self._processing_pending_or_stuck(
+                    video_id=video_id,
+                    session_uri=session_uri,
+                    started_at=started_at,
+                    age_seconds=age_seconds,
+                    diagnostics=diagnostics,
+                    poll_error_code="youtube_processing_poll_unavailable",
+                    retry_after=last_retry_after,
+                )
+            if response.status_code == 404:
+                error = AmbiguousPublishError(
+                    "youtube_processing_video_not_found",
+                    "YouTube processing video resource is no longer available",
+                    external_session_id=session_uri,
+                    external_media_id=video_id,
+                    external_url=video_url,
+                )
+                self._mark_processing_event(
+                    error,
+                    event_type="youtube_processing_video_not_found",
+                    video_id=video_id,
+                    started_at=started_at,
+                    age_seconds=age_seconds,
+                )
+                self._raise_processing_error(error, diagnostics)
+            if response.status_code != 200:
+                error = AmbiguousPublishError(
+                    "youtube_processing_state_unknown",
+                    "YouTube processing status returned an unexpected response",
+                    external_session_id=session_uri,
+                    external_media_id=video_id,
+                    external_url=video_url,
+                )
+                self._mark_processing_event(
+                    error,
+                    event_type="youtube_processing_state_unknown",
+                    video_id=video_id,
+                    started_at=started_at,
+                    age_seconds=age_seconds,
+                )
+                self._raise_processing_error(error, diagnostics)
+            try:
+                payload = _json_object(response.body, error="YouTube processing response is malformed")
+                items = payload.get("items")
+                item = next(
+                    value for value in items
+                    if isinstance(value, Mapping) and value.get("id") == video_id
+                ) if isinstance(items, list) else None
+                details = item.get("processingDetails") if isinstance(item, Mapping) else None
+                status_value = details.get("processingStatus") if isinstance(details, Mapping) else None
+            except (StopIteration, ValueError) as exc:
+                error = AmbiguousPublishError(
+                    "youtube_processing_state_unknown",
+                    "YouTube processing status response is malformed or incomplete",
+                    external_session_id=session_uri,
+                    external_media_id=video_id,
+                    external_url=video_url,
+                )
+                self._mark_processing_event(
+                    error,
+                    event_type="youtube_processing_state_unknown",
+                    video_id=video_id,
+                    started_at=started_at,
+                    age_seconds=age_seconds,
+                )
+                self._raise_processing_error(error, diagnostics, exc)
+
+            if status_value == "processing":
+                if age_seconds > self.processing_sla_seconds:
+                    error = AmbiguousPublishError(
+                        "youtube_processing_stuck",
+                        f"YouTube video processing exceeded the {int(self.processing_sla_seconds)} second SLA",
+                        external_session_id=session_uri,
+                        external_media_id=video_id,
+                        external_url=video_url,
+                    )
+                    self._mark_processing_event(
+                        error,
+                        event_type="youtube_processing_stuck",
+                        video_id=video_id,
+                        started_at=started_at,
+                        age_seconds=age_seconds,
+                    )
+                    self._raise_processing_error(error, diagnostics)
+                return self._processing_pending(
+                    video_id=video_id,
+                    session_uri=session_uri,
+                    started_at=started_at,
+                    age_seconds=age_seconds,
+                    diagnostics=diagnostics,
+                )
+            if status_value == "succeeded":
+                status = item.get("status") if isinstance(item, Mapping) else None
+                actual_privacy = status.get("privacyStatus") if isinstance(status, Mapping) else None
+                if actual_privacy != expected_privacy_status:
+                    error = AmbiguousPublishError(
+                        "youtube_privacy_status_mismatch",
+                        "YouTube processing completed with an unexpected privacy status",
+                        external_session_id=session_uri,
+                        external_media_id=video_id,
+                        external_url=video_url,
+                    )
+                    self._mark_processing_event(
+                        error,
+                        event_type="youtube_processing_invariant_violation",
+                        video_id=video_id,
+                        started_at=started_at,
+                        age_seconds=age_seconds,
+                        reason="privacy_status_mismatch",
+                    )
+                    self._raise_processing_error(error, diagnostics)
+                content = item.get("contentDetails") if isinstance(item, Mapping) else None
+                if isinstance(content, Mapping) and _duration_is_strictly_zero(content.get("duration")):
+                    error = AmbiguousPublishError(
+                        "youtube_processing_invariant_violation",
+                        "YouTube reported successful processing for a zero-duration video",
+                        external_session_id=session_uri,
+                        external_media_id=video_id,
+                        external_url=video_url,
+                    )
+                    self._mark_processing_event(
+                        error,
+                        event_type="youtube_processing_invariant_violation",
+                        video_id=video_id,
+                        started_at=started_at,
+                        age_seconds=age_seconds,
+                        reason="zero_duration",
+                    )
+                    self._raise_processing_error(error, diagnostics)
+                return self._attach_diagnostics(
+                    PublishResult(video_id, video_url, session_uri),
+                    diagnostics,
+                )
+            if status_value == "failed":
+                reason_value = details.get("processingFailureReason") if isinstance(details, Mapping) else None
+                reason = self._safe_processing_reason(reason_value)
+                error = PermanentPublishError(
+                    "youtube_processing_failed",
+                    f"YouTube video processing failed ({reason})",
+                    external_session_id=session_uri,
+                    external_media_id=video_id,
+                    external_url=video_url,
+                )
+                self._mark_processing_event(
+                    error,
+                    event_type="youtube_processing_failed",
+                    video_id=video_id,
+                    started_at=started_at,
+                    age_seconds=age_seconds,
+                    reason=reason,
+                )
+                self._raise_processing_error(error, diagnostics)
+            if status_value == "terminated":
+                error = AmbiguousPublishError(
+                    "youtube_processing_terminated",
+                    "YouTube terminated video processing without a usable result",
+                    external_session_id=session_uri,
+                    external_media_id=video_id,
+                    external_url=video_url,
+                )
+                self._mark_processing_event(
+                    error,
+                    event_type="youtube_processing_terminated",
+                    video_id=video_id,
+                    started_at=started_at,
+                    age_seconds=age_seconds,
+                )
+                self._raise_processing_error(error, diagnostics)
+            error = AmbiguousPublishError(
+                "youtube_processing_status_unknown",
+                "YouTube returned an unknown video processing status",
+                external_session_id=session_uri,
+                external_media_id=video_id,
+                external_url=video_url,
+            )
+            self._mark_processing_event(
+                error,
+                event_type="youtube_processing_status_unknown",
+                video_id=video_id,
+                started_at=started_at,
+                age_seconds=age_seconds,
+                reason=str(status_value)[:80] if status_value is not None else None,
+            )
+            self._raise_processing_error(error, diagnostics)
+        raise AssertionError("processing poll loop did not return")
+
+    def _processing_pending(
+        self,
+        *,
+        video_id: str,
+        session_uri: str | None,
+        started_at: str,
+        age_seconds: int,
+        diagnostics: list[Mapping[str, object]],
+        poll_error_code: str | None = None,
+        retry_after: int | None = None,
+    ) -> YouTubeProcessingResult:
+        interval = max(1, int(self.processing_poll_interval_seconds))
+        if self.processing_poll_interval_seconds > interval:
+            interval += 1
+        interval = max(interval, retry_after or 0)
+        result = YouTubeProcessingResult(
+            external_media_id=video_id,
+            external_url=f"https://www.youtube.com/shorts/{video_id}",
+            external_session_id=session_uri,
+            processing_started_at=started_at,
+            processing_age_seconds=age_seconds,
+            next_poll_after_seconds=interval,
+            poll_error_code=poll_error_code,
+            transport_diagnostics=tuple(diagnostics),
+        )
+        return result
+
+    def _processing_pending_or_stuck(
+        self,
+        *,
+        video_id: str,
+        session_uri: str | None,
+        started_at: str,
+        age_seconds: int,
+        diagnostics: list[Mapping[str, object]],
+        poll_error_code: str | None = None,
+        retry_after: int | None = None,
+    ) -> YouTubeProcessingResult:
+        if age_seconds > self.processing_sla_seconds:
+            error = AmbiguousPublishError(
+                "youtube_processing_stuck",
+                f"YouTube video processing exceeded the {int(self.processing_sla_seconds)} second SLA",
+                external_session_id=session_uri,
+                external_media_id=video_id,
+                external_url=f"https://www.youtube.com/shorts/{video_id}",
+            )
+            self._mark_processing_event(
+                error,
+                event_type="youtube_processing_stuck",
+                video_id=video_id,
+                started_at=started_at,
+                age_seconds=age_seconds,
+            )
+            self._raise_processing_error(error, diagnostics)
+        return self._processing_pending(
+            video_id=video_id,
+            session_uri=session_uri,
+            started_at=started_at,
+            age_seconds=age_seconds,
+            diagnostics=diagnostics,
+            poll_error_code=poll_error_code,
+            retry_after=retry_after,
+        )
+
+    @staticmethod
+    def _processing_age_seconds(now: str, started_at: str) -> int:
+        now_value = datetime.fromisoformat(now.replace("Z", "+00:00"))
+        start_value = datetime.fromisoformat(started_at.replace("Z", "+00:00"))
+        return max(0, int((now_value - start_value).total_seconds()))
+
+    def _request_now(self, request: PublishRequest) -> str:
+        candidate = getattr(request, "_youtube_now", None)
+        if candidate is None:
+            candidate = self.clock()
+        return _canonical_timestamp(candidate) or _utc_now()
+
+    @staticmethod
+    def _safe_processing_reason(value: object) -> str:
+        if not isinstance(value, str) or not value:
+            return "unspecified"
+        safe = re.sub(r"[^A-Za-z0-9_.-]", "_", value)
+        return safe[:120] or "unspecified"
+
+    def _raise_processing_error(
+        self,
+        error: PermanentPublishError | AmbiguousPublishError,
+        diagnostics: list[Mapping[str, object]],
+        cause: BaseException | None = None,
+    ) -> None:
+        self._attach_diagnostics(error, diagnostics)
+        if cause is None:
+            raise error
+        raise error from cause
+
+    @staticmethod
+    def _mark_processing_event(
+        error: BaseException,
+        *,
+        event_type: str,
+        video_id: str,
+        started_at: str,
+        age_seconds: int,
+        reason: str | None = None,
+    ) -> None:
+        data: dict[str, object] = {
+            "event_type": event_type,
+            "video_id": video_id,
+            "processing_started_at": started_at,
+            "processing_age_seconds": age_seconds,
+        }
+        if reason is not None:
+            data["reason"] = reason
+        setattr(error, "youtube_processing_event", data)
+
+    @staticmethod
+    def _attach_diagnostics(
+        value: BaseException | PublishResult,
+        diagnostics: list[Mapping[str, object]],
+    ) -> BaseException | PublishResult:
+        if diagnostics:
+            existing = getattr(value, "transport_diagnostics", ())
+            merged = list(existing)
+            for diagnostic in diagnostics:
+                if not any(diagnostic is prior or diagnostic == prior for prior in merged):
+                    merged.append(diagnostic)
+            object.__setattr__(value, "transport_diagnostics", tuple(merged))
+        return value
+
+    def _capture_diagnostic(
+        self,
+        request: PublishRequest,
+        diagnostics: list[Mapping[str, object]],
+        *,
+        session_uri: str | None,
+        stage: str,
+        started: float,
+        attempt: int,
+        exc: BaseException | None = None,
+        http_status: int | None = None,
+    ) -> None:
+        value: dict[str, object] = {
+            "exception_class": _safe_exception_class(exc) if exc is not None else "HTTPStatusError",
+            "stage": stage,
+            "elapsed_seconds": round(max(0.0, time.monotonic() - started), 6),
+            "http_status": http_status,
+            "attempt": attempt,
+            "session_fingerprint": (
+                sha256(session_uri.encode("utf-8")).hexdigest()[:16] if session_uri is not None else None
+            ),
+        }
+        diagnostics.append(value)
+        callback = getattr(request, "_record_youtube_transport_diagnostic", None)
+        if callable(callback):
+            try:
+                callback(value)
+            except Exception:
+                # The durable worker will retry recording diagnostics from the
+                # result/exception.  A callback failure must not hide the
+                # provider outcome or leak a secret through an error path.
+                pass
 
     def _authorized_request(
         self,
@@ -1375,9 +2207,23 @@ class YouTubeLiveAdapterFactory:
         state_dir: Path | str,
         *,
         transport_factory: Callable[[], HttpTransport] | None = None,
+        status_probe_max_attempts: int = DEFAULT_STATUS_PROBE_MAX_ATTEMPTS,
+        status_probe_base_backoff_seconds: float = DEFAULT_STATUS_PROBE_BASE_BACKOFF_SECONDS,
+        status_probe_max_backoff_seconds: float = DEFAULT_STATUS_PROBE_MAX_BACKOFF_SECONDS,
+        processing_sla_seconds: float = DEFAULT_PROCESSING_SLA_SECONDS,
+        processing_poll_interval_seconds: float = DEFAULT_PROCESSING_POLL_INTERVAL_SECONDS,
+        sleep: Callable[[float], None] | None = None,
+        clock: Callable[[], str | datetime] | None = None,
     ):
         self.state_dir = absolute_path(state_dir)
         self.transport_factory = transport_factory
+        self.status_probe_max_attempts = status_probe_max_attempts
+        self.status_probe_base_backoff_seconds = status_probe_base_backoff_seconds
+        self.status_probe_max_backoff_seconds = status_probe_max_backoff_seconds
+        self.processing_sla_seconds = processing_sla_seconds
+        self.processing_poll_interval_seconds = processing_poll_interval_seconds
+        self.sleep = sleep
+        self.clock = clock
 
     def supports_resumable_session(self, platform: str) -> bool:
         return platform == "youtube"
@@ -1399,4 +2245,11 @@ class YouTubeLiveAdapterFactory:
         return YouTubeResumableAdapter(
             settings,
             transport=self.transport_factory() if self.transport_factory is not None else None,
+            status_probe_max_attempts=self.status_probe_max_attempts,
+            status_probe_base_backoff_seconds=self.status_probe_base_backoff_seconds,
+            status_probe_max_backoff_seconds=self.status_probe_max_backoff_seconds,
+            processing_sla_seconds=self.processing_sla_seconds,
+            processing_poll_interval_seconds=self.processing_poll_interval_seconds,
+            sleep=self.sleep,
+            clock=self.clock,
         )

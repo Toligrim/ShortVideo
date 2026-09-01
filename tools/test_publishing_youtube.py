@@ -27,12 +27,14 @@ from publishing.adapters.youtube import (
     OAUTH_AUTHORIZATION_ENDPOINT,
     OAUTH_TOKEN_ENDPOINT,
     YOUTUBE_RESUMABLE_INITIATION_ENDPOINT,
-    YOUTUBE_UPLOAD_SCOPE,
+    YOUTUBE_REQUIRED_SCOPES,
+    YOUTUBE_VIDEOS_ENDPOINT,
     HttpResponse,
     YouTubeConfigurationError,
     YouTubeLiveAdapterFactory,
     YouTubeOAuthClient,
     YouTubeOAuthSettings,
+    YouTubeProcessingResult,
     YouTubeResumableAdapter,
     build_authorization_request,
 )
@@ -59,6 +61,29 @@ def video_response(video_id: str = "yt-video-123", *, privacy_status: str | None
     if privacy_status is not None:
         payload["status"] = {"privacyStatus": privacy_status}
     return HttpResponse(201, {"Content-Type": "application/json"}, json.dumps(payload).encode("utf-8"))
+
+
+def processing_response(
+    video_id: str = "yt-video-123",
+    *,
+    processing_status: str = "succeeded",
+    privacy_status: str | None = "private",
+    duration: str | None = "PT1M",
+    failure_reason: str | None = None,
+) -> HttpResponse:
+    details: dict[str, object] = {"processingStatus": processing_status}
+    if failure_reason is not None:
+        details["processingFailureReason"] = failure_reason
+    item: dict[str, object] = {"id": video_id, "processingDetails": details}
+    if privacy_status is not None:
+        item["status"] = {"privacyStatus": privacy_status}
+    if duration is not None:
+        item["contentDetails"] = {"duration": duration}
+    return HttpResponse(
+        200,
+        {"Content-Type": "application/json"},
+        json.dumps({"items": [item]}).encode("utf-8"),
+    )
 
 
 class FakeTransport:
@@ -115,7 +140,7 @@ class YouTubeAdapterTests(unittest.TestCase):
         self.secrets_dir.mkdir(mode=0o700)
         self.token_file = self.secrets_dir / "youtube-token.json"
         self.token_file.write_text(
-            json.dumps({"refresh_token": "REFRESH_TOKEN_SECRET", "scope": YOUTUBE_UPLOAD_SCOPE}),
+            json.dumps({"refresh_token": "REFRESH_TOKEN_SECRET", "scope": YOUTUBE_REQUIRED_SCOPES}),
             encoding="utf-8",
         )
         os.chmod(self.token_file, 0o600)
@@ -186,8 +211,10 @@ class YouTubeAdapterTests(unittest.TestCase):
             phase=phase,
         )
 
-    def adapter(self, transport: FakeTransport) -> YouTubeResumableAdapter:
-        return YouTubeResumableAdapter(self.settings, transport=transport, chunk_size=MIN_CHUNK_SIZE)
+    def adapter(self, transport: FakeTransport, **overrides: object) -> YouTubeResumableAdapter:
+        overrides.setdefault("chunk_size", MIN_CHUNK_SIZE)
+        overrides.setdefault("sleep", lambda _seconds: None)
+        return YouTubeResumableAdapter(self.settings, transport=transport, **overrides)
 
     def test_refresh_and_pkce_bootstrap_store_no_access_token(self):
         refresh_transport = FakeTransport(token_response("ACCESS_TOKEN_SECRET"))
@@ -229,7 +256,7 @@ class YouTubeAdapterTests(unittest.TestCase):
         parsed = urlparse(authorization.url)
         self.assertEqual(f"{parsed.scheme}://{parsed.netloc}{parsed.path}", OAUTH_AUTHORIZATION_ENDPOINT)
         fields = parse_qs(parsed.query)
-        self.assertEqual(fields["scope"], [YOUTUBE_UPLOAD_SCOPE])
+        self.assertEqual(fields["scope"], [YOUTUBE_REQUIRED_SCOPES])
         self.assertEqual(fields["code_challenge_method"], ["S256"])
         self.assertEqual(fields["state"], [authorization.state])
         self.assertNotIn(authorization.code_verifier, authorization.url)
@@ -239,7 +266,7 @@ class YouTubeAdapterTests(unittest.TestCase):
             token_response(
                 "BOOTSTRAP_ACCESS_SECRET",
                 refresh_token="BOOTSTRAP_REFRESH_SECRET",
-                scope=YOUTUBE_UPLOAD_SCOPE,
+                scope=YOUTUBE_REQUIRED_SCOPES,
             )
         )
         YouTubeOAuthClient(bootstrap_settings, transport=bootstrap_transport).exchange_authorization_code(
@@ -271,6 +298,7 @@ class YouTubeAdapterTests(unittest.TestCase):
             note,
             noted(HttpResponse(200, {"Location": SESSION_URI})),
             noted(video_response("short-id_1")),
+            noted(processing_response("short-id_1")),
         )
         request, saved, progress = self.request(order=order)
         result = self.adapter(transport).publish(request)
@@ -319,6 +347,7 @@ class YouTubeAdapterTests(unittest.TestCase):
             HttpResponse(200, {"Location": SESSION_URI}),
             HttpResponse(308, {"Range": f"bytes=0-{MIN_CHUNK_SIZE - 1}"}),
             video_response(),
+            processing_response(),
         )
         request, _saved, progress = self.request()
         self.assertEqual(self.adapter(transport).publish(request).external_media_id, "yt-video-123")
@@ -336,6 +365,7 @@ class YouTubeAdapterTests(unittest.TestCase):
             token_response("RESUMED_ACCESS"),
             HttpResponse(308, {"Range": f"bytes=0-{MIN_CHUNK_SIZE - 1}"}),
             video_response("resumed-video"),
+            processing_response("resumed-video"),
         )
         checkpoint = self.checkpoint(offset=0, phase="uploading")
         resumed_request, _saved, resumed_progress = self.request(checkpoint=checkpoint)
@@ -362,6 +392,7 @@ class YouTubeAdapterTests(unittest.TestCase):
             token_response("SECOND_ACCESS"),
             HttpResponse(200, {"Location": SESSION_URI}),
             video_response(),
+            processing_response(),
         )
         request, _saved, _progress = self.request()
         self.adapter(transport).publish(request)
@@ -411,6 +442,7 @@ class YouTubeAdapterTests(unittest.TestCase):
             token_response(),
             HttpResponse(308, {}),
             video_response("after-500"),
+            processing_response("after-500"),
         )
         resumed_request, _saved, _progress = self.request(checkpoint=checkpoint)
         self.assertEqual(self.adapter(resumed_transport).publish(resumed_request).external_media_id, "after-500")
@@ -431,7 +463,7 @@ class YouTubeAdapterTests(unittest.TestCase):
         self.assertEqual(rate_limited.exception.retry_after_seconds, 7)
         self.assertEqual(rate_limited.exception.external_session_id, SESSION_URI)
 
-    def test_permanent_4xx_timeout_and_malformed_final_are_not_blindly_retried(self):
+    def test_permanent_4xx_and_malformed_final_are_not_blindly_retried(self):
         self.write_asset()
         rejected = FakeTransport(
             token_response(),
@@ -447,11 +479,17 @@ class YouTubeAdapterTests(unittest.TestCase):
             token_response(),
             HttpResponse(200, {"Location": SESSION_URI}),
             TimeoutError("network timeout after " + SESSION_URI),
+            video_response("confirmed-after-timeout"),
+            processing_response("confirmed-after-timeout"),
         )
-        with self.assertRaises(AmbiguousPublishError) as ambiguous:
-            self.adapter(timeout).publish(self.request()[0])
-        self.assertEqual(ambiguous.exception.code, "youtube_final_chunk_timeout")
-        self.assertNotIn(SESSION_URI, str(ambiguous.exception))
+        confirmed = self.adapter(timeout).publish(self.request()[0])
+        self.assertEqual(confirmed.external_media_id, "confirmed-after-timeout")
+        self.assertEqual(timeout.calls[2]["headers"]["Content-Length"], str(MIN_CHUNK_SIZE))
+        self.assertEqual(timeout.calls[3]["headers"]["Content-Length"], str(0))
+        diagnostics = getattr(confirmed, "transport_diagnostics")
+        self.assertEqual(diagnostics[0]["exception_class"], "TimeoutError")
+        self.assertEqual(diagnostics[0]["stage"], "final_chunk_upload")
+        self.assertNotIn(SESSION_URI, json.dumps(diagnostics))
 
         malformed = FakeTransport(
             token_response(),
@@ -461,6 +499,191 @@ class YouTubeAdapterTests(unittest.TestCase):
         with self.assertRaises(AmbiguousPublishError) as invalid_response:
             self.adapter(malformed).publish(self.request()[0])
         self.assertEqual(invalid_response.exception.code, "youtube_malformed_success_response")
+
+    def test_final_oserror_probe_308_resumes_only_missing_tail(self):
+        self.write_asset(MIN_CHUNK_SIZE * 2)
+        transport = FakeTransport(
+            token_response(),
+            HttpResponse(200, {"Location": SESSION_URI}),
+            HttpResponse(308, {"Range": f"bytes=0-{MIN_CHUNK_SIZE - 1}"}),
+            ConnectionResetError("connection reset"),
+            HttpResponse(308, {"Range": f"bytes=0-{MIN_CHUNK_SIZE - 1}"}),
+            video_response("resumed-after-unknown"),
+            processing_response("resumed-after-unknown"),
+        )
+        request, _saved, progress = self.request()
+        result = self.adapter(transport).publish(request)
+        self.assertEqual(result.external_media_id, "resumed-after-unknown")
+        session_calls = [call for call in transport.calls if call["url"] == SESSION_URI]
+        self.assertEqual(session_calls[0]["headers"]["Content-Range"], "bytes 0-262143/524288")
+        self.assertEqual(session_calls[1]["headers"]["Content-Range"], "bytes 262144-524287/524288")
+        self.assertEqual(session_calls[2]["headers"]["Content-Range"], "bytes */524288")
+        self.assertEqual(session_calls[3]["headers"]["Content-Range"], "bytes 262144-524287/524288")
+        self.assertEqual(session_calls[3]["body"], b"x" * MIN_CHUNK_SIZE)
+        self.assertIn((MIN_CHUNK_SIZE, "resuming"), progress)
+
+    def test_final_oserror_probe_transport_retry_then_completed(self):
+        self.write_asset()
+        transport = FakeTransport(
+            token_response(),
+            HttpResponse(200, {"Location": SESSION_URI}),
+            TimeoutError("final transport failure"),
+            OSError("probe reset"),
+            video_response("probe-retried"),
+            processing_response("probe-retried"),
+        )
+        result = self.adapter(transport).publish(self.request()[0])
+        self.assertEqual(result.external_media_id, "probe-retried")
+        probes = [call for call in transport.calls if call["url"] == SESSION_URI]
+        self.assertEqual(len(probes), 3)
+        self.assertEqual([call["headers"]["Content-Range"] for call in probes], [
+            "bytes 0-262143/262144",
+            "bytes */262144",
+            "bytes */262144",
+        ])
+        diagnostics = getattr(result, "transport_diagnostics")
+        self.assertEqual([item["exception_class"] for item in diagnostics], ["TimeoutError", "OSError"])
+        self.assertEqual([item["attempt"] for item in diagnostics], [1, 1])
+
+    def test_final_oserror_probe_5xx_honors_retry_after(self):
+        self.write_asset()
+        delays: list[float] = []
+        transport = FakeTransport(
+            token_response(),
+            HttpResponse(200, {"Location": SESSION_URI}),
+            ConnectionResetError("final reset"),
+            HttpResponse(503, {"Retry-After": "7"}),
+            video_response("probe-5xx-retried"),
+            processing_response("probe-5xx-retried"),
+        )
+        result = self.adapter(transport, sleep=delays.append).publish(self.request()[0])
+        self.assertEqual(result.external_media_id, "probe-5xx-retried")
+        self.assertEqual(delays, [7.0])
+        diagnostics = getattr(result, "transport_diagnostics")
+        self.assertEqual(diagnostics[1]["http_status"], 503)
+        self.assertEqual(diagnostics[1]["stage"], "resumable_status_probe")
+
+    def test_final_oserror_probe_expired_session_requires_reconciliation(self):
+        self.write_asset()
+        transport = FakeTransport(
+            token_response(),
+            HttpResponse(200, {"Location": SESSION_URI}),
+            ConnectionResetError("final reset"),
+            HttpResponse(404, {}),
+        )
+        with self.assertRaises(AmbiguousPublishError) as expired:
+            self.adapter(transport).publish(self.request()[0])
+        self.assertEqual(expired.exception.code, "youtube_final_chunk_session_expired")
+        self.assertEqual(len([call for call in transport.calls if call["url"] == SESSION_URI]), 2)
+
+    def test_upload_complete_processing_is_returned_for_a_later_worker_poll(self):
+        self.write_asset()
+        transport = FakeTransport(
+            token_response(),
+            HttpResponse(200, {"Location": SESSION_URI}),
+            video_response("still-processing"),
+            processing_response("still-processing", processing_status="processing"),
+        )
+        result = self.adapter(transport, processing_poll_interval_seconds=4).publish(self.request()[0])
+        self.assertIsInstance(result, YouTubeProcessingResult)
+        self.assertEqual(result.processing_status, "processing")
+        self.assertEqual(result.external_media_id, "still-processing")
+        self.assertEqual(result.next_poll_after_seconds, 4)
+        self.assertEqual(
+            [call["method"] for call in transport.calls if call["url"] == SESSION_URI],
+            ["PUT"],
+        )
+        processing_calls = [call for call in transport.calls if str(call["url"]).startswith(YOUTUBE_VIDEOS_ENDPOINT)]
+        self.assertEqual(len(processing_calls), 1)
+        self.assertEqual(parse_qs(urlparse(str(processing_calls[0]["url"])).query)["id"], ["still-processing"])
+
+    def test_processing_failed_preserves_video_reference_and_reason(self):
+        self.write_asset()
+        transport = FakeTransport(
+            token_response(),
+            HttpResponse(200, {"Location": SESSION_URI}),
+            video_response("processing-failed"),
+            processing_response(
+                "processing-failed",
+                processing_status="failed",
+                failure_reason="processingFailed",
+            ),
+        )
+        with self.assertRaises(PermanentPublishError) as failed:
+            self.adapter(transport).publish(self.request()[0])
+        self.assertEqual(failed.exception.code, "youtube_processing_failed")
+        self.assertEqual(failed.exception.external_media_id, "processing-failed")
+        self.assertIn("processingFailed", str(failed.exception))
+        event = getattr(failed.exception, "youtube_processing_event")
+        self.assertEqual(event["event_type"], "youtube_processing_failed")
+
+    def test_processing_failure_after_final_checkpoint_keeps_processing_error(self):
+        self.write_asset()
+        transport = FakeTransport(
+            token_response(),
+            video_response("processing-failed-after-resume"),
+            processing_response(
+                "processing-failed-after-resume",
+                processing_status="failed",
+                failure_reason="processingFailed",
+            ),
+        )
+        request, _saved, _progress = self.request(checkpoint=self.checkpoint(phase="final_chunk_inflight"))
+        with self.assertRaises(PermanentPublishError) as failed:
+            self.adapter(transport).publish(request)
+        self.assertEqual(failed.exception.code, "youtube_processing_failed")
+        self.assertEqual(failed.exception.external_media_id, "processing-failed-after-resume")
+        self.assertEqual(
+            getattr(failed.exception, "youtube_processing_event")["event_type"],
+            "youtube_processing_failed",
+        )
+
+    def test_processing_success_zero_duration_is_an_invariant_violation(self):
+        self.write_asset()
+        transport = FakeTransport(
+            token_response(),
+            HttpResponse(200, {"Location": SESSION_URI}),
+            video_response("zero-duration"),
+            processing_response("zero-duration", duration="PT0S"),
+        )
+        with self.assertRaises(AmbiguousPublishError) as invalid:
+            self.adapter(transport).publish(self.request()[0])
+        self.assertEqual(invalid.exception.code, "youtube_processing_invariant_violation")
+        self.assertEqual(invalid.exception.external_media_id, "zero-duration")
+
+    def test_processing_success_without_privacy_confirmation_is_ambiguous(self):
+        self.write_asset()
+        transport = FakeTransport(
+            token_response(),
+            HttpResponse(200, {"Location": SESSION_URI}),
+            video_response("missing-processing-privacy"),
+            processing_response("missing-processing-privacy", privacy_status=None),
+        )
+        with self.assertRaises(AmbiguousPublishError) as invalid:
+            self.adapter(transport).publish(self.request()[0])
+        self.assertEqual(invalid.exception.code, "youtube_privacy_status_mismatch")
+        self.assertEqual(invalid.exception.external_media_id, "missing-processing-privacy")
+
+    def test_processing_stuck_beyond_sla_is_actionable(self):
+        self.write_asset()
+        transport = FakeTransport(
+            token_response(),
+            HttpResponse(200, {"Location": SESSION_URI}),
+            video_response("stuck-video"),
+            processing_response("stuck-video", processing_status="processing"),
+        )
+        request, _saved, _progress = self.request()
+        object.__setattr__(request, "_youtube_now", "2099-01-01T00:01:01Z")
+        object.__setattr__(request, "_youtube_processing_started_at", "2099-01-01T00:00:00Z")
+        with self.assertRaises(AmbiguousPublishError) as stuck:
+            self.adapter(
+                transport,
+                processing_sla_seconds=60,
+                processing_poll_interval_seconds=1,
+            ).publish(request)
+        self.assertEqual(stuck.exception.code, "youtube_processing_stuck")
+        self.assertEqual(stuck.exception.external_media_id, "stuck-video")
+        self.assertEqual(getattr(stuck.exception, "youtube_processing_event")["processing_age_seconds"], 61)
 
     def test_lost_location_range_edges_and_404_after_uncertain_final_are_ambiguous(self):
         self.write_asset()
@@ -474,7 +697,12 @@ class YouTubeAdapterTests(unittest.TestCase):
             self.adapter(malformed_range).publish(self.request(checkpoint=self.checkpoint())[0])
         self.assertEqual(bad_range.exception.code, "youtube_invalid_resume_range")
 
-        absent_range = FakeTransport(token_response(), HttpResponse(308, {}), video_response("range-absent"))
+        absent_range = FakeTransport(
+            token_response(),
+            HttpResponse(308, {}),
+            video_response("range-absent"),
+            processing_response("range-absent"),
+        )
         result = self.adapter(absent_range).publish(self.request(checkpoint=self.checkpoint())[0])
         self.assertEqual(result.external_media_id, "range-absent")
         self.assertEqual(absent_range.calls[2]["headers"]["Content-Range"], f"bytes 0-{MIN_CHUNK_SIZE - 1}/{MIN_CHUNK_SIZE}")
@@ -484,21 +712,21 @@ class YouTubeAdapterTests(unittest.TestCase):
             self.adapter(uncertain_final).publish(
                 self.request(checkpoint=self.checkpoint(phase="final_chunk_inflight"))[0]
             )
-        self.assertEqual(missing_after_final.exception.code, "youtube_session_missing_after_final_chunk")
+        self.assertEqual(missing_after_final.exception.code, "youtube_final_chunk_session_expired")
 
         rejected_final_probe = FakeTransport(token_response(), HttpResponse(403, {}))
         with self.assertRaises(AmbiguousPublishError) as rejected_after_final:
             self.adapter(rejected_final_probe).publish(
                 self.request(checkpoint=self.checkpoint(phase="final_chunk_inflight"))[0]
             )
-        self.assertEqual(rejected_after_final.exception.code, "youtube_final_chunk_probe_unconfirmed")
+        self.assertEqual(rejected_after_final.exception.code, "youtube_final_chunk_outcome_unknown")
 
         oauth_rejected_final_probe = FakeTransport(HttpResponse(400, {}))
         with self.assertRaises(AmbiguousPublishError) as oauth_rejected_after_final:
             self.adapter(oauth_rejected_final_probe).publish(
                 self.request(checkpoint=self.checkpoint(phase="final_chunk_inflight"))[0]
             )
-        self.assertEqual(oauth_rejected_after_final.exception.code, "youtube_final_chunk_probe_unconfirmed")
+        self.assertEqual(oauth_rejected_after_final.exception.code, "youtube_final_chunk_outcome_unknown")
 
         expired = FakeTransport(token_response(), HttpResponse(404, {}))
         with self.assertRaises(PermanentPublishError) as missing_nonfinal:
@@ -628,7 +856,7 @@ class YouTubeAdapterTests(unittest.TestCase):
         )
         with self.assertRaises(AmbiguousPublishError) as final_short_lease:
             self.adapter(FakeTransport()).publish(final_request)
-        self.assertEqual(final_short_lease.exception.code, "youtube_final_chunk_probe_unconfirmed")
+        self.assertEqual(final_short_lease.exception.code, "youtube_final_chunk_outcome_unknown")
         self.assertFalse(
             YouTubeResumableAdapter._valid_session_uri(
                 "https://www.googleapis.com:444/upload/youtube/v3/videos?upload_id=x"
@@ -705,12 +933,29 @@ class YouTubeAdapterTests(unittest.TestCase):
                 },
             )
 
-    def test_token_scope_must_be_exactly_youtube_upload(self):
+    def test_token_scope_must_be_exactly_upload_and_readonly(self):
         self.token_file.write_text(
-            json.dumps({"refresh_token": "REFRESH_TOKEN_SECRET", "scope": f"{YOUTUBE_UPLOAD_SCOPE} openid"}),
+            json.dumps({"refresh_token": "REFRESH_TOKEN_SECRET", "scope": f"{YOUTUBE_REQUIRED_SCOPES} openid"}),
             encoding="utf-8",
         )
         os.chmod(self.token_file, 0o600)
+        with self.assertRaises(YouTubeConfigurationError):
+            YouTubeOAuthSettings.from_environment(
+                state_dir=self.state_dir,
+                environ={
+                    "SHORTVIDEO_YOUTUBE_CLIENT_ID": "client-id",
+                    "SHORTVIDEO_YOUTUBE_TOKEN_FILE": str(self.token_file),
+                },
+            )
+        self.token_file.write_text(
+            json.dumps(
+                {
+                    "refresh_token": "REFRESH_TOKEN_SECRET",
+                    "scope": "https://www.googleapis.com/auth/youtube.upload",
+                }
+            ),
+            encoding="utf-8",
+        )
         with self.assertRaises(YouTubeConfigurationError):
             YouTubeOAuthSettings.from_environment(
                 state_dir=self.state_dir,
@@ -795,6 +1040,45 @@ class ResumeFactory:
         return Adapter()
 
 
+class ProcessingFactory:
+    def __init__(self, clock: "Clock", outcomes: list[object]):
+        self.clock = clock
+        self.outcomes = list(outcomes)
+        self.requests: list[PublishRequest] = []
+
+    def supports_resumable_session(self, platform: str) -> bool:
+        return platform == "youtube"
+
+    def __call__(self, _platform: str):
+        factory = self
+
+        class Adapter:
+            def publish(self, request):
+                factory.requests.append(request)
+                if request.resumable_checkpoint is None:
+                    checkpoint = ResumableSessionCheckpoint(
+                        session_uri=SESSION_URI,
+                        asset_sha256=request.asset_sha256,
+                        approval_fingerprint=request.approval_fingerprint,
+                        total_bytes=request.asset_path.stat().st_size,
+                        mime_type="video/mp4",
+                        offset=0,
+                        phase="session_recorded",
+                    )
+                    assert request.record_target_processing is not None
+                    assert request.record_target_processing(checkpoint)
+                if not factory.outcomes:
+                    raise AssertionError("unexpected processing poll")
+                outcome = factory.outcomes.pop(0)
+                if callable(outcome):
+                    outcome = outcome(request)
+                if isinstance(outcome, BaseException):
+                    raise outcome
+                return outcome
+
+        return Adapter()
+
+
 class WorkerYouTubeIntegrationTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -843,6 +1127,155 @@ class WorkerYouTubeIntegrationTests(unittest.TestCase):
         }
         params.update(overrides)
         return PublishWorker(**params)
+
+    def test_processing_is_polled_across_worker_runs_and_never_reuploads(self):
+        publication = self.create_publication()
+        self.approve(publication)
+        started = self.clock()
+        pending = YouTubeProcessingResult(
+            "processing-video",
+            "https://www.youtube.com/shorts/processing-video",
+            SESSION_URI,
+            processing_started_at=started,
+            processing_age_seconds=0,
+            next_poll_after_seconds=1,
+        )
+        factory = ProcessingFactory(
+            self.clock,
+            [
+                pending,
+                YouTubeProcessingResult(
+                    "processing-video",
+                    "https://www.youtube.com/shorts/processing-video",
+                    SESSION_URI,
+                    processing_started_at=started,
+                    processing_age_seconds=1,
+                    next_poll_after_seconds=1,
+                ),
+                PublishResult(
+                    "processing-video",
+                    "https://www.youtube.com/shorts/processing-video",
+                    SESSION_URI,
+                ),
+            ],
+        )
+        worker = self.worker(factory)
+
+        self.assertEqual(worker.run_once().outcome, "processing")
+        self.assertEqual(self.target(publication, "youtube").state, TargetState.PROCESSING)
+        self.assertEqual(self.target(publication, "youtube").external_media_id, "processing-video")
+
+        self.clock.advance(1)
+        self.assertEqual(worker.run_once().outcome, "processing")
+        self.assertTrue(hasattr(factory.requests[1], "_youtube_existing_external_media_id"))
+        self.assertEqual(factory.requests[1]._youtube_existing_external_media_id, "processing-video")
+
+        self.clock.advance(1)
+        self.assertEqual(worker.run_once().outcome, "published")
+        self.assertEqual(self.target(publication, "youtube").state, TargetState.PUBLISHED)
+        self.assertEqual(len(factory.requests), 3)
+        self.assertIsNone(worker.run_once())
+
+    def test_processing_failed_is_terminal_but_keeps_video_id(self):
+        publication = self.create_publication()
+        self.approve(publication)
+        failed_error = PermanentPublishError(
+            "youtube_processing_failed",
+            "YouTube video processing failed (processingFailed)",
+            external_session_id=SESSION_URI,
+            external_media_id="failed-video",
+            external_url="https://www.youtube.com/shorts/failed-video",
+        )
+        failed_error.youtube_processing_event = {
+            "event_type": "youtube_processing_failed",
+            "video_id": "failed-video",
+            "processing_started_at": self.clock(),
+            "processing_age_seconds": 0,
+            "reason": "processingFailed",
+        }
+        factory = ProcessingFactory(
+            self.clock,
+            [failed_error],
+        )
+        result = self.worker(factory).run_once()
+        self.assertEqual(result.outcome, "permanent_failure")
+        target = self.target(publication, "youtube")
+        self.assertEqual(target.state, TargetState.FAILED)
+        self.assertEqual(target.external_media_id, "failed-video")
+        self.assertEqual(target.last_error_code, "youtube_processing_failed")
+        self.assertTrue(any(event["event_type"] == "youtube_processing_failed" for event in self.store.list_events(publication.id)))
+
+    def test_processing_stuck_requires_reconciliation_without_duplicate_upload(self):
+        publication = self.create_publication()
+        self.approve(publication)
+        started = self.clock()
+        pending = YouTubeProcessingResult(
+            "stuck-video",
+            "https://www.youtube.com/shorts/stuck-video",
+            SESSION_URI,
+            processing_started_at=started,
+            processing_age_seconds=0,
+            next_poll_after_seconds=1,
+        )
+        stuck = AmbiguousPublishError(
+            "youtube_processing_stuck",
+            "YouTube video processing exceeded the 60 second SLA",
+            external_session_id=SESSION_URI,
+            external_media_id="stuck-video",
+            external_url="https://www.youtube.com/shorts/stuck-video",
+        )
+        stuck.youtube_processing_event = {
+            "event_type": "youtube_processing_stuck",
+            "video_id": "stuck-video",
+            "processing_started_at": started,
+            "processing_age_seconds": 61,
+        }
+        factory = ProcessingFactory(self.clock, [pending, stuck])
+        worker = self.worker(factory)
+        self.assertEqual(worker.run_once().outcome, "processing")
+        self.clock.advance(61)
+        self.assertEqual(worker.run_once().outcome, "reconciliation_required")
+        target = self.target(publication, "youtube")
+        self.assertEqual(target.state, TargetState.RECONCILIATION_REQUIRED)
+        self.assertEqual(target.external_media_id, "stuck-video")
+        self.assertEqual(len(factory.requests), 2)
+        self.assertEqual(factory.requests[1]._youtube_existing_external_media_id, "stuck-video")
+        stuck_events = [
+            event for event in self.store.list_events(publication.id)
+            if event["event_type"] == "youtube_processing_stuck"
+        ]
+        self.assertEqual(len(stuck_events), 1)
+        self.assertEqual(stuck_events[0]["data"]["video_id"], "stuck-video")
+        self.assertEqual(stuck_events[0]["data"]["processing_age_seconds"], 61)
+
+    def test_transport_diagnostic_event_survives_successful_completion(self):
+        publication = self.create_publication()
+        self.approve(publication)
+        result = PublishResult("diagnostic-video", "https://www.youtube.com/shorts/diagnostic-video")
+        object.__setattr__(
+            result,
+            "transport_diagnostics",
+            (
+                {
+                    "exception_class": "ConnectionResetError",
+                    "stage": "final_chunk_upload",
+                    "elapsed_seconds": 0.125,
+                    "http_status": None,
+                    "attempt": 1,
+                    "session_fingerprint": "0123456789abcdef",
+                },
+            ),
+        )
+        self.assertEqual(self.worker(ResumeFactory(result)).run_once().outcome, "published")
+        events = [
+            event for event in self.store.list_events(publication.id)
+            if event["event_type"] == "youtube_transport_error"
+        ]
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0]["data"]["exception_class"], "ConnectionResetError")
+        self.assertNotIn("Authorization", json.dumps(events))
+        self.assertNotIn(SESSION_URI, json.dumps(events))
+        self.assertIsNone(self.target(publication, "youtube").last_error_code)
 
     def checkpoint_target(self, publication, *, phase: str = "session_recorded") -> str:
         item = self.store.claim_target_publish("crashed-worker", lease_seconds=5, now=self.clock())
