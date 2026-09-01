@@ -196,6 +196,14 @@ def test_claim_is_atomic_across_processes(sandbox):
 # Детектор опасных действий в сессиях Codex
 # ---------------------------------------------------------------------------
 
+def _exec_input(cmd: str) -> str:
+    """Реалистичная форма payload.input: code-mode Codex не зовёт shell
+    напрямую, модель пишет JS, которая сама вызывает tools.exec_command({cmd:
+    ..., ...}). Детектор обязан искать danger-паттерны именно внутри cmd:"...",
+    а не в input целиком — см. CMD_LITERAL_RE и её комментарий."""
+    return f'const r = await tools.exec_command({{cmd:{json.dumps(cmd)},workdir:"/x"}}); text(r.output);'
+
+
 @pytest.mark.parametrize("cmd,expected", [
     ("git stash push --include-untracked --message 'x'", "git_stash_untracked"),
     ("git stash -u", "git_stash_untracked"),
@@ -209,7 +217,7 @@ def test_claim_is_atomic_across_processes(sandbox):
 ])
 def test_dangerous_commands_are_detected(cmd, expected):
     import codex_session_import as csi
-    actions = [{"kind": "tool_call", "ts": "2026-08-31T16:00:00Z", "input": cmd}]
+    actions = [{"kind": "tool_call", "ts": "2026-08-31T16:00:00Z", "input": _exec_input(cmd)}]
     found = csi.detect_dangers(actions)
     assert expected in [f["anomaly_kind"] for f in found], f"{cmd!r} не пойман"
 
@@ -227,8 +235,26 @@ def test_dangerous_commands_are_detected(cmd, expected):
 def test_safe_commands_are_not_flagged(cmd):
     """Ложная тревога обесценивает настоящую — читатель перестаёт им верить."""
     import codex_session_import as csi
-    actions = [{"kind": "tool_call", "ts": "2026-08-31T16:00:00Z", "input": cmd}]
+    actions = [{"kind": "tool_call", "ts": "2026-08-31T16:00:00Z", "input": _exec_input(cmd)}]
     assert csi.detect_dangers(actions) == [], f"{cmd!r} ошибочно помечен опасным"
+
+
+def test_prompt_text_mentioning_dangerous_commands_is_not_flagged():
+    """Инцидент 2026-09-01: промпт делегирования (tools/producer_scheduler.py::
+    build_prompt) сам ЦИТИРУЕТ команды инцидента, объясняя делегату, что они
+    запрещены. Детектор ловил эту цитату как будто делегат её выполнил — один
+    custom_tool_call нередко несёт и реальный cmd:"...", и рядом свободный
+    текст промпта для суб-делегата (tools.mcp__codex__codex({prompt: "..."})).
+    Danger-паттерны обязаны смотреть только внутрь cmd:"...", не в prompt."""
+    import codex_session_import as csi
+    blob = (
+        'const dict = await tools.exec_command({cmd:"sed -n \'1,10p\' README.md",workdir:"/x"});\n'
+        'const prompt = `ДЕЛЕГАТУ ЗАПРЕЩЕНО: git stash push --include-untracked, '
+        'git reset --hard, git clean, kill -TERM -- -990719`;\n'
+        'const res = await tools.mcp__codex__codex({cwd:"/x",prompt:prompt});'
+    )
+    actions = [{"kind": "tool_call", "ts": "2026-09-01T08:00:00Z", "input": blob}]
+    assert csi.detect_dangers(actions) == []
 
 
 def test_normalize_extracts_tool_calls_and_messages(tmp_path):
@@ -256,6 +282,46 @@ def test_normalize_extracts_tool_calls_and_messages(tmp_path):
         "зашифрованное размышление обязано быть помечено как недоступное"
     meta = csi.session_meta(path)
     assert meta["source"] == "mcp"
+
+
+def test_import_preserves_original_anomaly_timestamp(sandbox):
+    """Инцидент 2026-09-01: append_event() по умолчанию ставит now_iso() —
+    верно для этапов конвейера (append_event зовётся сразу), но импорт сессий
+    почти всегда идёт постфактум. Без явного "ts" в fields сводка "Что пошло
+    не так" в рассказе показывала все аномалии временем самого импорта, а не
+    временем, когда делегат реально это выполнил."""
+    import codex_session_import as csi
+    importlib.reload(csi)
+    root = sandbox["root"]
+    csi.pipeline_log.ROOT = root
+    csi.pipeline_log.RUNS = root / "runs"
+    csi.ROOT = root
+
+    original_ts = "2026-09-01T05:03:00.178Z"
+    sessions_dir = sandbox["root"].parent / "codex-sessions"
+    sessions_dir.mkdir(parents=True, exist_ok=True)
+    rollout = sessions_dir / "rollout-x.jsonl"
+    rollout.write_text("\n".join(json.dumps(r, ensure_ascii=False) for r in [
+        {"type": "session_meta", "payload": {"session_id": "s1", "source": "exec",
+                                             "cwd": str(sandbox["root"]), "timestamp": original_ts}},
+        {"type": "response_item", "timestamp": original_ts,
+         "payload": {"type": "custom_tool_call", "name": "exec",
+                     "input": 'const r = await tools.exec_command({cmd: "git reset --hard HEAD"});',
+                     "call_id": "c1"}},
+    ]) + "\n")
+
+    code = csi.main(["import", "--run-id", sandbox["run_dir"].name,
+                     "--sessions-dir", str(sessions_dir)])
+    assert code == 0
+
+    events = [json.loads(line) for line in
+              (sandbox["run_dir"] / "events.jsonl").read_text().splitlines()]
+    anomalies = [e for e in events if e.get("kind") == "anomaly"]
+    assert len(anomalies) == 1
+    assert anomalies[0]["ts"] == original_ts, (
+        f"ожидали время самой команды ({original_ts}), получили время импорта "
+        f"({anomalies[0]['ts']})"
+    )
 
 
 # ---------------------------------------------------------------------------

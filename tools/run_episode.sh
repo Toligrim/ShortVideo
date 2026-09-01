@@ -135,6 +135,13 @@ if [[ $CODE -ne 0 ]]; then
 fi
 python3 tools/pipeline_log.py finish --status "$STATUS" --exit-code "$CODE" > "$RUN_DIR/manifest.json"
 
+# Наблюдаемость (docs/agent-safety-architecture.md, этап 1.2): втянуть сессии
+# делегатов Codex за этот прогон в runs/$RUN_ID/agents/ и собрать рассказ.
+# Оба шага — ПОСЛЕ завершения прогона и с || true: телеметрия не имеет права
+# стоить эпизода, тот же принцип, что уже принят в pipeline_log.py.
+python3 tools/codex_session_import.py import --run-id "$RUN_ID" || true
+python3 tools/episode_story.py run --run-id "$RUN_ID" || true
+
 echo "run_id=$RUN_ID status=$STATUS exit_code=$CODE" >&2
 echo "manifest=$RUN_DIR/manifest.json" >&2
 exit "$CODE"

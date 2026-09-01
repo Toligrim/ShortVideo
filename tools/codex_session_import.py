@@ -195,19 +195,41 @@ def normalize(path: Path) -> list[dict[str, Any]]:
     return actions
 
 
+# "code mode" Codex не вызывает shell напрямую — модель пишет JS, которая сама
+# зовёт tools.exec_command({cmd: "...", ...}). Один вызов custom_tool_call
+# нередко несёт МНОГО НЕсвязанного текста в одном блоке: реальные shell-команды
+# в cmd:"...", но рядом же — например, при делегировании через
+# tools.mcp__codex__codex({..., prompt: "..."}) — целый промпт для суб-делегата
+# свободным текстом. Проверено на живом прогоне 2026-09-01: промпт
+# оркестратора (tools/producer_scheduler.py::build_prompt) сам ЦИТИРУЕТ команды
+# инцидента, объясняя делегату, что они запрещены — и старая версия детектора,
+# сканируя весь input целиком, ловила эту цитату как будто делегат её выполнил.
+# Поэтому danger-паттерны ищутся ТОЛЬКО внутри значений cmd:"..."/cmd:'...' —
+# то, что делегат реально просил выполнить оболочку, а не любой текст рядом.
+CMD_LITERAL_RE = re.compile(r"""cmd\s*:\s*(["'`])((?:\\.|(?!\1).)*)\1""", re.S)
+
+
+def extract_shell_commands(text: str) -> list[str]:
+    return [m.group(2) for m in CMD_LITERAL_RE.finditer(text)]
+
+
 def detect_dangers(actions: list[dict[str, Any]]) -> list[dict[str, Any]]:
     found: list[dict[str, Any]] = []
     for act in actions:
         if act.get("kind") != "tool_call":
             continue
-        text = act.get("input") or ""
-        for pattern, kind, severity, why in DANGER_PATTERNS:
-            if pattern.search(text):
-                found.append({
-                    "ts": act.get("ts"), "anomaly_kind": kind,
-                    "severity": severity, "why": why,
-                    "evidence": text[:1000],
-                })
+        raw = act.get("input") or ""
+        commands = extract_shell_commands(raw)
+        if not commands:
+            continue
+        for cmd_text in commands:
+            for pattern, kind, severity, why in DANGER_PATTERNS:
+                if pattern.search(cmd_text):
+                    found.append({
+                        "ts": act.get("ts"), "anomaly_kind": kind,
+                        "severity": severity, "why": why,
+                        "evidence": cmd_text[:1000],
+                    })
     return found
 
 
@@ -327,11 +349,19 @@ def cmd_import(args: argparse.Namespace) -> int:
         imported.append(info)
 
         for d in dangers:
+            # "ts" здесь ОБЯЗАТЕЛЕН: append_event() по умолчанию проставляет
+            # now_iso() (время самого импорта, а не события) — для этапов
+            # конвейера это верно (append_event зовётся сразу), но импорт
+            # сессий Codex почти всегда идёт постфактум, после завершения
+            # прогона. Без явного "ts" в fields сводка "Что пошло не так" в
+            # рассказе показывала все аномалии одним временем — временем
+            # самого импорта, а не тем, когда делегат реально это выполнил
+            # (найдено на живом прогоне 2026-09-01).
             pipeline_log.append_event(run_dir, {
                 "kind": "anomaly", "anomaly_kind": d["anomaly_kind"],
                 "actor": session_id, "severity": d["severity"],
                 "detail": d["why"], "evidence": d["evidence"][:1000],
-                "source": "codex-session-import",
+                "source": "codex-session-import", "ts": d.get("ts"),
             })
 
     index = {
