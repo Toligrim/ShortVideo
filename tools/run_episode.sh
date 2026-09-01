@@ -75,6 +75,46 @@ RUN_ID=$(python3 tools/pipeline_log.py run-start \
 RUN_DIR="$ROOT/runs/$RUN_ID"
 echo "run_id=$RUN_ID" >&2
 
+# Наблюдаемость (docs/agent-safety-architecture.md, этап 2.2): untracked-файл
+# уровня A — ошибка прогона, а не фон (именно так неделями лежал untracked
+# tools/pipeline_log.py до инцидента 31.08). Пока только предупреждение
+# (--warn-only): не роняет прогон, даёт время убедиться, что в реальной
+# работе ложных срабатываний нет, прежде чем сделать эту проверку жёсткой.
+python3 tools/repo_guard.py check --warn-only || true
+
+# SIGTERM/SIGINT (docs/agent-safety-architecture.md, §7.3, шаг A). Инцидент
+# 31.08.2026: делегат убил именно этот процесс (run_episode.sh) сначала
+# точечным `kill`, затем весь process group оркестратора — и НИКТО об этом
+# не узнал почти сутки, потому что убивать было уже некому. Это не мешает
+# убийству случиться (детерминированно запретить kill/pkill сегодня на этой
+# машине нельзя, см. §7.4 — решение отложено), но убирает то, что было хуже
+# самого убийства: тишину. Флаг-защёлка — сигнал может прийти дважды
+# (TERM, потом дожимающий KILL), обработчик не должен запускаться повторно.
+NOTIFIED_KILLED=""
+on_kill_signal() {
+  local sig_num="$1"
+  [ -n "$NOTIFIED_KILLED" ] && exit "$((128 + sig_num))"
+  NOTIFIED_KILLED=1
+  set +e
+  python3 tools/pipeline_log.py finish --status killed \
+    --exit-code "$((128 + sig_num))" > "$RUN_DIR/manifest.json" 2>/dev/null
+  python3 tools/codex_session_import.py import --run-id "$RUN_ID" >/dev/null 2>&1
+  python3 tools/episode_story.py run --run-id "$RUN_ID" >/dev/null 2>&1
+  (
+    ENV_FILE="$HOME/.config/shortvideo/publisher.env"
+    [ -f "$ENV_FILE" ] && . "$ENV_FILE"
+    if [ -n "${TELEGRAM_BOT_TOKEN:-}" ] && [ -n "${TELEGRAM_ALLOWED_CHAT_ID:-}" ]; then
+      TEXT="⚠️ Прогон $SLUG (run_id=$RUN_ID) получил сигнал $sig_num и остановлен принудительно.
+Рассказ: runs/$RUN_ID/STORY.md"
+      curl -s -m 10 "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+        -d chat_id="${TELEGRAM_ALLOWED_CHAT_ID}" --data-urlencode text="$TEXT" >/dev/null 2>&1
+    fi
+  )
+  exit "$((128 + sig_num))"
+}
+trap 'on_kill_signal 15' TERM
+trap 'on_kill_signal 2' INT
+
 python3 tools/pipeline_log.py snapshot --label before
 
 export SV_RUN_ID="$RUN_ID"
@@ -108,6 +148,13 @@ echo "Для делегирования подзадач используй MCP-
 exit 127
 SHIM
     chmod +x "$SHIM_DIR/opencode-tool"
+    # Явный background + wait, а не просто foreground-вызов: bash не
+    # прерывает синхронную foreground-команду ради trap — обработчик
+    # SIGTERM/SIGINT молча откладывается до её завершения (проверено эмпирически:
+    # foreground `timeout ... sleep` не давал trap сработать вообще, пока не
+    # закончится сам; тот же код через `cmd & wait "$!"` прерывался за
+    # миллисекунды). Без этого весь trap выше был бы бесполезен на боевом
+    # прогоне — именно так и убили run_episode.sh 31.08.2026.
     SHORTVIDEO_NO_OPENCODE=1 \
     timeout "${TIMEOUT_MIN}m" codex exec \
       -C "$ROOT" \
@@ -115,13 +162,17 @@ SHIM
       -c model_reasoning_effort="$EFFORT" \
       --sandbox danger-full-access \
       - < "$PROMPT_FILE" \
-      > "$RUN_DIR/cli-stdout.log" 2> "$RUN_DIR/cli-stderr.log"
+      > "$RUN_DIR/cli-stdout.log" 2> "$RUN_DIR/cli-stderr.log" &
+    CLI_PID=$!
+    wait "$CLI_PID"
     CODE=$?
     ;;
   claude)
     timeout "${TIMEOUT_MIN}m" claude -p "$(cat "$PROMPT_FILE")" \
       --model "$MODEL" --effort "$EFFORT" --dangerously-skip-permissions \
-      > "$RUN_DIR/cli-stdout.log" 2> "$RUN_DIR/cli-stderr.log"
+      > "$RUN_DIR/cli-stdout.log" 2> "$RUN_DIR/cli-stderr.log" &
+    CLI_PID=$!
+    wait "$CLI_PID"
     CODE=$?
     ;;
 esac
@@ -141,6 +192,7 @@ python3 tools/pipeline_log.py finish --status "$STATUS" --exit-code "$CODE" > "$
 # стоить эпизода, тот же принцип, что уже принят в pipeline_log.py.
 python3 tools/codex_session_import.py import --run-id "$RUN_ID" || true
 python3 tools/episode_story.py run --run-id "$RUN_ID" || true
+python3 tools/repo_guard.py check --warn-only || true
 
 echo "run_id=$RUN_ID status=$STATUS exit_code=$CODE" >&2
 echo "manifest=$RUN_DIR/manifest.json" >&2

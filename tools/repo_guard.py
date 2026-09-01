@@ -50,8 +50,13 @@ def is_level_a(rel_path: str) -> bool:
         # ролик и его метаданные, но не двоичные артефакты (их тут нет).
         return rel_path.endswith(".json")
     if rel_path.startswith("runs/"):
-        # rollout.jsonl уже в .gitignore (§4.8) — сюда он не попадёт, `git
-        # status` его вообще не покажет как untracked без --ignored.
+        # rollout.jsonl уже в .gitignore (§4.8: сырые транскрипты, потенциальные
+        # секреты, редактор не написан) — `git status` его и так не покажет
+        # untracked. Но is_level_a() не полагается ТОЛЬКО на .gitignore: если
+        # его когда-нибудь сломают, этот файл всё равно не должен молча
+        # попасть в "закоммить немедленно" только по суффиксу .jsonl.
+        if rel_path.endswith("/rollout.jsonl"):
+            return False
         return rel_path.endswith(LEVEL_A_SUFFIXES_RUNS)
     return False
 

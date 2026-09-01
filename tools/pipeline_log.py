@@ -655,7 +655,7 @@ def build_parser() -> argparse.ArgumentParser:
     sn.add_argument("--label", required=True, choices=["before", "after"])
 
     fn = sub.add_parser("finish")
-    fn.add_argument("--status", default="ok", choices=["ok", "failed"])
+    fn.add_argument("--status", default="ok", choices=["ok", "failed", "killed"])
     fn.add_argument("--exit-code", type=int, default=0)
 
     return p
