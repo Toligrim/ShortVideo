@@ -55,6 +55,7 @@ import { DiffusionDenoiseVisual, type DiffusionDenoisePhase } from "./DiffusionD
 import { TlsHandshakeVisual, type TlsHandshakePhase } from "./TlsHandshakeVisual";
 import { BatterySeiGrowthVisual, type SeiPhase } from "./BatterySeiGrowth";
 import { BatteryChargeLimitVisual, type ChargeLimitPhase } from "./BatteryChargeLimitVisual";
+import { ColdBatteryVoltageDropVisual, type ColdBatteryPhase } from "./ColdBatteryVoltageDropVisual";
 import { IncognitoSessionVisual, type IncognitoSessionPhase } from "./IncognitoSessionVisual";
 import { ContextWindowVisual, type ContextWindowPhase } from "./ContextWindowVisual";
 import { AttentionCostVisual, type AttentionCostPhase } from "./AttentionCostVisual";
@@ -297,6 +298,10 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
     if (beat.visual === "battery-charge-limit") {
       const phase = beat.params?.phase;
       impact = start + Math.round(dur * (phase === "heat" ? 0.62 : phase === "limit80" ? 0.58 : 0.55));
+    }
+    if (beat.visual === "cold-battery-voltage-drop") {
+      const phase = beat.params?.phase as ColdBatteryPhase | undefined;
+      impact = start + Math.round(dur * (phase === "drop" ? 0.68 : phase === "shutdown" ? 0.52 : phase === "resistance" ? 0.62 : 0.55));
     }
     if (beat.visual === "incognito-session") {
       const phase = beat.params?.phase;
@@ -638,6 +643,11 @@ export const storySfx = (
     if (s.beat.visual === "battery-charge-limit") {
       const ph = s.beat.params?.phase;
       const sound = ph === "heat" ? "slam" : ph === "limit80" ? "ding" : "pop";
+      events.push({ frame: s.impact, sound });
+    }
+    if (s.beat.visual === "cold-battery-voltage-drop") {
+      const ph = s.beat.params?.phase as ColdBatteryPhase | undefined;
+      const sound = ph === "shutdown" ? "slam" : ph === "drop" ? "ding" : ph === "resistance" ? "pop" : "click";
       events.push({ frame: s.impact, sound });
     }
     if (s.beat.visual === "context-window") {
@@ -11590,6 +11600,7 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     "wifi-signal-vs-airtime": { scale: 0.9, y: -20 },
     "diffusion-denoise": { scale: 0.92, y: -20 },
     "tls-handshake": { scale: 0.92, y: -20 },
+    "cold-battery-voltage-drop": { scale: 0.9, y: -20 },
     "incognito-session": { scale: 0.92, y: -20 },
     "context-window": { scale: 0.9, y: -20 },
     "attention-cost": { scale: 0.9, y: -20 },
@@ -12438,6 +12449,15 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             fps={fps}
             impactLocal={impactLocal}
             phase={(slot.beat.params?.phase as ChargeLimitPhase | undefined) ?? "full"}
+          />
+        );
+      case "cold-battery-voltage-drop":
+        return (
+          <ColdBatteryVoltageDropVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as ColdBatteryPhase | undefined) ?? "cold"}
           />
         );
       case "incognito-session":

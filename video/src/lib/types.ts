@@ -159,6 +159,7 @@ export interface StoryBeat {
     | "diffusion-denoise"
     | "battery-sei-growth"
     | "battery-charge-limit"
+    | "cold-battery-voltage-drop"
    | "incognito-session"
   | "context-window"
   | "attention-cost"
