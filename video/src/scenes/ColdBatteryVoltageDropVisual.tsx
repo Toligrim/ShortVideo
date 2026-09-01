@@ -386,7 +386,7 @@ const VoltageMeter: React.FC<{ left: number; top: number; sag: number }> = ({ le
       </div>
       <div style={{ position: "absolute", left: 55, bottom: 20, width: 150, textAlign: "center", color: theme.accent, fontSize: 22, ...mono }}>БЕЗ НАГРУЗКИ<br />3.8 В</div>
       <div style={{ position: "absolute", right: 45, bottom: 20, width: 185, textAlign: "center", color: theme.danger, fontSize: 22, ...mono }}>ПОД НАГРУЗКОЙ<br />{voltage.toFixed(1)} В</div>
-      <div style={{ position: "absolute", right: 24, top: 12, color: theme.warning, fontSize: 16, ...mono }}>MIN 3.0 В</div>
+      <div style={{ position: "absolute", right: 24, top: 52, color: theme.warning, fontSize: 16, ...mono }}>MIN 3.0 В</div>
     </div>
   );
 };
