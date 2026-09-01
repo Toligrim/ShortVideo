@@ -1,0 +1,118 @@
+{
+  "id": "auto-20260901-082101",
+  "title": "Почему код из приложения-аутентификатора работает даже без интернета?",
+  "scenes": [
+    {
+      "type": "story",
+      "narration": "В самолёте или подвале сеть пропала, а код в приложении всё равно работает и позже подходит сайту. Как?",
+      "beats": [
+        {
+          "visual": "totp-window",
+          "onWord": "самолёте",
+          "params": { "phase": "offline" }
+        },
+        {
+          "visual": "totp-window",
+          "onWord": "подходит",
+          "params": { "phase": "match" }
+        },
+        {
+          "visual": "title-slam",
+          "onWord": "Как?",
+          "params": { "text": "КАК?", "sub": "КОД БЕЗ СЕТИ" }
+        }
+      ]
+    },
+    {
+      "type": "story",
+      "narration": "Три — настоящий механизм: это {TOTP|ти оу ти пи}. Приложение и сервер заранее хранят общий секрет, берут номер текущего окна и независимо считают код через {HMAC|эйч мак}.",
+      "beats": [
+        {
+          "visual": "totp-window",
+          "onWord": "TOTP",
+          "params": { "phase": "secret" }
+        },
+        {
+          "visual": "totp-window",
+          "onWord": "окна",
+          "params": { "phase": "window", "windowSeconds": 30 }
+        },
+        {
+          "visual": "totp-window",
+          "onWord": "HMAC",
+          "params": { "phase": "hmac", "windowSeconds": 30 }
+        }
+      ]
+    },
+    {
+      "type": "story",
+      "narration": "Два — стандарт рекомендует временное окно в тридцать секунд. При задержке сервер может принять соседнее окно, но слишком широкий допуск облегчает атаку.",
+      "beats": [
+        {
+          "visual": "totp-window",
+          "onWord": "тридцать",
+          "params": { "phase": "window", "windowSeconds": 30 }
+        },
+        {
+          "visual": "totp-window",
+          "onWord": "соседнее",
+          "params": { "phase": "tolerance", "windowSeconds": 30 }
+        },
+        {
+          "visual": "totp-window",
+          "onWord": "широкий",
+          "params": { "phase": "tolerance", "windowSeconds": 30, "wide": true }
+        }
+      ]
+    },
+    {
+      "type": "story",
+      "narration": "Один — представь две запечатанные инструкции: внутри общий секрет, снаружи одинаковый таймер. В нужный момент каждая считает код на месте, ничего не пересылая.",
+      "beats": [
+        {
+          "visual": "totp-window",
+          "onWord": "две",
+          "params": { "phase": "sealed", "windowSeconds": 30 }
+        },
+        {
+          "visual": "totp-window",
+          "onWord": "код",
+          "params": { "phase": "sealed-result", "windowSeconds": 30 }
+        }
+      ]
+    },
+    {
+      "type": "story",
+      "narration": "Ноль — сеть нужна сайту, чтобы принять код, но не приложению для расчёта. Сбитые часы телефона ломают совпадение: стороны выбирают разные окна и получают разные числа.",
+      "beats": [
+        {
+          "visual": "totp-window",
+          "onWord": "сайту",
+          "params": { "phase": "offline" }
+        },
+        {
+          "visual": "totp-window",
+          "onWord": "Сбитые",
+          "params": { "phase": "skew", "windowSeconds": 30, "clockOffset": 30 }
+        },
+        {
+          "visual": "totp-window",
+          "onWord": "разные",
+          "params": { "phase": "mismatch" }
+        }
+      ]
+    },
+    {
+      "type": "outro",
+      "title": "Код без интернета",
+      "bullets": [
+        "Секрет хранится заранее",
+        "Время выбирает окно",
+        "HMAC считает код",
+        "Часы должны совпадать"
+      ],
+      "cta": "Подпишись: дальше — защита шести цифр",
+      "narration": "Итог: код рождается из общего секрета и времени, а не приходит из интернета. Дальше — как защищают эти шесть цифр. Подпишись."
+    }
+  ]
+}
