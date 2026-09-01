@@ -435,7 +435,11 @@ def main(argv: list[str] | None = None) -> int:
         R2ConfigurationError,
         OSError,
     ) as exc:
-        print(f"error: {exc}", file=sys.stderr)
+        code = getattr(exc, "code", None)
+        if code == "instagram_configuration_invalid":
+            print(f"error: {exc}\nerror_code: {code}", file=sys.stderr)
+        else:
+            print(f"error: {exc}", file=sys.stderr)
         return 2
     return 0
 

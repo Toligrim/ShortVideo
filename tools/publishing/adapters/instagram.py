@@ -39,6 +39,16 @@ from ..security import PrivatePathError, absolute_path, reject_symlink_chain
 INSTAGRAM_GRAPH_HOST = "graph.instagram.com"
 _VERSION_RE = re.compile(r"^v[1-9][0-9]*\.[0-9]+$")
 _ID_RE = re.compile(r"^[0-9]+$")
+_PLACEHOLDER_RE = re.compile(
+    r"(?:REPLACE(?:[_ -]?(?:WITH|ME))?|CHANGE[_ -]?ME|CHANGEME|"
+    r"YOUR[_ -](?:VALUE|ID|TOKEN|SECRET|KEY|ACCOUNT|REAL)|PLACEHOLDER|"
+    r"TODO|INSERT[_ -]?(?:VALUE|ID|TOKEN|SECRET|KEY)|"
+    r"\bv(?:X{2,}|N{2,})(?:[._-]|$))",
+    re.IGNORECASE,
+)
+_PLACEHOLDER_PATH_RE = re.compile(
+    r"(?:^|[/\\])(?:USER|USERNAME|YOUR_USER|EXAMPLE)(?:[/\\]|$)",
+)
 _LEASE_MARGIN_SECONDS = 5.0
 _CHECKPOINT_PHASES = frozenset({
     "object_uploaded", "container_create_inflight", "container_created",
@@ -48,6 +58,24 @@ _CHECKPOINT_PHASES = frozenset({
 
 class InstagramConfigurationError(RuntimeError):
     """Local Instagram credentials or configuration are unsafe."""
+
+    def __init__(self, message: str, *, reason_code: str | None = None) -> None:
+        super().__init__(message)
+        self.reason_code = reason_code
+
+
+def looks_like_configuration_placeholder(value: object) -> bool:
+    """Recognize explicit operator-template markers without exposing values."""
+    if not isinstance(value, str):
+        return False
+    candidate = value.strip()
+    if not candidate:
+        return False
+    return bool(
+        _PLACEHOLDER_RE.search(candidate)
+        or _PLACEHOLDER_PATH_RE.search(candidate)
+        or re.search(r"<[^>\r\n]+>|\$\{[^}\r\n]+\}", candidate)
+    )
 
 
 @dataclass(frozen=True)
@@ -128,60 +156,141 @@ class InstagramSettings:
     state_dir: Path
 
     def __post_init__(self) -> None:
-        if not _ID_RE.fullmatch(self.user_id) or not _VERSION_RE.fullmatch(self.api_version):
-            raise InstagramConfigurationError("Instagram configuration is incomplete or invalid")
+        if not isinstance(self.user_id, str) or not self.user_id.strip():
+            raise InstagramConfigurationError(
+                "Instagram professional account/user ID is required",
+                reason_code="instagram_user_id_missing",
+            )
+        if looks_like_configuration_placeholder(self.user_id):
+            raise InstagramConfigurationError(
+                "Instagram professional account/user ID is a placeholder",
+                reason_code="instagram_user_id_placeholder",
+            )
+        if not _ID_RE.fullmatch(self.user_id):
+            raise InstagramConfigurationError(
+                "Instagram professional account/user ID must contain only digits",
+                reason_code="instagram_user_id_invalid",
+            )
+        if not isinstance(self.api_version, str) or not self.api_version.strip():
+            raise InstagramConfigurationError(
+                "Instagram API version is required",
+                reason_code="instagram_api_version_missing",
+            )
+        if looks_like_configuration_placeholder(self.api_version):
+            raise InstagramConfigurationError(
+                "Instagram API version is a placeholder",
+                reason_code="instagram_api_version_placeholder",
+            )
+        if not _VERSION_RE.fullmatch(self.api_version):
+            raise InstagramConfigurationError(
+                "Instagram API version must match vNN.0-style format",
+                reason_code="instagram_api_version_invalid",
+            )
         token_file = self._external_token_path(self.access_token_file, self.state_dir)
         object.__setattr__(self, "access_token_file", token_file)
         object.__setattr__(self, "state_dir", absolute_path(self.state_dir))
 
     @staticmethod
     def _external_token_path(raw: Path | str, state_dir: Path | str) -> Path:
+        raw_text = str(raw)
+        if not raw_text.strip():
+            raise InstagramConfigurationError(
+                "Instagram access-token file path is required",
+                reason_code="instagram_token_path_missing",
+            )
+        if looks_like_configuration_placeholder(raw_text):
+            raise InstagramConfigurationError(
+                "Instagram access-token file path is a placeholder",
+                reason_code="instagram_token_path_placeholder",
+            )
         candidate = absolute_path(raw)
         state = absolute_path(state_dir)
         if not Path(raw).expanduser().is_absolute():
-            raise InstagramConfigurationError("Instagram access-token file must be absolute and outside publisher state")
+            raise InstagramConfigurationError(
+                "Instagram access-token file must be absolute and outside publisher state",
+                reason_code="instagram_token_path_not_absolute",
+            )
         try:
             reject_symlink_chain(candidate, label="Instagram access-token file")
             reject_symlink_chain(state, label="publisher state directory")
         except PrivatePathError as exc:
-            raise InstagramConfigurationError("Instagram access-token file is unsafe") from exc
+            raise InstagramConfigurationError(
+                "Instagram access-token file is unsafe",
+                reason_code="instagram_token_file_unsafe",
+            ) from exc
         try:
             candidate.relative_to(state)
         except ValueError:
             return candidate
-        raise InstagramConfigurationError("Instagram access-token file must be outside publisher state")
+        raise InstagramConfigurationError(
+            "Instagram access-token file must be outside publisher state",
+            reason_code="instagram_token_file_unsafe",
+        )
 
     @classmethod
     def from_environment(
         cls, *, state_dir: Path | str, environ: Mapping[str, str] | None = None,
     ) -> "InstagramSettings":
         source = os.environ if environ is None else environ
+        raw_token_path = str(source.get("SHORTVIDEO_INSTAGRAM_ACCESS_TOKEN_FILE", "")).strip()
+        if not raw_token_path:
+            raise InstagramConfigurationError(
+                "Instagram access-token file path is required",
+                reason_code="instagram_token_path_missing",
+            )
         return cls(
             user_id=str(source.get("SHORTVIDEO_INSTAGRAM_USER_ID", "")).strip(),
             api_version=str(source.get("SHORTVIDEO_INSTAGRAM_API_VERSION", "")).strip(),
-            access_token_file=Path(str(source.get("SHORTVIDEO_INSTAGRAM_ACCESS_TOKEN_FILE", "")).strip()),
+            access_token_file=Path(raw_token_path),
             state_dir=Path(state_dir),
         )
 
     def read_access_token(self) -> str:
-        try:
-            info = self.access_token_file.lstat()
-        except OSError as exc:
-            raise InstagramConfigurationError("Instagram access-token file cannot be read") from exc
-        if (
-            stat.S_ISLNK(info.st_mode)
-            or not stat.S_ISREG(info.st_mode)
-            or info.st_uid != os.geteuid()
-            or stat.S_IMODE(info.st_mode) & 0o077
-        ):
-            raise InstagramConfigurationError("Instagram access-token file must be owner-only")
-        try:
-            token = self.access_token_file.read_text(encoding="utf-8").strip()
-        except OSError as exc:
-            raise InstagramConfigurationError("Instagram access-token file cannot be read") from exc
-        if not token or "\n" in token or "\r" in token:
-            raise InstagramConfigurationError("Instagram access-token file is invalid")
-        return token
+        return _read_owner_only_access_token(self.access_token_file)
+
+
+def _read_owner_only_access_token(path: Path) -> str:
+    """Read a token only after the same local safety checks used by the adapter."""
+    try:
+        info = path.lstat()
+    except FileNotFoundError as exc:
+        raise InstagramConfigurationError(
+            "Instagram access-token file does not exist",
+            reason_code="instagram_token_file_missing",
+        ) from exc
+    except OSError as exc:
+        raise InstagramConfigurationError(
+            "Instagram access-token file cannot be read",
+            reason_code="instagram_token_file_unreadable",
+        ) from exc
+    if (
+        stat.S_ISLNK(info.st_mode)
+        or not stat.S_ISREG(info.st_mode)
+        or info.st_uid != os.geteuid()
+        or stat.S_IMODE(info.st_mode) & 0o077
+    ):
+        raise InstagramConfigurationError(
+            "Instagram access-token file must be owner-only",
+            reason_code="instagram_token_file_unsafe",
+        )
+    try:
+        token = path.read_text(encoding="utf-8").strip()
+    except (OSError, UnicodeError) as exc:
+        raise InstagramConfigurationError(
+            "Instagram access-token file cannot be read",
+            reason_code="instagram_token_file_unreadable",
+        ) from exc
+    if not token:
+        raise InstagramConfigurationError(
+            "Instagram access-token file is empty",
+            reason_code="instagram_token_file_empty",
+        )
+    if "\n" in token or "\r" in token:
+        raise InstagramConfigurationError(
+            "Instagram access-token file is invalid",
+            reason_code="instagram_token_file_invalid",
+        )
+    return token
 
 
 def _json_object(response: InstagramHttpResponse) -> dict[str, Any]:
@@ -218,7 +327,10 @@ class InstagramReelsAdapter:
         transport: InstagramHttpTransport | None = None, timeout_seconds: float = 30.0,
     ) -> None:
         if timeout_seconds <= 0:
-            raise InstagramConfigurationError("Instagram HTTP timeout must be positive")
+            raise InstagramConfigurationError(
+                "Instagram HTTP timeout must be positive",
+                reason_code="instagram_http_timeout_invalid",
+            )
         self.settings = settings
         self.r2 = r2
         self.transport = transport or RequestsInstagramHttpTransport()

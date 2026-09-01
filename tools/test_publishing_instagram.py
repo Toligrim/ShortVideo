@@ -3,19 +3,24 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from hashlib import sha256
 from pathlib import Path
+from contextlib import redirect_stderr
+from io import StringIO
 import os
 import tempfile
 import threading
 import unittest
 from urllib.parse import parse_qs
+from unittest.mock import patch
 
 from publishing.adapters.base import AmbiguousPublishError, InstagramPublishCheckpoint, PermanentPublishError, PublishRequest, RetryablePublishError
 from publishing.adapters.instagram import InstagramConfigurationError, InstagramHttpResponse, InstagramReelsAdapter, InstagramSettings
+from publishing.adapters.live import CombinedLiveAdapterFactory, instagram_doctor
 from publishing.adapters.r2 import R2ConfigurationError, R2OperationError, StagedMedia
 from publishing.db import PublishingStore
 from publishing.metadata import metadata_sha256, write_metadata_snapshot
 from publishing.models import ExecutionMode, TargetState
 from publishing.worker import PublishWorker
+import publish
 
 
 class FakeTransport:
@@ -255,6 +260,140 @@ class InstagramAdapterTests(unittest.TestCase):
     def test_settings_rejects_token_inside_state(self):
         with self.assertRaises(Exception):
             InstagramSettings.from_environment(state_dir=self.temp.name, environ={"SHORTVIDEO_INSTAGRAM_USER_ID": "1", "SHORTVIDEO_INSTAGRAM_API_VERSION": "v22.0", "SHORTVIDEO_INSTAGRAM_ACCESS_TOKEN_FILE": str(self.token)})
+
+
+class InstagramDoctorTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        self.state = self.root / "state"
+        self.state.mkdir(mode=0o700)
+        self.token = self.root / "instagram-token"
+        self.fake_token = "unit-test-token-never-print"
+        self.token.write_text(self.fake_token, encoding="utf-8")
+        self.token.chmod(0o600)
+        self.env = {
+            "SHORTVIDEO_INSTAGRAM_USER_ID": "123456789",
+            "SHORTVIDEO_INSTAGRAM_API_VERSION": "v22.0",
+            "SHORTVIDEO_INSTAGRAM_ACCESS_TOKEN_FILE": str(self.token),
+            "SHORTVIDEO_R2_ACCOUNT_ID": "a" * 32,
+            "SHORTVIDEO_R2_BUCKET": "shortvideo-media",
+            "SHORTVIDEO_R2_ACCESS_KEY_ID": "unit-test-access-key",
+            "SHORTVIDEO_R2_SECRET_ACCESS_KEY": "unit-test-secret-key",
+            "SHORTVIDEO_R2_TTL": "900",
+        }
+
+    def doctor_error(self, environ=None):
+        with self.assertRaises(PermanentPublishError) as raised:
+            instagram_doctor(state_dir=self.state, environ=self.env if environ is None else environ)
+        self.assertEqual(raised.exception.code, "instagram_configuration_invalid")
+        return raised.exception
+
+    def test_valid_configuration_is_ok_without_exposing_token(self):
+        result = instagram_doctor(state_dir=self.state, environ=self.env)
+        self.assertEqual(
+            result,
+            {
+                "provider": "instagram",
+                "access_token_configured": True,
+                "r2_configured": True,
+                "api_version": "v22.0",
+            },
+        )
+        self.assertNotIn(self.fake_token, repr(result))
+
+    def test_each_configuration_problem_has_a_specific_reason_code(self):
+        cases = {
+            "instagram_user_id_placeholder": ("SHORTVIDEO_INSTAGRAM_USER_ID", "REPLACE_WITH_PROFESSIONAL_ACCOUNT_ID"),
+            "instagram_user_id_invalid": ("SHORTVIDEO_INSTAGRAM_USER_ID", "not-an-id"),
+            "instagram_api_version_placeholder": ("SHORTVIDEO_INSTAGRAM_API_VERSION", "vXX.0"),
+            "instagram_api_version_invalid": ("SHORTVIDEO_INSTAGRAM_API_VERSION", "22"),
+            "instagram_token_path_missing": ("SHORTVIDEO_INSTAGRAM_ACCESS_TOKEN_FILE", ""),
+            "instagram_token_path_placeholder": (
+                "SHORTVIDEO_INSTAGRAM_ACCESS_TOKEN_FILE",
+                "/home/USER/.local/share/shortvideo/secrets/instagram-token",
+            ),
+            "instagram_token_path_not_absolute": ("SHORTVIDEO_INSTAGRAM_ACCESS_TOKEN_FILE", "relative-token"),
+            "r2_account_id_invalid": ("SHORTVIDEO_R2_ACCOUNT_ID", "bad-account"),
+            "r2_bucket_invalid": ("SHORTVIDEO_R2_BUCKET", "BAD_BUCKET"),
+            "r2_ttl_invalid": ("SHORTVIDEO_R2_TTL", "not-an-integer"),
+            "r2_ttl_out_of_range": ("SHORTVIDEO_R2_TTL", "30"),
+        }
+        for expected, (name, value) in cases.items():
+            with self.subTest(reason_code=expected):
+                environ = dict(self.env)
+                environ[name] = value
+                error = self.doctor_error(environ)
+                self.assertIn(expected, error.reason_codes)
+                self.assertTrue(any(issue["reason_code"] == expected for issue in error.issues))
+
+    def test_missing_unsafe_and_empty_token_files_are_distinct(self):
+        missing = dict(self.env)
+        missing["SHORTVIDEO_INSTAGRAM_ACCESS_TOKEN_FILE"] = str(self.root / "missing-token")
+        self.assertIn("instagram_token_file_missing", self.doctor_error(missing).reason_codes)
+
+        unsafe = dict(self.env)
+        self.token.chmod(0o640)
+        self.assertIn("instagram_token_file_unsafe", self.doctor_error(unsafe).reason_codes)
+
+        empty = dict(self.env)
+        self.token.write_text("", encoding="utf-8")
+        self.token.chmod(0o600)
+        empty_error = self.doctor_error(empty)
+        self.assertIn("instagram_token_file_empty", empty_error.reason_codes)
+        self.assertNotIn("instagram_token_file_missing", empty_error.reason_codes)
+
+    def test_realistic_production_placeholders_are_reported_in_one_pass(self):
+        environ = {
+            "SHORTVIDEO_INSTAGRAM_USER_ID": "REPLACE_WITH_PROFESSIONAL_ACCOUNT_ID",
+            "SHORTVIDEO_INSTAGRAM_API_VERSION": "REPLACE_WITH_CURRENT_VXX_0",
+            "SHORTVIDEO_INSTAGRAM_ACCESS_TOKEN_FILE": "/home/USER/.local/share/shortvideo/secrets/instagram-token",
+            "SHORTVIDEO_R2_ACCOUNT_ID": "REPLACE_WITH_32_HEX_ACCOUNT_ID",
+            "SHORTVIDEO_R2_BUCKET": "REPLACE_WITH_BUCKET",
+            "SHORTVIDEO_R2_ACCESS_KEY_ID": "REPLACE_WITH_ACCESS_KEY_ID",
+            "SHORTVIDEO_R2_SECRET_ACCESS_KEY": "REPLACE_WITH_SECRET_ACCESS_KEY",
+        }
+        error = self.doctor_error(environ)
+        self.assertEqual(
+            set(error.reason_codes),
+            {
+                "instagram_user_id_placeholder",
+                "instagram_api_version_placeholder",
+                "instagram_token_path_placeholder",
+                "instagram_token_file_missing",
+                "r2_configuration_incomplete",
+            },
+        )
+        rendered = str(error)
+        self.assertIn("SHORTVIDEO_INSTAGRAM_USER_ID", rendered)
+        self.assertIn("SHORTVIDEO_INSTAGRAM_API_VERSION", rendered)
+        self.assertIn("SHORTVIDEO_R2_ACCOUNT_ID", rendered)
+        self.assertIn("not configured safely", rendered)
+
+    def test_factory_preserves_configuration_cause_chain(self):
+        environ = dict(self.env)
+        environ["SHORTVIDEO_INSTAGRAM_USER_ID"] = "REPLACE_WITH_PROFESSIONAL_ACCOUNT_ID"
+        factory = CombinedLiveAdapterFactory(self.state)
+        with patch.dict(os.environ, environ, clear=True):
+            with self.assertRaises(PermanentPublishError) as raised:
+                factory("instagram")
+        self.assertEqual(raised.exception.code, "instagram_configuration_invalid")
+        self.assertIn("instagram_user_id_placeholder", raised.exception.reason_codes)
+        self.assertIsInstance(raised.exception.__cause__, InstagramConfigurationError)
+        self.assertEqual(raised.exception.__cause__.reason_code, "instagram_user_id_placeholder")
+
+    def test_cli_guidance_never_contains_token_value(self):
+        environ = dict(self.env)
+        environ.pop("SHORTVIDEO_R2_SECRET_ACCESS_KEY")
+        stderr = StringIO()
+        with patch.dict(os.environ, environ, clear=True), redirect_stderr(stderr):
+            result = publish.main(["doctor", "instagram", "--state-dir", str(self.state)])
+        output = stderr.getvalue()
+        self.assertEqual(result, 2)
+        self.assertIn("error_code: instagram_configuration_invalid", output)
+        self.assertIn("SHORTVIDEO_R2_SECRET_ACCESS_KEY", output)
+        self.assertNotIn(self.fake_token, output)
 
 
 if __name__ == "__main__": unittest.main()
