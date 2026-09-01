@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import importlib
 import json
+import shutil
 import subprocess
 import sys
 import threading
@@ -696,3 +697,96 @@ def test_concurrent_closes_are_serialized_by_integration_lock(sandbox, capsys, m
     (wt2 / "two.txt").write_bytes(b"two-base\n")
     remove_clean_worktree(sandbox, wt1)
     remove_clean_worktree(sandbox, wt2)
+
+
+def test_timeout_quarantine_blocks_close_gc_release_and_retry(sandbox, capsys):
+    wt = open_delegate(sandbox, capsys, "timed-out", task_id="task:timed-out")
+    al = sandbox["dw"].agent_log
+
+    assert al.main(["delegate-start", "--agent-id", "timed-out"]) == 0
+    capsys.readouterr()
+    assert al.main([
+        "delegate-result", "--agent-id", "timed-out",
+        "--result-class", "infrastructure_failure",
+        "--error-code", "mcp_transport_timeout",
+    ]) == 0
+    result_output = capsys.readouterr().out
+    assert last_json(result_output)["termination_unconfirmed"] is True
+
+    (wt / "delegate-output.json").write_bytes(b"must remain quarantined")
+
+    rc, result, _ = close_delegate(sandbox, capsys, "timed-out", "delegate-output.json")
+    assert rc == 7
+    assert result["error_code"] == "delegate_termination_unconfirmed"
+    assert result["termination_unconfirmed"] is True
+    assert result["worktree_removed"] is False
+    assert wt.is_dir()
+    assert not (sandbox["root"] / "delegate-output.json").exists()
+
+    assert al.main([
+        "delegate-release", "--agent-id", "timed-out", "--status", "abandoned",
+    ]) == 7
+    capsys.readouterr()
+    assert sandbox["dw"].main(["abandon", "--agent-id", "timed-out"]) == 7
+    capsys.readouterr()
+
+    assert al.main([
+        "delegate-claim", "--task-id", "task:timed-out", "--role", "tester",
+        "--agent-id", "retry",
+    ]) == 7
+    retry_output = capsys.readouterr().out
+    assert last_json(retry_output)["error_code"] == "delegate_termination_unconfirmed"
+
+    set_claim(sandbox, "timed-out", expires_at=time.time() - 1)
+    assert sandbox["dw"].main(["gc"]) == 0
+    gc_result = last_json(capsys.readouterr().out)
+    assert str(wt) in gc_result["kept"]
+    assert wt.is_dir()
+
+    assert al.main([
+        "delegate-confirm-termination", "--agent-id", "timed-out",
+        "--evidence", "operator verified the timed-out actor is gone",
+    ]) == 0
+    capsys.readouterr()
+    (wt / "delegate-output.json").unlink()
+    remove_clean_worktree(sandbox, wt)
+
+
+def test_animation_workspace_write_canary_cannot_write_repository_root(sandbox, capsys):
+    import codex_sandbox_doctor as doctor
+    import delegate_invoke
+
+    policy = json.loads(
+        (TOOLS / "delegate_policy.json").read_text(encoding="utf-8")
+    )
+    assert policy["roles"]["animation-director"]["sandbox"] == "workspace-write"
+
+    codex_path = shutil.which("codex")
+    if codex_path is None:
+        pytest.skip("Codex/bwrap is not installed")
+    bwrap_path = doctor.resolve_vendored_bwrap(Path(codex_path))
+    if bwrap_path is None:
+        pytest.skip("Codex/bwrap is not installed")
+    if doctor.run_smoke(bwrap_path)["error_class"] != "ok":
+        pytest.skip("host cannot run the Codex sandbox")
+
+    wt = open_delegate(sandbox, capsys, "animation-canary")
+    root_sentinel = sandbox["root"] / "animation-root-canary.txt"
+    worktree_marker = wt / "animation-worktree-canary.txt"
+    script = (
+        "from pathlib import Path; "
+        f"Path({str(worktree_marker)!r}).write_text('worktree'); "
+        f"Path({str(root_sentinel)!r}).write_text('root')"
+    )
+    command = [
+        str(bwrap_path), "--die-with-parent", "--unshare-user", "--uid", "0",
+        "--gid", "0", "--ro-bind", "/", "/", "--bind", str(wt), str(wt),
+        "--chdir", str(wt), "--", sys.executable, "-c", script,
+    ]
+    proc = subprocess.run(command, capture_output=True)
+    assert proc.returncode != 0
+    assert worktree_marker.read_text(encoding="utf-8") == "worktree"
+    assert not root_sentinel.exists()
+
+    worktree_marker.unlink()
+    remove_clean_worktree(sandbox, wt)

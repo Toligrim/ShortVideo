@@ -80,7 +80,24 @@ lease.
    `mcp_transport_timeout` or `mcp_invocation_invalid`. A successful nested
    response is classified by the generated bridge as `success`.
 
-6. Record the close boundary and then use the unchanged worktree CLI:
+   A `mcp_transport_timeout` is special: `Promise.race` stops waiting but does
+   not prove that the nested process stopped. The bridge records
+   `termination_unconfirmed` and leaves the claim/worktree in quarantine. Do
+   not close, abandon, delete, or retry that task. After checking the host
+   independently, an operator may attest termination explicitly:
+
+   ```text
+   python3 tools/agent_log.py delegate-confirm-termination \
+     --agent-id <agent-id> --evidence "<external process check>"
+   ```
+
+   Only after that confirmation may the normal release/abandon and worktree
+   lifecycle commands proceed. Until then the stable error code is
+   `delegate_termination_unconfirmed`; it is an infrastructure quarantine,
+   not a semantic failure or a completed infrastructure retry.
+
+6. Record the close boundary and then use the worktree CLI (it remains the
+   owner of physical worktree operations):
 
    ```text
    python3 tools/delegate_invoke.py lifecycle --run-id "$SV_RUN_ID" \
@@ -89,9 +106,9 @@ lease.
      --allow <approved-relative-path> [--allow ...]
    ```
 
-   If the delegate is unrecoverable, use the unchanged `abandon` command; its
-   event is normalized to `worktree_abandoned`. The unchanged `open`/`close`
-   CLI remains the owner of physical worktree operations.
+   If the delegate is unrecoverable, use the `abandon` command; its event is
+   normalized to `worktree_abandoned`. The `open`/`close` CLI remains the
+   owner of physical worktree operations and enforces timeout quarantine.
 
 ## Retry and telemetry rules
 
@@ -100,10 +117,13 @@ Semantic attempts are incremented only after the generated bridge records
 classification. Sandbox startup, RTM_NEWADDR, model/runtime unavailability,
 MCP transport timeout, malformed invocation, and worktree visibility failures
 use a separate bounded infrastructure budget (three attempts, with a circuit
-breaker after two identical errors). The bridge enforces the bounded
-exponential backoff before rendering a retry (and `agent_log.py` reports the
-same machine-readable recommendation). A failed sandbox doctor prevents every
-delegate attempt in the episode.
+breaker after two identical errors). A transport timeout first enters
+`termination_unconfirmed` quarantine; it is not counted in that budget and the
+circuit stays closed to all new attempts until termination is confirmed. The
+bridge enforces the bounded exponential backoff before rendering a retry (and
+`agent_log.py` reports the same machine-readable recommendation). A failed
+sandbox doctor prevents every Codex attempt in the episode; it is not run for
+the Claude runner.
 
 `events.jsonl` contains structured lifecycle events. It records paths and the
 prompt-file reference, not the prompt body. MCP-internal token/progress events
@@ -114,10 +134,10 @@ telemetry marks the caller-visible request/response boundaries with
 not claims about unavailable MCP-internal progress events.
 
 The policy source is deliberately small and deterministic:
-`tools/delegate_policy.json`. Current production roles retain the observed
-permissions: `scriptwriter` uses `workspace-write`, `animation-director` uses
-`danger-full-access`, and `critic` uses `read-only`. All three use the single
-canonical model `gpt-5.6-luna`.
+`tools/delegate_policy.json`. `scriptwriter` and `animation-director` use
+`workspace-write`, while `critic` uses `read-only`. All three use the single
+canonical model `gpt-5.6-luna`. A director's cwd is its registered worktree;
+the repository ROOT is not an output location.
 
 ## Investigation references
 

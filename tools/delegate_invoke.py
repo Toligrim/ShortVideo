@@ -378,6 +378,13 @@ def resolve_claim(
             raise BridgeError(
                 "control_plane_failure", "mcp_invocation_invalid", "lease attempt is missing"
             )
+        if agent_log.termination_unconfirmed(claim):
+            raise BridgeError(
+                "infrastructure_failure",
+                agent_log.TERMINATION_UNCONFIRMED_ERROR_CODE,
+                "delegate termination is unconfirmed after an MCP timeout",
+                exit_code=7,
+            )
         if claim.get("state") in agent_log.TERMINAL_STATES or now >= claim.get("expires_at", 0):
             raise BridgeError(
                 "infrastructure_failure",
@@ -432,6 +439,13 @@ def resolve_claim(
         if not isinstance(current, dict) or current.get("state") in agent_log.TERMINAL_STATES:
             raise BridgeError(
                 "control_plane_failure", "mcp_invocation_invalid", "delegate lease disappeared"
+            )
+        if agent_log.termination_unconfirmed(current):
+            raise BridgeError(
+                "infrastructure_failure",
+                agent_log.TERMINATION_UNCONFIRMED_ERROR_CODE,
+                "delegate termination became unconfirmed during validation",
+                exit_code=7,
             )
         if (
             current.get("task_id") != task_id
@@ -581,8 +595,8 @@ def _record_refusal(
         agent_id = getattr(args, "agent_id", None)
         if agent_id:
             # Keep the failed claim from looking like a live, retryable
-            # semantic delegate.  The physical worktree is still closed by
-            # delegate_worktree.py, but the result classification is durable
+            # semantic delegate.  Physical lifecycle commands perform their
+            # own quarantine check, and the result classification is durable
             # even when render refuses before the JS hand-off.
             _call_agent_log(
                 run_dir,
@@ -905,6 +919,13 @@ def cmd_mark_started(args: argparse.Namespace) -> int:
     if args.attempt is not None:
         argv.extend(["--attempt", str(args.attempt)])
     rc, output = _call_agent_log(run_dir, argv)
+    if rc == 7:
+        raise BridgeError(
+            "infrastructure_failure",
+            agent_log.TERMINATION_UNCONFIRMED_ERROR_CODE,
+            "delegate lease is quarantined after an unconfirmed termination",
+            exit_code=7,
+        )
     if rc != 0:
         raise BridgeError("control_plane_failure", "mcp_invocation_invalid", "delegate lease could not start")
     if output:
@@ -929,6 +950,13 @@ def cmd_result(args: argparse.Namespace) -> int:
     if args.error_code:
         argv.extend(["--error-code", args.error_code])
     rc, output = _call_agent_log(run_dir, argv)
+    if rc == 7:
+        raise BridgeError(
+            "infrastructure_failure",
+            agent_log.TERMINATION_UNCONFIRMED_ERROR_CODE,
+            "delegate result cannot change a quarantined lease",
+            exit_code=7,
+        )
     if rc != 0:
         raise BridgeError("control_plane_failure", "mcp_invocation_invalid", "delegate result could not be recorded")
     if output:
@@ -994,6 +1022,13 @@ def cmd_lifecycle(args: argparse.Namespace) -> int:
         claim = registry.claims.get(agent_id)
         if not isinstance(claim, dict):
             raise BridgeError("control_plane_failure", "mcp_invocation_invalid", "unknown agent_id")
+        if agent_log.termination_unconfirmed(claim):
+            raise BridgeError(
+                "infrastructure_failure",
+                agent_log.TERMINATION_UNCONFIRMED_ERROR_CODE,
+                "worktree lifecycle is blocked while delegate termination is unconfirmed",
+                exit_code=7,
+            )
         task_id = claim.get("task_id")
         role = claim.get("role")
         worktree = claim.get("worktree")

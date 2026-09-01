@@ -32,6 +32,7 @@ corrections/git-reset-clean-incident/REPORT.md.
     2  ошибка использования / состояния
     4  задача уже занята живой лизой (см. agent_log.py delegate-claim)
     6  делегат изменил пути вне разрешённого списка — результат НЕ влит
+    7  worktree/task quarantine активен после неподтверждённого timeout
 """
 from __future__ import annotations
 
@@ -394,6 +395,14 @@ def _validate_claim(args: argparse.Namespace, rd: Path, claim: dict[str, Any]) -
         raise CloseValidationError(
             "worktree_lease_identity_mismatch", "claim agent identity mismatch",
         )
+    if agent_log.termination_unconfirmed(claim):
+        raise CloseValidationError(
+            agent_log.TERMINATION_UNCONFIRMED_ERROR_CODE,
+            "delegate termination is unconfirmed after transport timeout",
+            termination_unconfirmed=True,
+            worktree=claim.get("worktree"),
+            worktree_removed=False,
+        )
     state = claim.get("state")
     if state in agent_log.TERMINAL_STATES:
         raise CloseValidationError(
@@ -751,7 +760,11 @@ def cmd_close(args: argparse.Namespace) -> int:
                     **exc.details,
                 }
                 print(json.dumps(payload, ensure_ascii=False, indent=1))
-                return 2
+                return (
+                    7
+                    if exc.error_code == agent_log.TERMINATION_UNCONFIRMED_ERROR_CODE
+                    else 2
+                )
             if not wt.is_dir():
                 print(f"delegate_worktree: каталог {wt} отсутствует", file=sys.stderr)
                 return 2
@@ -1006,8 +1019,14 @@ def _remove_worktree(wt: Path) -> bool:
 
 def cmd_abandon(args: argparse.Namespace) -> int:
     rd = run_dir()
-    agent_log.main(["delegate-release", "--agent-id", args.agent_id,
-                    "--status", "abandoned", "--note", args.note or "закрыт оператором"])
+    release_rc = agent_log.main([
+        "delegate-release", "--agent-id", args.agent_id,
+        "--status", "abandoned", "--note", args.note or "закрыт оператором",
+    ])
+    if release_rc != 0:
+        # In particular, do not report a successful abandon when the release
+        # was refused because an MCP timeout left the actor quarantined.
+        return release_rc
     pipeline_log.append_event(rd, {
         "kind": "worktree_abandon", "actor": args.agent_id, "detail": args.note,
     })
@@ -1052,6 +1071,11 @@ def cmd_gc(args: argparse.Namespace) -> int:
             if not wt.is_dir():
                 continue
             claim = registry.get(wt.name)
+            if isinstance(claim, dict) and agent_log.termination_unconfirmed(claim):
+                # A timed-out actor may still mutate this worktree. Lease
+                # expiry is not a safe deletion signal, so quarantine wins.
+                kept.append(str(wt))
+                continue
             terminal = claim is not None and claim.get("state") in agent_log.TERMINAL_STATES
             expired = claim is not None and now >= claim.get("expires_at", 0)
             unknown = claim is None

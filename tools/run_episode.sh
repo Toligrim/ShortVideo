@@ -129,32 +129,37 @@ export SV_SANDBOX_POLICY="danger-full-access"
 
 # Host-side Codex sandbox preflight.  This is intentionally after run-start
 # (so the refusal is durable in the manifest) and before the first Codex
-# process or delegate worktree can be created.  A non-zero doctor result is an
-# infrastructure failure, never a semantic attempt.
-DOCTOR_JSON="$RUN_DIR/codex-sandbox-doctor.json"
-set +e
-python3 tools/codex_sandbox_doctor.py > "$DOCTOR_JSON"
-DOCTOR_RC=$?
-set -e
-DOCTOR_CLASS=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8")).get("error_class", "bwrap_unknown_failure"))' "$DOCTOR_JSON" 2>/dev/null || true)
-DOCTOR_VERSION=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8")).get("codex_version") or "")' "$DOCTOR_JSON" 2>/dev/null || true)
-[[ -n "$DOCTOR_CLASS" ]] || DOCTOR_CLASS="bwrap_unknown_failure"
-export SV_CODEX_VERSION="$DOCTOR_VERSION"
-DOCTOR_PASSED=0
-if [[ "$DOCTOR_RC" -eq 0 && "$DOCTOR_CLASS" == ok ]]; then
-  DOCTOR_PASSED=1
-fi
-python3 tools/pipeline_log.py event sandbox_preflight --stage other \
-  --severity "$([[ "$DOCTOR_PASSED" -eq 1 ]] && echo info || echo error)" \
-  --detail "$DOCTOR_CLASS" \
-  --data "doctor_exit_code=$DOCTOR_RC" \
-  --data "error_class=$DOCTOR_CLASS" || true
-if [[ "$DOCTOR_PASSED" -ne 1 ]]; then
-  python3 tools/pipeline_log.py finish --status failed --exit-code 78 \
-    --result-class infrastructure_failure --error-code codex_sandbox_unavailable \
-    > "$RUN_DIR/manifest.json"
-  echo "Codex sandbox preflight failed: class=$DOCTOR_CLASS (see $DOCTOR_JSON)" >&2
-  exit 78
+# process or delegate worktree can be created.  Claude does not invoke Codex,
+# so its run must not be coupled to Codex/bwrap availability.
+export SV_CODEX_VERSION=""
+if [[ "$RUNNER" == codex ]]; then
+  # A non-zero doctor result is an infrastructure failure, never a semantic
+  # attempt.
+  DOCTOR_JSON="$RUN_DIR/codex-sandbox-doctor.json"
+  set +e
+  python3 tools/codex_sandbox_doctor.py > "$DOCTOR_JSON"
+  DOCTOR_RC=$?
+  set -e
+  DOCTOR_CLASS=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8")).get("error_class", "bwrap_unknown_failure"))' "$DOCTOR_JSON" 2>/dev/null || true)
+  DOCTOR_VERSION=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8")).get("codex_version") or "")' "$DOCTOR_JSON" 2>/dev/null || true)
+  [[ -n "$DOCTOR_CLASS" ]] || DOCTOR_CLASS="bwrap_unknown_failure"
+  export SV_CODEX_VERSION="$DOCTOR_VERSION"
+  DOCTOR_PASSED=0
+  if [[ "$DOCTOR_RC" -eq 0 && "$DOCTOR_CLASS" == ok ]]; then
+    DOCTOR_PASSED=1
+  fi
+  python3 tools/pipeline_log.py event sandbox_preflight --stage other \
+    --severity "$([[ "$DOCTOR_PASSED" -eq 1 ]] && echo info || echo error)" \
+    --detail "$DOCTOR_CLASS" \
+    --data "doctor_exit_code=$DOCTOR_RC" \
+    --data "error_class=$DOCTOR_CLASS" || true
+  if [[ "$DOCTOR_PASSED" -ne 1 ]]; then
+    python3 tools/pipeline_log.py finish --status failed --exit-code 78 \
+      --result-class infrastructure_failure --error-code codex_sandbox_unavailable \
+      > "$RUN_DIR/manifest.json"
+    echo "Codex sandbox preflight failed: class=$DOCTOR_CLASS (see $DOCTOR_JSON)" >&2
+    exit 78
+  fi
 fi
 
 # The producer prompt remains a normal file value.  The protocol is appended

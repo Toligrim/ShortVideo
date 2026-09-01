@@ -31,6 +31,7 @@
     agent_log.py delegate-start   --agent-id A
     agent_log.py delegate-result  --agent-id A --result-class CLASS [--error-code CODE]
     agent_log.py delegate-release --agent-id A --status ok|failed|abandoned
+    agent_log.py delegate-confirm-termination --agent-id A --evidence TEXT
     agent_log.py delegate-status  [--json]
     agent_log.py action           --actor A --kind KIND [--name N] [--input ...]
     agent_log.py anomaly          --kind KIND --detail ... [--actor A]
@@ -41,7 +42,8 @@
     4  задача уже занята живой лизой (delegate-claim) — НЕ ошибка вызова,
        а штатный отказ, который оркестратор обязан обработать
     5  неизвестный agent_id (release/heartbeat/start/result)
-    7  infrastructure budget/circuit breaker отказал в новой попытке
+    7  infrastructure budget/circuit breaker отказал в новой попытке или
+       делегат остался в quarantine после неподтверждённого timeout
 """
 from __future__ import annotations
 
@@ -72,6 +74,16 @@ REGISTRY_VERSION = 2
 
 TERMINAL_STATES = {"ok", "failed", "abandoned", "denied"}
 
+# A transport timeout only stops waiting in the caller. It does not prove that
+# the nested actor stopped. Keep this state non-terminal so the task and its
+# worktree remain quarantined until an operator supplies external evidence.
+TERMINATION_UNCONFIRMED_STATE = "termination_unconfirmed"
+TERMINATION_UNCONFIRMED_ERROR_CODE = "delegate_termination_unconfirmed"
+TERMINATION_UNCONFIRMED_SOURCE_CODES = frozenset({
+    "mcp_transport_timeout",
+    TERMINATION_UNCONFIRMED_ERROR_CODE,
+})
+
 RESULT_CLASSES = {
     "success",
     "semantic_failure",
@@ -88,6 +100,7 @@ INFRASTRUCTURE_ERROR_CODES = {
     "worktree_missing",
     "worktree_not_visible",
     "infrastructure_budget_exhausted",
+    TERMINATION_UNCONFIRMED_ERROR_CODE,
 }
 
 CONTROL_PLANE_ERROR_CODES = {
@@ -168,6 +181,41 @@ def default_result_for_status(status: str, started: bool = False) -> tuple[str, 
     return "policy_failure", "policy_violation"
 
 
+def termination_unconfirmed(claim: dict[str, Any]) -> bool:
+    """Whether a claim still owns a possibly-live timed-out actor."""
+
+    return (
+        claim.get("termination_unconfirmed") is True
+        or claim.get("state") == TERMINATION_UNCONFIRMED_STATE
+    )
+
+
+def _mark_termination_unconfirmed(
+    claim: dict[str, Any], now: float, source_code: str,
+) -> None:
+    """Put a timed-out claim into durable quarantine."""
+
+    claim["termination_unconfirmed"] = True
+    claim["termination_unconfirmed_at"] = now
+    claim["termination_unconfirmed_source_code"] = source_code
+    claim["state"] = TERMINATION_UNCONFIRMED_STATE
+    # This is deliberately not a completed infrastructure retry. The task
+    # remains blocked until termination is confirmed explicitly.
+    claim["infrastructure_counted"] = False
+
+
+def _clear_termination_unconfirmed(
+    claim: dict[str, Any], now: float, evidence: str,
+) -> None:
+    """Release quarantine after an explicit operator attestation."""
+
+    claim["termination_unconfirmed"] = False
+    claim["termination_confirmed_at"] = now
+    claim["termination_confirmation_evidence"] = evidence[:2_048]
+    if claim.get("state") == TERMINATION_UNCONFIRMED_STATE:
+        claim["state"] = "running"
+
+
 def task_counters(claims: dict[str, Any], task_id: str) -> tuple[int, int, list[str]]:
     """Return (semantic attempts, infrastructure attempts, infra error codes)."""
 
@@ -176,6 +224,10 @@ def task_counters(claims: dict[str, Any], task_id: str) -> tuple[int, int, list[
     codes: list[str] = []
     for claim in claims.values():
         if claim.get("task_id") != task_id:
+            continue
+        # A timed-out actor is not a completed retry. Keep it out of both
+        # counters while active_for_task/circuit logic holds the task.
+        if termination_unconfirmed(claim):
             continue
         if claim.get("semantic_counted"):
             semantic += 1
@@ -193,6 +245,11 @@ def task_counters(claims: dict[str, Any], task_id: str) -> tuple[int, int, list[
 
 
 def infrastructure_circuit_open(claims: dict[str, Any], task_id: str) -> tuple[bool, str | None]:
+    if any(
+        claim.get("task_id") == task_id and termination_unconfirmed(claim)
+        for claim in claims.values()
+    ):
+        return True, TERMINATION_UNCONFIRMED_ERROR_CODE
     _, count, codes = task_counters(claims, task_id)
     if count >= MAX_INFRASTRUCTURE_ATTEMPTS:
         return True, "infrastructure_budget_exhausted"
@@ -269,6 +326,9 @@ class Registry:
         for claim in self.claims.values():
             if claim.get("task_id") != task_id:
                 continue
+            if termination_unconfirmed(claim):
+                # Expiry is not evidence that the underlying process died.
+                return claim
             if claim.get("state") in TERMINAL_STATES:
                 continue
             if now >= claim.get("expires_at", 0):
@@ -283,6 +343,10 @@ class Registry:
         """Перевести истёкшие живые лизы в `abandoned`. Возвращает список задетых."""
         expired = []
         for claim in self.claims.values():
+            if termination_unconfirmed(claim):
+                # Quarantine survives lease expiry. Automatically abandoning
+                # it would reopen the task while the timed-out actor may live.
+                continue
             if claim.get("state") in TERMINAL_STATES:
                 continue
             if now >= claim.get("expires_at", 0):
@@ -344,6 +408,28 @@ def cmd_delegate_claim(args: argparse.Namespace) -> int:
 
         held = reg.active_for_task(args.task_id, now)
         if held is not None:
+            if termination_unconfirmed(held):
+                emit(run_dir, {
+                    "kind": "delegation_denied", "actor": agent_id,
+                    "task_id": args.task_id, "role": args.role,
+                    "detail": TERMINATION_UNCONFIRMED_STATE,
+                    "held_by": held["agent_id"],
+                    "held_since": iso(held["claimed_at"]),
+                    "reason": args.reason,
+                    "result_class": "infrastructure_failure",
+                    "error_code": TERMINATION_UNCONFIRMED_ERROR_CODE,
+                })
+                print(json.dumps({
+                    "granted": False,
+                    "reason": TERMINATION_UNCONFIRMED_STATE,
+                    "task_id": args.task_id,
+                    "held_by": held["agent_id"],
+                    "held_since": iso(held["claimed_at"]),
+                    "error_code": TERMINATION_UNCONFIRMED_ERROR_CODE,
+                    "hint": "старый actor мог пережить timeout; сначала подтверди "
+                            "его termination внешним evidence",
+                }, ensure_ascii=False, indent=1))
+                return 7
             # Структурный отказ — то самое место, где инцидент 31.08 был бы
             # остановлен: второй и третий вызовы сценариста на тот же slug
             # просто не получили бы разрешения работать.
@@ -415,6 +501,11 @@ def cmd_delegate_claim(args: argparse.Namespace) -> int:
             "pending_result_class": None,
             "pending_error_code": None,
             "pending_substantive_work": False,
+            "termination_unconfirmed": False,
+            "termination_unconfirmed_at": None,
+            "termination_unconfirmed_source_code": None,
+            "termination_confirmed_at": None,
+            "termination_confirmation_evidence": None,
             "thread_id": None,
             "released_at": None,
             "release_reason": None,
@@ -452,6 +543,13 @@ def cmd_delegate_heartbeat(args: argparse.Namespace) -> int:
         if claim is None:
             print(f"agent_log: неизвестный agent_id {args.agent_id!r}", file=sys.stderr)
             return 5
+        if termination_unconfirmed(claim):
+            print(
+                f"agent_log: lease для {args.agent_id!r} в quarantine; "
+                "termination не подтверждён",
+                file=sys.stderr,
+            )
+            return 7
         claim["heartbeat_at"] = now
         claim["expires_at"] = now + claim.get("lease_sec", DEFAULT_LEASE_SEC)
         if args.thread_id:
@@ -507,6 +605,13 @@ def cmd_delegate_start(args: argparse.Namespace) -> int:
         if not _claim_identity_matches(claim, args):
             print(f"agent_log: lease identity for {args.agent_id!r} changed", file=sys.stderr)
             return 5
+        if termination_unconfirmed(claim):
+            print(
+                f"agent_log: lease для {args.agent_id!r} в quarantine; "
+                "termination не подтверждён",
+                file=sys.stderr,
+            )
+            return 7
         if claim.get("state") in TERMINAL_STATES or now >= claim.get("expires_at", 0):
             print(f"agent_log: lease для {args.agent_id!r} не активна", file=sys.stderr)
             return 5
@@ -555,6 +660,13 @@ def cmd_delegate_result(args: argparse.Namespace) -> int:
         if not _claim_identity_matches(claim, args):
             print(f"agent_log: lease identity for {args.agent_id!r} changed", file=sys.stderr)
             return 5
+        if termination_unconfirmed(claim):
+            print(
+                f"agent_log: lease для {args.agent_id!r} в quarantine; "
+                "termination не подтверждён",
+                file=sys.stderr,
+            )
+            return 7
         if claim.get("state") in TERMINAL_STATES:
             print(f"agent_log: lease для {args.agent_id!r} уже закрыта", file=sys.stderr)
             return 5
@@ -567,6 +679,9 @@ def cmd_delegate_result(args: argparse.Namespace) -> int:
         claim["pending_result_class"] = args.result_class
         claim["pending_error_code"] = args.error_code
         claim["pending_substantive_work"] = args.result_class in {"success", "semantic_failure"}
+        if args.error_code in TERMINATION_UNCONFIRMED_SOURCE_CODES:
+            _mark_termination_unconfirmed(claim, now, args.error_code)
+        termination_flag = termination_unconfirmed(claim)
         reg.save()
         task_id = claim.get("task_id")
         role = claim.get("role")
@@ -579,10 +694,12 @@ def cmd_delegate_result(args: argparse.Namespace) -> int:
         "infrastructure_attempt": infra_attempt,
         "semantic_attempt": semantic_attempt,
         "phase": "result_classification",
+        "termination_unconfirmed": termination_flag,
     })
     print(json.dumps({
         "agent_id": args.agent_id, "result_class": args.result_class,
         "error_code": args.error_code,
+        "termination_unconfirmed": termination_flag,
     }, ensure_ascii=False))
     return 0
 
@@ -678,6 +795,27 @@ def cmd_delegate_release(args: argparse.Namespace) -> int:
     run_dir = resolve_run_dir()
     try:
         with Registry(run_dir) as reg:
+            claim = _claim_or_error(reg, args.agent_id)
+            if claim is None:
+                return 5
+            if termination_unconfirmed(claim):
+                emit(run_dir, {
+                    "kind": "delegation_release_blocked", "actor": args.agent_id,
+                    "task_id": claim.get("task_id"), "role": claim.get("role"),
+                    "status": args.status,
+                    "result_class": "infrastructure_failure",
+                    "error_code": TERMINATION_UNCONFIRMED_ERROR_CODE,
+                    "termination_unconfirmed": True,
+                })
+                print(json.dumps({
+                    "agent_id": args.agent_id,
+                    "status": TERMINATION_UNCONFIRMED_STATE,
+                    "result_class": "infrastructure_failure",
+                    "error_code": TERMINATION_UNCONFIRMED_ERROR_CODE,
+                    "termination_unconfirmed": True,
+                    "hint": "сначала выполни явное подтверждение termination с внешним evidence",
+                }, ensure_ascii=False))
+                return 7
             info = release_claim_locked(
                 reg, args.agent_id, args.status,
                 result_class=args.result_class,
@@ -720,6 +858,42 @@ def cmd_delegate_release(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_delegate_confirm_termination(args: argparse.Namespace) -> int:
+    """Clear timeout quarantine only after explicit operator attestation."""
+
+    run_dir = resolve_run_dir()
+    now = now_epoch()
+    with Registry(run_dir) as reg:
+        claim = _claim_or_error(reg, args.agent_id)
+        if claim is None:
+            return 5
+        if not termination_unconfirmed(claim):
+            print(json.dumps({
+                "agent_id": args.agent_id,
+                "termination_unconfirmed": False,
+                "already_confirmed": True,
+            }, ensure_ascii=False))
+            return 0
+        _clear_termination_unconfirmed(claim, now, args.evidence)
+        reg.save()
+        task_id = claim.get("task_id")
+        role = claim.get("role")
+        worktree = claim.get("worktree")
+    emit(run_dir, {
+        "kind": "delegate_termination_confirmed", "actor": args.agent_id,
+        "task_id": task_id, "role": role, "worktree_path": worktree,
+        "error_code": TERMINATION_UNCONFIRMED_ERROR_CODE,
+        "termination_unconfirmed": False,
+        "evidence": args.evidence[:2_048],
+    })
+    print(json.dumps({
+        "agent_id": args.agent_id,
+        "termination_unconfirmed": False,
+        "termination_confirmed": True,
+    }, ensure_ascii=False))
+    return 0
+
+
 def cmd_delegate_status(args: argparse.Namespace) -> int:
     run_dir = resolve_run_dir()
     now = now_epoch()
@@ -727,7 +901,7 @@ def cmd_delegate_status(args: argparse.Namespace) -> int:
         claims = list(reg.claims.values())
 
     live = [c for c in claims if c.get("state") not in TERMINAL_STATES
-            and now < c.get("expires_at", 0)]
+            and (termination_unconfirmed(c) or now < c.get("expires_at", 0))]
     if args.json:
         by_task: dict[str, dict[str, Any]] = {}
         for claim in claims:
@@ -746,6 +920,10 @@ def cmd_delegate_status(args: argparse.Namespace) -> int:
                 "circuit_open": infrastructure_circuit_open(
                     {c.get("agent_id", str(i)): c for i, c in enumerate(claims)}, task_id
                 )[0],
+                "termination_unconfirmed": any(
+                    c.get("task_id") == task_id and termination_unconfirmed(c)
+                    for c in claims
+                ),
             }
         print(json.dumps({"run_dir": str(run_dir), "claims": claims,
                           "live": [c["agent_id"] for c in live],
@@ -838,6 +1016,16 @@ def build_parser() -> argparse.ArgumentParser:
     dr.add_argument("--note", default=None)
     dr.add_argument("--thread-id", default=None)
 
+    dct = sub.add_parser(
+        "delegate-confirm-termination",
+        help="снять timeout quarantine после внешнего подтверждения смерти делегата",
+    )
+    dct.add_argument("--agent-id", required=True)
+    dct.add_argument(
+        "--evidence", required=True,
+        help="краткое внешнее evidence, почему старый процесс точно завершён",
+    )
+
     ds = sub.add_parser("delegate-status", help="что сейчас делегировано и кому")
     ds.add_argument("--json", action="store_true")
 
@@ -867,6 +1055,7 @@ def main(argv: list[str] | None = None) -> int:
         "delegate-start": cmd_delegate_start,
         "delegate-result": cmd_delegate_result,
         "delegate-release": cmd_delegate_release,
+        "delegate-confirm-termination": cmd_delegate_confirm_termination,
         "delegate-status": cmd_delegate_status,
         "action": cmd_action,
         "anomaly": cmd_anomaly,

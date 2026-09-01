@@ -194,6 +194,86 @@ setTimeout(() => process.stdout.write(JSON.stringify({outputs, commands})), 100)
     )
 
 
+def test_mcp_timeout_is_classified_by_generated_bridge(delegation):
+    """Promise.race timeout must surface the stable transport error code."""
+
+    run_dir, prompt_file, claim = delegation
+    prompt_file.write_text("safe", encoding="utf-8")
+    context = delegate_invoke.ClaimContext(
+        run_dir=run_dir,
+        run_id=run_dir.name,
+        task_id=claim["task_id"],
+        agent_id=claim["agent_id"],
+        role=claim["role"],
+        attempt=claim["attempt"],
+        worktree=delegate_invoke.ROOT,
+        base_sha=claim["base_sha"],
+        semantic_attempt=0,
+        infrastructure_attempt=1,
+        codex_path=Path("/usr/bin/codex"),
+        codex_version="test-codex",
+        policy=delegate_invoke.Policy(
+            model="gpt-5.6-luna",
+            sandbox="workspace-write",
+            approval_policy="never",
+            timeout_seconds=1,
+        ),
+    )
+    js_file = run_dir / "timeout.js"
+    js_file.write_text(delegate_invoke._render_js(context, prompt_file), encoding="utf-8")
+
+    node = _node()
+    runner = r'''
+const outputs = [];
+globalThis.text = (value) => outputs.push(String(value));
+globalThis.tools = {
+  exec_command: async ({cmd}) => ({
+    exit_code: 0, output: cmd.includes("cat --") ? "safe" : ""
+  }),
+  mcp__codex__codex: async () => new Promise(() => {})
+};
+require(process.env.GENERATED_JS);
+setTimeout(() => process.stdout.write(JSON.stringify(outputs)), 1500);
+'''
+    executed = subprocess.run(
+        [node, "-e", runner],
+        env={**os.environ, "GENERATED_JS": str(js_file)},
+        capture_output=True,
+        text=True,
+        timeout=5,
+    )
+    assert executed.returncode == 0, executed.stderr
+    result = json.loads(json.loads(executed.stdout)[-1])
+    assert result["result_class"] == "infrastructure_failure"
+    assert result["error_code"] == "mcp_transport_timeout"
+
+
+def test_animation_director_policy_is_workspace_write():
+    assert delegate_invoke.load_policy("animation-director").sandbox == "workspace-write"
+
+
+def test_bridge_refuses_render_for_quarantined_claim(delegation, capsys):
+    run_dir, prompt_file, claim = delegation
+    prompt_file.write_text("safe", encoding="utf-8")
+    with agent_log.Registry(run_dir) as registry:
+        stored = registry.claims[claim["agent_id"]]
+        stored["state"] = agent_log.TERMINATION_UNCONFIRMED_STATE
+        stored["termination_unconfirmed"] = True
+        registry.save()
+
+    rc = delegate_invoke.main([
+        "render",
+        "--task-id", claim["task_id"],
+        "--agent-id", claim["agent_id"],
+        "--role", claim["role"],
+        "--prompt-file", str(prompt_file),
+    ])
+    captured = capsys.readouterr()
+    assert rc == 7
+    assert captured.out == ""
+    assert json.loads(captured.err)["error_code"] == "delegate_termination_unconfirmed"
+
+
 def test_model_sandbox_and_cwd_are_not_bridge_arguments(delegation):
     run_dir, prompt_file, _ = delegation
     prompt_file.write_text("safe", encoding="utf-8")
@@ -303,6 +383,11 @@ def test_success_and_semantic_attempts_are_separate_from_infrastructure(tmp_path
     ]) == 0
     capsys.readouterr()
     assert agent_log.main([
+        "delegate-confirm-termination", "--agent-id", "infra-1",
+        "--evidence", "focused test confirmed no old actor",
+    ]) == 0
+    capsys.readouterr()
+    assert agent_log.main([
         "delegate-release", "--agent-id", "infra-1", "--status", "failed"
     ]) == 0
     capsys.readouterr()
@@ -312,6 +397,54 @@ def test_success_and_semantic_attempts_are_separate_from_infrastructure(tmp_path
     assert semantic == 1
     assert infrastructure == 1
     assert codes == ["mcp_transport_timeout"]
+
+
+def test_timeout_quarantine_blocks_release_and_retry_until_confirmed(tmp_path, monkeypatch, capsys):
+    run_dir = tmp_path / "run-quarantine"
+    run_dir.mkdir()
+    (run_dir / "mono_start").write_text(repr(time.monotonic()), encoding="utf-8")
+    monkeypatch.setenv("SV_RUN_DIR", str(run_dir))
+    monkeypatch.setenv("SV_RUN_ID", run_dir.name)
+    task = "critic:quarantine"
+
+    assert agent_log.main([
+        "delegate-claim", "--task-id", task, "--role", "critic", "--agent-id", "timed-out",
+        "--lease-sec", "1",
+    ]) == 0
+    capsys.readouterr()
+    assert agent_log.main(["delegate-start", "--agent-id", "timed-out"]) == 0
+    capsys.readouterr()
+    assert agent_log.main([
+        "delegate-result", "--agent-id", "timed-out",
+        "--result-class", "infrastructure_failure", "--error-code", "mcp_transport_timeout",
+    ]) == 0
+    capsys.readouterr()
+
+    assert agent_log.main([
+        "delegate-release", "--agent-id", "timed-out", "--status", "failed",
+    ]) == 7
+    assert json.loads(capsys.readouterr().out)["error_code"] == "delegate_termination_unconfirmed"
+    assert agent_log.main([
+        "delegate-claim", "--task-id", task, "--role", "critic", "--agent-id", "retry",
+    ]) == 7
+    assert json.loads(capsys.readouterr().out)["error_code"] == "delegate_termination_unconfirmed"
+
+    with agent_log.Registry(run_dir) as registry:
+        assert agent_log.task_counters(registry.claims, task) == (0, 0, [])
+
+    assert agent_log.main([
+        "delegate-confirm-termination", "--agent-id", "timed-out",
+        "--evidence", "test actor was independently confirmed dead",
+    ]) == 0
+    capsys.readouterr()
+    assert agent_log.main([
+        "delegate-release", "--agent-id", "timed-out", "--status", "failed",
+    ]) == 0
+    capsys.readouterr()
+    assert agent_log.main([
+        "delegate-claim", "--task-id", task, "--role", "critic", "--agent-id", "retry",
+    ]) == 0
+    capsys.readouterr()
 
 
 def test_repeated_infrastructure_errors_open_the_circuit(tmp_path, monkeypatch, capsys):
@@ -332,6 +465,11 @@ def test_repeated_infrastructure_errors_open_the_circuit(tmp_path, monkeypatch, 
             "delegate-result", "--agent-id", agent_id,
             "--result-class", "infrastructure_failure",
             "--error-code", "mcp_transport_timeout",
+        ]) == 0
+        capsys.readouterr()
+        assert agent_log.main([
+            "delegate-confirm-termination", "--agent-id", agent_id,
+            "--evidence", "focused test confirmed no old actor",
         ]) == 0
         capsys.readouterr()
         assert agent_log.main([
