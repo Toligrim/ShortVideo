@@ -36,10 +36,12 @@ corrections/git-reset-clean-incident/REPORT.md.
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import fcntl
 import json
 import os
 import shutil
+import stat
 import subprocess
 import sys
 import time
@@ -62,14 +64,63 @@ WORKTREES_ROOT = Path.home() / ".local/share/shortvideo/worktrees"
 ALLOC_LOCK = Path.home() / ".local/share/shortvideo/worktree-alloc.lock"
 
 
+def _run_git(args: list[str], cwd: Path | None = None) -> subprocess.CompletedProcess[bytes]:
+    """Запустить git без декодирования stdout.
+
+    Декодирование и нормализация намеренно вынесены в вызывающие функции:
+    git использует stdout и для обычных текстовых значений, и для бинарных
+    blob'ов/NUL-разделённых протоколов.
+    """
+    return subprocess.run(["git", *args], cwd=str(cwd or ROOT),
+                          capture_output=True)
+
+
+def _raise_git_error(args: list[str], proc: subprocess.CompletedProcess[bytes]) -> None:
+    stderr = os.fsdecode(proc.stderr).strip()
+    # stdout может принадлежать raw-команде; не нормализуем его даже в
+    # диагностике ошибки. У stderr здесь обычная текстовая роль.
+    stdout = os.fsdecode(proc.stdout)
+    raise RuntimeError(f"git {' '.join(args)} → {proc.returncode}: "
+                       f"{stderr or stdout}")
+
+
 def git(args: list[str], cwd: Path | None = None, check: bool = True) -> str:
-    """Вызов git. Деструктивные формы здесь не используются принципиально."""
-    proc = subprocess.run(["git", *args], cwd=str(cwd or ROOT),
-                          capture_output=True, text=True)
+    """Вызов git для обычного текстового scalar-вывода.
+
+    `.strip()` допустим только здесь: вызывающий код должен использовать эту
+    функцию лишь для значений вроде commit SHA или типа git-объекта.
+    """
+    proc = _run_git(args, cwd=cwd)
     if check and proc.returncode != 0:
-        raise RuntimeError(f"git {' '.join(args)} → {proc.returncode}: "
-                           f"{proc.stderr.strip() or proc.stdout.strip()}")
-    return proc.stdout.strip()
+        _raise_git_error(args, proc)
+    return os.fsdecode(proc.stdout).strip()
+
+
+def git_raw(args: list[str], cwd: Path | None = None, check: bool = True) -> bytes:
+    """Вызов git, возвращающий stdout побайтово и без нормализации.
+
+    Это единственный допустимый путь для `-z`-выводов и содержимого blob'ов:
+    здесь нельзя удалять пробелы, переводы строк или любые другие байты.
+    """
+    proc = _run_git(args, cwd=cwd)
+    if check and proc.returncode != 0:
+        _raise_git_error(args, proc)
+    return proc.stdout
+
+
+def _decode_git_path(raw_path: bytes) -> str:
+    """Декодировать имя файла как имя filesystem, не теряя байты.
+
+    `-z`-режим не применяет git-экранирование. `os.fsdecode` использует
+    surrogateescape для невалидного UTF-8 и потому сохраняет такие имена для
+    последующего обращения к файловой системе.
+    """
+    return os.fsdecode(raw_path)
+
+
+def _nul_paths(raw: bytes) -> list[str]:
+    """Разобрать NUL-разделённый список путей без trim/strip."""
+    return [_decode_git_path(part) for part in raw.split(b"\0") if part]
 
 
 class AllocLock:
@@ -103,25 +154,191 @@ def worktree_path(run_id: str, agent_id: str) -> Path:
 def changed_paths(wt: Path, base: str) -> tuple[set[str], set[str]]:
     """(изменённые отслеживаемые пути, untracked-пути) в worktree делегата.
 
-    Считаем и то и другое: делегат чаще всего СОЗДАЁТ новый файл (draft JSON),
-    то есть его результат — именно untracked-путь, и не проверять их значило бы
-    не проверять ничего.
+    Tracked-изменения берём относительно зафиксированной базы, а untracked —
+    отдельной git-командой. Обе команды используют NUL-протокол и raw bytes:
+    status porcelain здесь не нужен, а значит пробелы в двухбайтовом статусе
+    не могут стать частью имени пути.
+
+    `--no-renames` обязателен для safety-проверки: rename намеренно выглядит
+    как удаление старого пути и добавление нового, чтобы allowlist не потеряла
+    ни одну из сторон.
     """
-    tracked = set()
-    untracked = set()
-    out = git(["status", "--porcelain=v1", "-z", "--untracked-files=all"], cwd=wt)
-    for entry in out.split("\0"):
-        if not entry or len(entry) < 4:
-            continue
-        code, path = entry[:2], entry[3:]
-        (untracked if code == "??" else tracked).add(path)
-    # Плюс всё, что делегат успел закоммитить у себя поверх базы.
-    try:
-        committed = git(["diff", "--name-only", "-z", base, "HEAD"], cwd=wt)
-        tracked |= {p for p in committed.split("\0") if p}
-    except RuntimeError:
-        pass
+    tracked = set(_nul_paths(git_raw([
+        "diff", "--name-only", "-z", "--no-renames", base, "--",
+    ], cwd=wt)))
+    untracked = set(_nul_paths(git_raw([
+        "ls-files", "--others", "--exclude-standard", "-z", "--",
+    ], cwd=wt)))
     return tracked, untracked
+
+
+@dataclasses.dataclass(frozen=True)
+class FileState:
+    """Состояние одного пути в дереве.
+
+    Отсутствие — это `exists=False`, а не пустой `content`: пустой blob имеет
+    `exists=True` и `content=b""`. Для regular-файлов `content` всегда raw
+    bytes, поэтому trailing whitespace, CRLF и произвольные binary bytes
+    остаются частью сравнения.
+    """
+
+    exists: bool
+    content: bytes | None
+    kind: str = "missing"
+    mode: str | None = None
+
+
+@dataclasses.dataclass(frozen=True)
+class Change:
+    path: str
+    base: FileState
+    delegate: FileState
+    change_type: str
+
+
+SUPPORTED_FILE_KINDS = {"missing", "file"}
+
+
+def _base_tree_header(base: str, rel: str, cwd: Path) -> bytes | None:
+    """Вернуть header `ls-tree` для exact path или None, если его нет.
+
+    `ls-tree -z` не цитирует имена путей. Literal pathspec нужен дополнительно,
+    чтобы символы `*`, `?`, `[` в имени не расширялись в другие записи.
+    """
+    raw = git_raw([
+        "ls-tree", "-z", "--full-tree", base, "--", f":(literal){rel}",
+    ], cwd=cwd)
+    wanted = os.fsencode(rel)
+    for record in raw.split(b"\0"):
+        if not record:
+            continue
+        try:
+            header, path = record.split(b"\t", 1)
+        except ValueError as exc:
+            raise RuntimeError(f"git ls-tree вернул повреждённую запись для {rel!r}") from exc
+        if path == wanted:
+            return header
+    return None
+
+
+def _base_file_state(base: str, rel: str, cwd: Path) -> FileState:
+    """Прочитать состояние пути в BASE, включая пустой blob.
+
+    Наличие проверяется по записи `ls-tree`, а не по содержимому stdout
+    `git show`: у отсутствующего пути и у существующего пустого blob stdout
+    одинаково пуст.
+    """
+    header = _base_tree_header(base, rel, cwd)
+    if header is None:
+        return FileState(False, None)
+
+    fields = header.split()
+    if len(fields) != 3:
+        raise RuntimeError(f"git ls-tree вернул неожиданный header для {rel!r}")
+    mode = os.fsdecode(fields[0])
+    object_type = os.fsdecode(fields[1])
+    object_id = os.fsdecode(fields[2])
+
+    if mode == "120000":
+        kind = "symlink"
+    elif mode.startswith("100") and object_type == "blob":
+        kind = "file"
+    elif object_type == "tree":
+        kind = "directory"
+    elif object_type == "commit":
+        kind = "submodule"
+    else:
+        kind = "other"
+
+    content = None
+    if object_type == "blob":
+        # cat-file blob отдаёт данные без заголовков и без финального newline.
+        content = git_raw(["cat-file", "blob", object_id], cwd=cwd)
+    return FileState(True, content, kind, mode)
+
+
+def _disk_file_state(path: Path) -> FileState:
+    """Прочитать состояние на диске через lstat/read_bytes, не следуя symlink."""
+    try:
+        info = path.lstat()
+    except FileNotFoundError:
+        return FileState(False, None)
+
+    if stat.S_ISLNK(info.st_mode):
+        return FileState(True, None, "symlink", "120000")
+    if stat.S_ISREG(info.st_mode):
+        mode = "100755" if info.st_mode & 0o111 else "100644"
+        return FileState(True, path.read_bytes(), "file", mode)
+    if stat.S_ISDIR(info.st_mode):
+        return FileState(True, None, "directory")
+    return FileState(True, None, "other")
+
+
+def _unsupported_kind(base: FileState, delegate: FileState) -> str | None:
+    for state in (base, delegate):
+        if state.kind not in SUPPORTED_FILE_KINDS:
+            return state.kind
+    return None
+
+
+def _change_for(wt: Path, base: str, rel: str) -> Change:
+    base_state = _base_file_state(base, rel, wt)
+    delegate_state = _disk_file_state(wt / rel)
+    unsupported = _unsupported_kind(base_state, delegate_state)
+    if unsupported is not None:
+        return Change(rel, base_state, delegate_state, unsupported)
+    if not base_state.exists and delegate_state.exists:
+        change_type = "add"
+    elif base_state.exists and not delegate_state.exists:
+        change_type = "delete"
+    elif base_state.exists and delegate_state.exists:
+        # Binary files intentionally use the same path as text files: all
+        # regular-file handling below is byte-for-byte and never decodes text.
+        change_type = "modify"
+    else:
+        # A path in changed_paths should not have both states missing. Treat
+        # that race/anomaly as unsupported instead of silently losing it.
+        change_type = "unknown"
+    return Change(rel, base_state, delegate_state, change_type)
+
+
+def _unsupported_details(changes: list[Change], main_states: dict[str, FileState]) -> list[dict[str, str]]:
+    details: list[dict[str, str]] = []
+    for change in changes:
+        if change.change_type not in {"add", "delete", "modify"}:
+            details.append({"path": change.path, "type": change.change_type,
+                            "change_type": change.change_type})
+            continue
+        main = main_states.get(change.path)
+        if main is not None and main.kind not in SUPPORTED_FILE_KINDS:
+            details.append({"path": change.path, "type": main.kind,
+                            "change_type": main.kind})
+    return details
+
+
+def _report_unsupported_change_type(
+    rd: Path, agent_id: str, wt: Path, details: list[dict[str, str]],
+) -> int:
+    """Остановить close до слияния, сохранив worktree для оператора."""
+    pipeline_log.append_event(rd, {
+        "kind": "anomaly", "anomaly_kind": "worktree_unsupported_change_type",
+        "actor": agent_id, "severity": "error",
+        "detail": "делегат изменил неподдерживаемый тип пути",
+        "evidence": json.dumps(details, ensure_ascii=False),
+    })
+    agent_log.main(["delegate-release", "--agent-id", agent_id,
+                    "--status", "failed",
+                    "--note", "обнаружен неподдерживаемый тип изменения, результат не влит"])
+    print(json.dumps({
+        "merged": False,
+        "error": "worktree_unsupported_change_type",
+        "error_code": "worktree_unsupported_change_type",
+        "reason": "worktree_unsupported_change_type",
+        "unsupported": details,
+        "worktree": str(wt),
+        "hint": "worktree намеренно НЕ удалён — разберись с типом изменения и закрой его `abandon`.",
+    }, ensure_ascii=False, indent=1))
+    return 2
 
 
 def cmd_open(args: argparse.Namespace) -> int:
@@ -205,29 +422,42 @@ def cmd_close(args: argparse.Namespace) -> int:
         }, ensure_ascii=False, indent=1))
         return 6
 
+    changes = [_change_for(wt, base, rel) for rel in touched]
+    main_states = {change.path: _disk_file_state(ROOT / change.path)
+                   for change in changes}
+    unsupported = _unsupported_details(changes, main_states)
+    if unsupported:
+        return _report_unsupported_change_type(rd, args.agent_id, wt, unsupported)
+
     merged: list[str] = []
     conflicts: list[str] = []
-    for rel in touched:
+    for change in changes:
+        rel = change.path
         src = wt / rel
         dst = ROOT / rel
-        if not src.is_file():
+        main_state = main_states[rel]
+
+        # Сравниваем явные состояния BASE и main, включая exists=False и
+        # content=b"". Это покрывает modify/add/delete и не превращает
+        # отсутствие файла в особый случай с пустой строкой.
+        if args.detect_conflicts and main_state != change.base:
+            conflicts.append(rel)
             continue
-        # Конфликт: пока делегат работал, тот же файл изменился в основном
-        # дереве. Никакой автоматики — конвейер останавливается и говорит об
-        # этом. Именно на этом месте в инциденте делегат начал «побеждать»
-        # конкурента вместо того, чтобы доложить.
-        if dst.exists() and args.detect_conflicts:
-            base_blob = None
-            try:
-                base_blob = git(["show", f"{base}:{rel}"], check=False)
-            except RuntimeError:
-                base_blob = None
-            current = dst.read_text(encoding="utf-8", errors="replace")
-            if base_blob is not None and base_blob != "" and current != base_blob:
-                conflicts.append(rel)
-                continue
-        dst.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(src, dst)
+
+        if change.change_type == "delete":
+            # При включённом conflict detection main_state.exists здесь всегда
+            # True: если main уже удалил файл, это было бы конфликтом выше.
+            if main_state.exists:
+                dst.unlink()
+        elif change.change_type in {"add", "modify"}:
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            # Источник проверен через lstat/read_bytes: symlink не может
+            # незаметно превратиться в копирование внешнего файла.
+            shutil.copy2(src, dst)
+        else:
+            # Изменённый путь с двумя отсутствующими состояниями невозможен
+            # для обычного git diff, но не должен молча менять main.
+            continue
         merged.append(rel)
 
     if conflicts:
@@ -265,6 +495,7 @@ def cmd_close(args: argparse.Namespace) -> int:
         "merged": bool(merged) and not conflicts, "paths": merged,
         "conflicts": conflicts, "commit": commit_sha,
         "worktree_removed": removed,
+        "change_types": {change.path: change.change_type for change in changes},
     }, ensure_ascii=False, indent=1))
     return 2 if conflicts else 0
 
