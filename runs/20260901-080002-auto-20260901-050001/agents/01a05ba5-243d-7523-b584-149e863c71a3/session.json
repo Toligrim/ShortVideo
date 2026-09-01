@@ -1,0 +1,15 @@
+{
+ "session_id": "01a05ba5-243d-7523-b584-149e863c71a3",
+ "source": "mcp",
+ "is_delegate": true,
+ "cwd": "/home/toligrim/projects/ShortVideo",
+ "cli_version": "0.149.0",
+ "started_at": "2026-09-01T06:25:44.551Z",
+ "rollout_origin": "/home/toligrim/.codex/sessions/2026/09/01/rollout-2026-09-01T09-25-44-01a05ba5-243d-7523-b584-149e863c71a3.jsonl",
+ "actions_total": 148,
+ "tool_calls": 36,
+ "agent_messages": 11,
+ "reasoning_items": 62,
+ "reasoning_readable": false,
+ "dangers": []
+}

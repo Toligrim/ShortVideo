@@ -1,0 +1,109 @@
+{
+ "schema_version": 1,
+ "run_id": "20260827-180301-auto-20260827-150301",
+ "slug": "auto-20260827-150301",
+ "status": "ok",
+ "episode": {
+  "topic": "тему выбирает агент (инструкции в промпте)"
+ },
+ "runner": {
+  "cli": "codex",
+  "model": "gpt-5.6-luna",
+  "effort": "max",
+  "orchestration": "single-actor",
+  "invocation": "codex exec -m gpt-5.6-luna -c model_reasoning_effort=max --sandbox danger-full-access < /home/toligrim/.local/share/shortvideo/scheduler/producer-prompt-2a_xpab6.md"
+ },
+ "timing": {
+  "started_at": "2026-08-27T15:03:01.687Z",
+  "finished_at": "2026-08-27T16:42:56.043Z",
+  "wall_sec": 5994.356,
+  "unaccounted_sec": 5994.356,
+  "coverage_pct": 0.0,
+  "measured_by": "tools/pipeline_log.py",
+  "stages": {}
+ },
+ "composition": {
+  "scene_count": 5,
+  "scene_type_histogram": {
+   "hook": 1,
+   "diagram": 1,
+   "story": 1,
+   "code": 1,
+   "outro": 1
+  },
+  "spoken_words": 133,
+  "visuals_used": [
+   "password-hash"
+  ],
+  "audio_sec": 65.74,
+  "mp4_bytes": 28258090,
+  "video_sec": 68.29
+ },
+ "library_growth": {
+  "new_scene_types": [],
+  "new_story_visuals": [
+   "password-hash"
+  ],
+  "new_components": [],
+  "modified_components": [
+   "video/src/scenes/OutroScene.tsx",
+   "video/src/scenes/StoryScene.tsx"
+  ],
+  "count": 1,
+  "catalog_drift": {
+   "in_schema_not_in_catalog": [
+    "amdahl-speedup",
+    "ariane-overflow",
+    "bbp-digit",
+    "bbp-extract",
+    "busy-beaver",
+    "consistent-hash-ring",
+    "cuckoo-cycle",
+    "cuckoo-stash",
+    "cuckoo-table",
+    "elias-fano",
+    "gps-relativity",
+    "gray-code",
+    "hamming-syndrome",
+    "hamming-word",
+    "hilbert-curve",
+    "inverse-sqrt-bits",
+    "median-of-medians",
+    "merkle-tree",
+    "mincut-contract",
+    "minimal-perfect-hash",
+    "mt-recovery",
+    "recursion-call",
+    "reservoir-sampling",
+    "secret-sharing",
+    "stable-matching",
+    "stack-compare",
+    "stack-grow",
+    "suffix-automaton",
+    "timsort-runs",
+    "trie-growth"
+   ],
+   "in_catalog_not_in_schema": []
+  },
+  "detected_by": [
+   "snapshot-diff",
+   "git-diff"
+  ],
+  "git_before": "3e12521a20dc71e15aaefde109d7e205c43d1281",
+  "git_after": "0a90877dfe19e49b913721d02d6d4ce806b20110"
+ },
+ "incidents": [],
+ "verdicts": [],
+ "artifacts": {
+  "draft_json": "episodes/drafts/auto-20260827-150301.draft.json",
+  "episode_json": "episodes/auto-20260827-150301.json",
+  "meta_json": "video/public/episodes/auto-20260827-150301/meta.json",
+  "script_json": "video/public/episodes/auto-20260827-150301/script.json",
+  "audio_dir": "video/public/episodes/auto-20260827-150301/audio",
+  "mp4": "video/out/auto-20260827-150301.mp4"
+ },
+ "integrity": {
+  "stages_measured": [],
+  "clock": "utc+monotonic, tools/pipeline_log.py"
+ }
+}

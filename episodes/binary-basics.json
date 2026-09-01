@@ -1,0 +1,104 @@
+{
+  "id": "binary-basics",
+  "title": "Как компьютер понимает нули и единицы",
+  "scenes": [
+    {
+      "type": "story",
+      "narration": "Внутри компьютера только два состояния: выключено и включено. Как из них получаются числа, буквы и видео? Это двоичная система — язык нулей и единиц.",
+      "beats": [
+        { "visual": "devices-meet" },
+        { "visual": "handshake", "onWord": "два" },
+        { "visual": "title-slam", "onWord": "двоичная", "params": { "text": "0 / 1", "sub": "язык компьютеров" } }
+      ]
+    },
+    {
+      "type": "diagram",
+      "heading": "Один бит",
+      "nodes": [
+        { "id": "off", "label": "0 · Выключено", "icon": "toggle-left", "tone": "accent2" },
+        { "id": "on", "label": "1 · Включено", "icon": "toggle-right", "tone": "success" }
+      ],
+      "state": { "label": "Минимум информации", "tone": "accent", "onWord": "минимальный" },
+      "narration": "Один переключатель хранит один бит. Ноль — выключено, единица — включено. Это минимальный кусочек информации."
+    },
+    {
+      "type": "code",
+      "heading": "Вес разрядов",
+      "code": "разряд:  3   2   1   0\nвес:     8   4   2   1",
+      "highlight": [2],
+      "language": "bash",
+      "narration": "Четыре бита дают четыре разряда. Справа налево их веса: один, два, четыре и восемь. Каждый следующий вдвое важнее."
+    },
+    {
+      "type": "diagram",
+      "heading": "Сложение весов",
+      "nodes": [
+        { "id": "eight", "label": "Вес 8", "icon": "plus", "tone": "accent" },
+        { "id": "two", "label": "Вес 2", "icon": "plus", "tone": "accent2" },
+        { "id": "one", "label": "Вес 1", "icon": "plus", "tone": "success" }
+      ],
+      "packets": [
+        { "label": "+8", "from": "eight", "to": "one", "tone": "accent", "onWord": "восемь" },
+        { "label": "+2", "from": "two", "to": "one", "tone": "accent2", "onWord": "два" },
+        { "label": "+1", "from": "one", "to": "two", "tone": "success", "onWord": "один" }
+      ],
+      "state": { "label": "Итого: 11", "tone": "success", "onWord": "одиннадцать" },
+      "narration": "Возьмём {1011|один ноль один один}. Включены веса восемь, два и один. Восемь плюс два плюс один — это одиннадцать."
+    },
+    {
+      "type": "code",
+      "heading": "Перенос разряда",
+      "code": "  1011\n+ 0001\n------\n  1100",
+      "highlight": [4],
+      "language": "bash",
+      "narration": "Сложение знакомо: компьютер идёт справа налево. Если сумма даёт два, он пишет ноль и переносит единицу дальше."
+    },
+    {
+      "type": "terminal",
+      "heading": "Буква тоже число",
+      "commands": [
+        {
+          "cmd": "python3 -c \"print(ord('A'))\"",
+          "output": ["65"]
+        },
+        {
+          "cmd": "python3 -c \"print(f'{65:08b}')\"",
+          "output": ["01000001"]
+        }
+      ],
+      "narration": "Биты кодируют и буквы. По таблице {ASCII|аски} буква {A|эй} — это шестьдесят пять, а в двоичном виде — {01000001|ноль один ноль ноль ноль ноль ноль один}."
+    },
+    {
+      "type": "diagram",
+      "heading": "Почему два состояния",
+      "nodes": [
+        { "id": "low", "label": "Низкий сигнал", "icon": "arrow-down", "tone": "accent2" },
+        { "id": "transistor", "label": "Транзистор", "icon": "cpu", "tone": "accent" },
+        { "id": "high", "label": "Высокий сигнал", "icon": "arrow-up", "tone": "success" }
+      ],
+      "packets": [
+        { "label": "0", "from": "low", "to": "transistor", "tone": "accent2", "onWord": "низкий" },
+        { "label": "1", "from": "transistor", "to": "high", "tone": "success", "onWord": "единицу" }
+      ],
+      "state": { "label": "Шум не мешает", "tone": "success", "onWord": "надёжно" },
+      "narration": "Два состояния удобны электронике: высокий и низкий сигнал легче отличить от шума. Так транзистор надёжно видит ноль или единицу."
+    },
+    {
+      "type": "story",
+      "heading": "Из битов — блоки данных",
+      "narration": "Восемь битов — это байт. Он хранит {256|двести пятьдесят шесть} комбинаций. Из байтов складываются фотографии, звук и видео.",
+      "beats": [
+        { "visual": "title-slam", "params": { "text": "8 БИТ = 1 БАЙТ", "sub": "блок данных" } },
+        { "visual": "title-slam", "onWord": "256", "params": { "text": "256", "sub": "комбинаций в одном байте" } },
+        { "visual": "devices-meet", "onWord": "байтов" }
+      ]
+    },
+    {
+      "type": "outro",
+      "title": "Нули, единицы, смысл",
+      "bullets": ["Бит: 0 или 1", "Разряды имеют вес", "8 битов = 1 байт"],
+      "cta": "Подпишись: дальше — цвет пикселя",
+      "narration": "Запомни: бит — ноль или единица, разряд — его вес, байт — восемь битов. А цвета пикселя тоже хранятся в битах. Подпишись."
+    }
+  ]
+}

@@ -1,0 +1,81 @@
+{
+ "schema_version": 1,
+ "run_id": "20260822-023601-auto-20260821-233601",
+ "slug": "auto-20260821-233601",
+ "status": "ok",
+ "episode": {
+  "topic": "тему выбирает агент (инструкции в промпте)"
+ },
+ "runner": {
+  "cli": "codex",
+  "model": "gpt-5.6-luna",
+  "effort": "max",
+  "orchestration": "single-actor",
+  "invocation": "codex exec -m gpt-5.6-luna -c model_reasoning_effort=max --sandbox danger-full-access < /home/toligrim/.local/share/shortvideo/scheduler/producer-prompt-oks37q4g.md"
+ },
+ "timing": {
+  "started_at": "2026-08-21T23:36:01.264Z",
+  "finished_at": "2026-08-22T00:13:53.966Z",
+  "wall_sec": 2272.702,
+  "unaccounted_sec": 2272.702,
+  "coverage_pct": 0.0,
+  "measured_by": "tools/pipeline_log.py",
+  "stages": {}
+ },
+ "composition": {
+  "scene_count": 5,
+  "scene_type_histogram": {
+   "hook": 1,
+   "story": 3,
+   "outro": 1
+  },
+  "spoken_words": 147,
+  "visuals_used": [
+   "cuckoo-cycle",
+   "cuckoo-stash",
+   "cuckoo-table"
+  ]
+ },
+ "library_growth": {
+  "new_scene_types": [],
+  "new_story_visuals": [
+   "cuckoo-cycle",
+   "cuckoo-stash",
+   "cuckoo-table"
+  ],
+  "new_components": [],
+  "modified_components": [
+   "video/src/scenes/StoryScene.tsx"
+  ],
+  "count": 3,
+  "catalog_drift": {
+   "in_schema_not_in_catalog": [
+    "cuckoo-cycle",
+    "cuckoo-stash",
+    "cuckoo-table",
+    "gps-relativity",
+    "recursion-call",
+    "stack-compare",
+    "stack-grow"
+   ],
+   "in_catalog_not_in_schema": []
+  },
+  "detected_by": [
+   "snapshot-diff",
+   "git-diff"
+  ],
+  "git_before": "d6e4b753ded780cc8bd178cf1b10bd5b42e0f213",
+  "git_after": "58586b1cb29f99e6564c5ba449df68aea3fcc576"
+ },
+ "incidents": [],
+ "verdicts": [],
+ "artifacts": {
+  "draft_json": "episodes/drafts/auto-20260821-233601.draft.json",
+  "episode_json": "episodes/auto-20260821-233601.json",
+  "audio_dir": "video/public/episodes/auto-20260821-233601/audio"
+ },
+ "integrity": {
+  "stages_measured": [],
+  "clock": "utc+monotonic, tools/pipeline_log.py"
+ }
+}

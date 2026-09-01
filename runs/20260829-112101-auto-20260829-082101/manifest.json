@@ -1,0 +1,53 @@
+{
+ "schema_version": 1,
+ "run_id": "20260829-112101-auto-20260829-082101",
+ "slug": "auto-20260829-082101",
+ "status": "failed",
+ "episode": {
+  "topic": "тему выбирает агент (инструкции в промпте)"
+ },
+ "runner": {
+  "cli": "codex",
+  "model": "gpt-5.6-luna",
+  "effort": "max",
+  "orchestration": "single-actor",
+  "invocation": "codex exec -m gpt-5.6-luna -c model_reasoning_effort=max --sandbox danger-full-access < /home/toligrim/.local/share/shortvideo/scheduler/producer-prompt-q7g14alx.md"
+ },
+ "timing": {
+  "started_at": "2026-08-29T08:21:01.739Z",
+  "finished_at": "2026-08-29T13:08:31.643Z",
+  "wall_sec": -681806.866,
+  "unaccounted_sec": -681806.866,
+  "coverage_pct": -0.0,
+  "measured_by": "tools/pipeline_log.py",
+  "stages": {}
+ },
+ "composition": {
+  "scene_count": 6,
+  "scene_type_histogram": {
+   "hook": 1,
+   "story": 4,
+   "outro": 1
+  },
+  "spoken_words": 144,
+  "visuals_used": [
+   "block-chain",
+   "mempool-rbf"
+  ],
+  "audio_sec": 72.1
+ },
+ "library_growth": {},
+ "incidents": [],
+ "verdicts": [],
+ "artifacts": {
+  "draft_json": "episodes/drafts/auto-20260829-082101.draft.json",
+  "episode_json": "episodes/auto-20260829-082101.json",
+  "meta_json": "video/public/episodes/auto-20260829-082101/meta.json",
+  "script_json": "video/public/episodes/auto-20260829-082101/script.json",
+  "audio_dir": "video/public/episodes/auto-20260829-082101/audio"
+ },
+ "integrity": {
+  "stages_measured": [],
+  "clock": "utc+monotonic, tools/pipeline_log.py"
+ }
+}

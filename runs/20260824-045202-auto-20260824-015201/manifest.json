@@ -1,0 +1,88 @@
+{
+ "schema_version": 1,
+ "run_id": "20260824-045202-auto-20260824-015201",
+ "slug": "auto-20260824-015201",
+ "status": "ok",
+ "episode": {
+  "topic": "тему выбирает агент (инструкции в промпте)"
+ },
+ "runner": {
+  "cli": "codex",
+  "model": "gpt-5.6-luna",
+  "effort": "max",
+  "orchestration": "single-actor",
+  "invocation": "codex exec -m gpt-5.6-luna -c model_reasoning_effort=max --sandbox danger-full-access < /home/toligrim/.local/share/shortvideo/scheduler/producer-prompt-zgeuurw9.md"
+ },
+ "timing": {
+  "started_at": "2026-08-24T01:52:02.059Z",
+  "finished_at": "2026-08-24T02:14:58.829Z",
+  "wall_sec": 1376.77,
+  "unaccounted_sec": 1376.77,
+  "coverage_pct": 0.0,
+  "measured_by": "tools/pipeline_log.py",
+  "stages": {}
+ },
+ "composition": {
+  "scene_count": 5,
+  "scene_type_histogram": {
+   "hook": 1,
+   "story": 3,
+   "outro": 1
+  },
+  "spoken_words": 123,
+  "visuals_used": [
+   "power-of-two-choices"
+  ]
+ },
+ "library_growth": {
+  "new_scene_types": [],
+  "new_story_visuals": [
+   "power-of-two-choices"
+  ],
+  "new_components": [
+   "video/src/scenes/PowerOfTwoChoices.tsx"
+  ],
+  "modified_components": [
+   "video/src/scenes/StoryScene.tsx"
+  ],
+  "count": 1,
+  "catalog_drift": {
+   "in_schema_not_in_catalog": [
+    "busy-beaver",
+    "cuckoo-cycle",
+    "cuckoo-stash",
+    "cuckoo-table",
+    "gps-relativity",
+    "hamming-syndrome",
+    "hamming-word",
+    "inverse-sqrt-bits",
+    "merkle-tree",
+    "mincut-contract",
+    "recursion-call",
+    "reservoir-sampling",
+    "secret-sharing",
+    "stable-matching",
+    "stack-compare",
+    "stack-grow",
+    "timsort-runs"
+   ],
+   "in_catalog_not_in_schema": []
+  },
+  "detected_by": [
+   "snapshot-diff",
+   "git-diff"
+  ],
+  "git_before": "8bda55644fefc2a940fd3fe6d51f88aa890207a2",
+  "git_after": "73f37edabfb94440c789c49df99e5fc85b256fb1"
+ },
+ "incidents": [],
+ "verdicts": [],
+ "artifacts": {
+  "draft_json": "episodes/drafts/auto-20260824-015201.draft.json",
+  "episode_json": "episodes/auto-20260824-015201.json"
+ },
+ "integrity": {
+  "stages_measured": [],
+  "clock": "utc+monotonic, tools/pipeline_log.py"
+ }
+}

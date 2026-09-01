@@ -1,0 +1,86 @@
+{
+ "schema_version": 1,
+ "run_id": "20260823-052402-auto-20260823-022401",
+ "slug": "auto-20260823-022401",
+ "status": "ok",
+ "episode": {
+  "topic": "тему выбирает агент (инструкции в промпте)"
+ },
+ "runner": {
+  "cli": "codex",
+  "model": "gpt-5.6-luna",
+  "effort": "max",
+  "orchestration": "single-actor",
+  "invocation": "codex exec -m gpt-5.6-luna -c model_reasoning_effort=max --sandbox danger-full-access < /home/toligrim/.local/share/shortvideo/scheduler/producer-prompt-3_12gdfx.md"
+ },
+ "timing": {
+  "started_at": "2026-08-23T02:24:02.066Z",
+  "finished_at": "2026-08-23T02:53:17.663Z",
+  "wall_sec": 1755.598,
+  "unaccounted_sec": 1755.598,
+  "coverage_pct": 0.0,
+  "measured_by": "tools/pipeline_log.py",
+  "stages": {}
+ },
+ "composition": {
+  "scene_count": 6,
+  "scene_type_histogram": {
+   "hook": 1,
+   "story": 4,
+   "outro": 1
+  },
+  "spoken_words": 142,
+  "visuals_used": [
+   "title-slam",
+   "union-find"
+  ]
+ },
+ "library_growth": {
+  "new_scene_types": [],
+  "new_story_visuals": [
+   "union-find"
+  ],
+  "new_components": [],
+  "modified_components": [
+   "video/src/scenes/StoryScene.tsx"
+  ],
+  "count": 1,
+  "catalog_drift": {
+   "in_schema_not_in_catalog": [
+    "busy-beaver",
+    "cuckoo-cycle",
+    "cuckoo-stash",
+    "cuckoo-table",
+    "gps-relativity",
+    "hamming-syndrome",
+    "hamming-word",
+    "inverse-sqrt-bits",
+    "merkle-tree",
+    "recursion-call",
+    "reservoir-sampling",
+    "secret-sharing",
+    "stable-matching",
+    "stack-compare",
+    "stack-grow"
+   ],
+   "in_catalog_not_in_schema": []
+  },
+  "detected_by": [
+   "snapshot-diff",
+   "git-diff"
+  ],
+  "git_before": "e87652023865e93736237d1d158e4dbaf6325913",
+  "git_after": "fd3cd1ac2da28b4ee7eb029facaf519def640a3e"
+ },
+ "incidents": [],
+ "verdicts": [],
+ "artifacts": {
+  "draft_json": "episodes/drafts/auto-20260823-022401.draft.json",
+  "episode_json": "episodes/auto-20260823-022401.json",
+  "audio_dir": "video/public/episodes/auto-20260823-022401/audio"
+ },
+ "integrity": {
+  "stages_measured": [],
+  "clock": "utc+monotonic, tools/pipeline_log.py"
+ }
+}

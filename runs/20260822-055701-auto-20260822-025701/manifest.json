@@ -1,0 +1,81 @@
+{
+ "schema_version": 1,
+ "run_id": "20260822-055701-auto-20260822-025701",
+ "slug": "auto-20260822-025701",
+ "status": "ok",
+ "episode": {
+  "topic": "тему выбирает агент (инструкции в промпте)"
+ },
+ "runner": {
+  "cli": "codex",
+  "model": "gpt-5.6-luna",
+  "effort": "max",
+  "orchestration": "single-actor",
+  "invocation": "codex exec -m gpt-5.6-luna -c model_reasoning_effort=max --sandbox danger-full-access < /home/toligrim/.local/share/shortvideo/scheduler/producer-prompt-3lcz4mpv.md"
+ },
+ "timing": {
+  "started_at": "2026-08-22T02:57:01.418Z",
+  "finished_at": "2026-08-22T03:17:34.673Z",
+  "wall_sec": 1233.255,
+  "unaccounted_sec": 1233.255,
+  "coverage_pct": 0.0,
+  "measured_by": "tools/pipeline_log.py",
+  "stages": {}
+ },
+ "composition": {
+  "scene_count": 6,
+  "scene_type_histogram": {
+   "hook": 1,
+   "story": 4,
+   "outro": 1
+  },
+  "spoken_words": 136,
+  "visuals_used": [
+   "hamming-syndrome",
+   "hamming-word"
+  ]
+ },
+ "library_growth": {
+  "new_scene_types": [],
+  "new_story_visuals": [
+   "hamming-syndrome",
+   "hamming-word"
+  ],
+  "new_components": [],
+  "modified_components": [
+   "video/src/scenes/StoryScene.tsx"
+  ],
+  "count": 2,
+  "catalog_drift": {
+   "in_schema_not_in_catalog": [
+    "cuckoo-cycle",
+    "cuckoo-stash",
+    "cuckoo-table",
+    "gps-relativity",
+    "hamming-syndrome",
+    "hamming-word",
+    "recursion-call",
+    "stack-compare",
+    "stack-grow"
+   ],
+   "in_catalog_not_in_schema": []
+  },
+  "detected_by": [
+   "snapshot-diff",
+   "git-diff"
+  ],
+  "git_before": "58586b1cb29f99e6564c5ba449df68aea3fcc576",
+  "git_after": "681cb1052eb29d6bb599ba3d4eae8bd97d346b3e"
+ },
+ "incidents": [],
+ "verdicts": [],
+ "artifacts": {
+  "draft_json": "episodes/drafts/auto-20260822-025701.draft.json",
+  "episode_json": "episodes/auto-20260822-025701.json",
+  "audio_dir": "video/public/episodes/auto-20260822-025701/audio"
+ },
+ "integrity": {
+  "stages_measured": [],
+  "clock": "utc+monotonic, tools/pipeline_log.py"
+ }
+}

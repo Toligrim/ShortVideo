@@ -1,0 +1,81 @@
+{
+ "schema_version": 1,
+ "run_id": "20260821-094842-auto-20260821-064841",
+ "slug": "auto-20260821-064841",
+ "status": "ok",
+ "episode": {
+  "topic": "тему выбирает агент (инструкции в промпте)"
+ },
+ "runner": {
+  "cli": "codex",
+  "model": "gpt-5.6-luna",
+  "effort": "max",
+  "orchestration": "single-actor",
+  "invocation": "codex exec -m gpt-5.6-luna -c model_reasoning_effort=max --sandbox danger-full-access < /home/toligrim/.local/share/shortvideo/scheduler/producer-prompt-5zym7p9u.md"
+ },
+ "timing": {
+  "started_at": "2026-08-21T06:48:42.184Z",
+  "finished_at": "2026-08-21T08:00:34.295Z",
+  "wall_sec": 4312.113,
+  "unaccounted_sec": 4312.113,
+  "coverage_pct": 0.0,
+  "measured_by": "tools/pipeline_log.py",
+  "stages": {}
+ },
+ "composition": {
+  "scene_count": 7,
+  "scene_type_histogram": {
+   "story": 6,
+   "outro": 1
+  },
+  "spoken_words": 136,
+  "visuals_used": [
+   "bit-extractor",
+   "coin-pair",
+   "title-slam"
+  ],
+  "audio_sec": 72.84,
+  "mp4_bytes": 27904502,
+  "video_sec": 76.22
+ },
+ "library_growth": {
+  "new_scene_types": [],
+  "new_story_visuals": [
+   "bit-extractor",
+   "coin-pair"
+  ],
+  "new_components": [],
+  "modified_components": [
+   "video/src/scenes/StoryScene.tsx"
+  ],
+  "count": 2,
+  "catalog_drift": {
+   "in_schema_not_in_catalog": [
+    "recursion-call",
+    "stack-compare",
+    "stack-grow"
+   ],
+   "in_catalog_not_in_schema": []
+  },
+  "detected_by": [
+   "snapshot-diff",
+   "git-diff"
+  ],
+  "git_before": "c83974b95251507c8e59369b98c853120c18cdc8",
+  "git_after": "cd1581295be4141f2dfad802bf62e2063351102b"
+ },
+ "incidents": [],
+ "verdicts": [],
+ "artifacts": {
+  "draft_json": "episodes/drafts/auto-20260821-064841.draft.json",
+  "episode_json": "episodes/auto-20260821-064841.json",
+  "meta_json": "video/public/episodes/auto-20260821-064841/meta.json",
+  "script_json": "video/public/episodes/auto-20260821-064841/script.json",
+  "audio_dir": "video/public/episodes/auto-20260821-064841/audio",
+  "mp4": "video/out/auto-20260821-064841.mp4"
+ },
+ "integrity": {
+  "stages_measured": [],
+  "clock": "utc+monotonic, tools/pipeline_log.py"
+ }
+}

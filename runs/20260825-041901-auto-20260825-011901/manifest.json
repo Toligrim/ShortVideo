@@ -1,0 +1,95 @@
+{
+ "schema_version": 1,
+ "run_id": "20260825-041901-auto-20260825-011901",
+ "slug": "auto-20260825-011901",
+ "status": "ok",
+ "episode": {
+  "topic": "тему выбирает агент (инструкции в промпте)"
+ },
+ "runner": {
+  "cli": "codex",
+  "model": "gpt-5.6-luna",
+  "effort": "max",
+  "orchestration": "single-actor",
+  "invocation": "codex exec -m gpt-5.6-luna -c model_reasoning_effort=max --sandbox danger-full-access < /home/toligrim/.local/share/shortvideo/scheduler/producer-prompt-6dbyww_l.md"
+ },
+ "timing": {
+  "started_at": "2026-08-25T01:19:01.952Z",
+  "finished_at": "2026-08-25T01:46:34.200Z",
+  "wall_sec": 1652.249,
+  "unaccounted_sec": 1652.249,
+  "coverage_pct": 0.0,
+  "measured_by": "tools/pipeline_log.py",
+  "stages": {}
+ },
+ "composition": {
+  "scene_count": 6,
+  "scene_type_histogram": {
+   "hook": 1,
+   "story": 4,
+   "outro": 1
+  },
+  "spoken_words": 134,
+  "visuals_used": [
+   "median-of-medians",
+   "title-slam"
+  ]
+ },
+ "library_growth": {
+  "new_scene_types": [],
+  "new_story_visuals": [
+   "median-of-medians"
+  ],
+  "new_components": [
+   "video/src/scenes/MedianOfMediansVisual.tsx"
+  ],
+  "modified_components": [
+   "video/src/scenes/StoryScene.tsx"
+  ],
+  "count": 1,
+  "catalog_drift": {
+   "in_schema_not_in_catalog": [
+    "amdahl-speedup",
+    "bbp-digit",
+    "bbp-extract",
+    "busy-beaver",
+    "cuckoo-cycle",
+    "cuckoo-stash",
+    "cuckoo-table",
+    "gps-relativity",
+    "hamming-syndrome",
+    "hamming-word",
+    "inverse-sqrt-bits",
+    "median-of-medians",
+    "merkle-tree",
+    "mincut-contract",
+    "mt-recovery",
+    "recursion-call",
+    "reservoir-sampling",
+    "secret-sharing",
+    "stable-matching",
+    "stack-compare",
+    "stack-grow",
+    "timsort-runs"
+   ],
+   "in_catalog_not_in_schema": []
+  },
+  "detected_by": [
+   "snapshot-diff",
+   "git-diff"
+  ],
+  "git_before": "19ecf2acbfbb702bdd5c4f27c212f31f22cd2e8d",
+  "git_after": "75b24a2bbac75925e45f3a0ac487053a23b39f7c"
+ },
+ "incidents": [],
+ "verdicts": [],
+ "artifacts": {
+  "draft_json": "episodes/drafts/auto-20260825-011901.draft.json",
+  "episode_json": "episodes/auto-20260825-011901.json",
+  "audio_dir": "video/public/episodes/auto-20260825-011901/audio"
+ },
+ "integrity": {
+  "stages_measured": [],
+  "clock": "utc+monotonic, tools/pipeline_log.py"
+ }
+}

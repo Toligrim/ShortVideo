@@ -1,0 +1,15 @@
+# ShortVideo unattended producer — crontab entry (user crontab)
+# =============================================================
+# Install with:  crontab -e   (add the line below)
+# Or non-interactively:
+#   ( crontab -l 2>/dev/null | grep -v 'shortvideo/producer_cron' ; \
+#     echo 'PATH=/home/toligrim/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin' ; \
+#     echo 'SHELL=/bin/bash' ; \
+#     echo '* * * * * /home/toligrim/projects/ShortVideo/tools/producer_cron.sh >> /home/toligrim/.local/share/shortvideo/scheduler/cron.log 2>&1' \
+#   ) | crontab -
+#
+# NOTE: we never edit your crontab automatically — this file is the documented
+# artifact. The wrapper itself is what makes a per-minute tick safe to run.
+#
+# The line (one crontab line, five star fields = every minute):
+* * * * * /home/toligrim/projects/ShortVideo/tools/producer_cron.sh >> /home/toligrim/.local/share/shortvideo/scheduler/cron.log 2>&1

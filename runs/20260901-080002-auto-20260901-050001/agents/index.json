@@ -1,0 +1,217 @@
+{
+ "imported_at": "2026-09-01T07:44:38.187Z",
+ "window": {
+  "since": "2026-09-01T05:00:02.068000+00:00",
+  "until": "2026-09-01T07:30:24.142000+00:00"
+ },
+ "sessions_dir": "/home/toligrim/.codex/sessions",
+ "count": 11,
+ "delegates": 6,
+ "sessions": [
+  {
+   "session_id": "01a05b56-b37e-7360-92ee-d5d0c8bf0619",
+   "source": "exec",
+   "is_delegate": false,
+   "cwd": "/home/toligrim/projects/ShortVideo",
+   "cli_version": "0.149.0",
+   "started_at": "2026-09-01T05:00:03.912Z",
+   "rollout_origin": "/home/toligrim/.codex/sessions/2026/09/01/rollout-2026-09-01T08-00-03-01a05b56-b37e-7360-92ee-d5d0c8bf0619.jsonl",
+   "actions_total": 731,
+   "tool_calls": 214,
+   "agent_messages": 0,
+   "reasoning_items": 301,
+   "reasoning_readable": false,
+   "dangers": []
+  },
+  {
+   "session_id": "01a05b59-64b8-7d70-838b-1ee38805dbf5",
+   "source": "mcp",
+   "is_delegate": true,
+   "cwd": "/home/toligrim/projects/ShortVideo",
+   "cli_version": "0.149.0",
+   "started_at": "2026-09-01T05:03:00.318Z",
+   "rollout_origin": "/home/toligrim/.codex/sessions/2026/09/01/rollout-2026-09-01T08-03-00-01a05b59-64b8-7d70-838b-1ee38805dbf5.jsonl",
+   "actions_total": 130,
+   "tool_calls": 37,
+   "agent_messages": 5,
+   "reasoning_items": 48,
+   "reasoning_readable": false,
+   "dangers": []
+  },
+  {
+   "session_id": "01a05b59-64b8-7d70-838b-1ee38805dbf5",
+   "source": {
+    "subagent": {
+     "thread_spawn": {
+      "parent_thread_id": "01a05b59-64b8-7d70-838b-1ee38805dbf5",
+      "depth": 1,
+      "agent_path": null,
+      "agent_nickname": "Zeno",
+      "agent_role": null
+     }
+    }
+   },
+   "is_delegate": false,
+   "cwd": "/home/toligrim/projects/ShortVideo",
+   "cli_version": "0.149.0",
+   "started_at": "2026-09-01T05:06:19.181Z",
+   "rollout_origin": "/home/toligrim/.codex/sessions/2026/09/01/rollout-2026-09-01T08-06-19-01a05b5c-6d89-7811-88df-0cc38f93779a.jsonl",
+   "actions_total": 43,
+   "tool_calls": 9,
+   "agent_messages": 6,
+   "reasoning_items": 12,
+   "reasoning_readable": false,
+   "dangers": []
+  },
+  {
+   "session_id": "01a05b69-561c-7293-8597-a7828cfa938e",
+   "source": "mcp",
+   "is_delegate": true,
+   "cwd": "/home/toligrim/projects/ShortVideo",
+   "cli_version": "0.149.0",
+   "started_at": "2026-09-01T05:20:25.151Z",
+   "rollout_origin": "/home/toligrim/.codex/sessions/2026/09/01/rollout-2026-09-01T08-20-25-01a05b69-561c-7293-8597-a7828cfa938e.jsonl",
+   "actions_total": 3,
+   "tool_calls": 0,
+   "agent_messages": 0,
+   "reasoning_items": 0,
+   "reasoning_readable": false,
+   "dangers": []
+  },
+  {
+   "session_id": "01a05b69-9769-75b1-986d-d38238fc2a1f",
+   "source": "mcp",
+   "is_delegate": true,
+   "cwd": "/home/toligrim/projects/ShortVideo",
+   "cli_version": "0.149.0",
+   "started_at": "2026-09-01T05:20:41.868Z",
+   "rollout_origin": "/home/toligrim/.codex/sessions/2026/09/01/rollout-2026-09-01T08-20-41-01a05b69-9769-75b1-986d-d38238fc2a1f.jsonl",
+   "actions_total": 73,
+   "tool_calls": 16,
+   "agent_messages": 6,
+   "reasoning_items": 31,
+   "reasoning_readable": false,
+   "dangers": []
+  },
+  {
+   "session_id": "01a05b74-4cea-7660-b554-dd296844bfba",
+   "source": "mcp",
+   "is_delegate": true,
+   "cwd": "/home/toligrim/projects/ShortVideo",
+   "cli_version": "0.149.0",
+   "started_at": "2026-09-01T05:32:23.695Z",
+   "rollout_origin": "/home/toligrim/.codex/sessions/2026/09/01/rollout-2026-09-01T08-32-23-01a05b74-4cea-7660-b554-dd296844bfba.jsonl",
+   "actions_total": 266,
+   "tool_calls": 53,
+   "agent_messages": 21,
+   "reasoning_items": 136,
+   "reasoning_readable": false,
+   "dangers": []
+  },
+  {
+   "session_id": "01a05b7f-7b6a-7060-bd54-acef1fa05610",
+   "source": "mcp",
+   "is_delegate": true,
+   "cwd": "/home/toligrim/projects/ShortVideo",
+   "cli_version": "0.149.0",
+   "started_at": "2026-09-01T05:44:36.493Z",
+   "rollout_origin": "/home/toligrim/.codex/sessions/2026/09/01/rollout-2026-09-01T08-44-36-01a05b7f-7b6a-7060-bd54-acef1fa05610.jsonl",
+   "actions_total": 385,
+   "tool_calls": 113,
+   "agent_messages": 15,
+   "reasoning_items": 141,
+   "reasoning_readable": false,
+   "dangers": []
+  },
+  {
+   "session_id": "01a05b74-4cea-7660-b554-dd296844bfba",
+   "source": {
+    "subagent": {
+     "thread_spawn": {
+      "parent_thread_id": "01a05b74-4cea-7660-b554-dd296844bfba",
+      "depth": 1,
+      "agent_path": null,
+      "agent_nickname": "Sagan",
+      "agent_role": null
+     }
+    }
+   },
+   "is_delegate": false,
+   "cwd": "/home/toligrim/projects/ShortVideo",
+   "cli_version": "0.149.0",
+   "started_at": "2026-09-01T05:44:46.737Z",
+   "rollout_origin": "/home/toligrim/.codex/sessions/2026/09/01/rollout-2026-09-01T08-44-46-01a05b7f-a36e-74d2-a99e-7cce5e8053d1.jsonl",
+   "actions_total": 59,
+   "tool_calls": 8,
+   "agent_messages": 10,
+   "reasoning_items": 26,
+   "reasoning_readable": false,
+   "dangers": []
+  },
+  {
+   "session_id": "01a05b74-4cea-7660-b554-dd296844bfba",
+   "source": {
+    "subagent": {
+     "thread_spawn": {
+      "parent_thread_id": "01a05b74-4cea-7660-b554-dd296844bfba",
+      "depth": 1,
+      "agent_path": null,
+      "agent_nickname": "Turing",
+      "agent_role": null
+     }
+    }
+   },
+   "is_delegate": false,
+   "cwd": "/home/toligrim/projects/ShortVideo",
+   "cli_version": "0.149.0",
+   "started_at": "2026-09-01T05:52:50.113Z",
+   "rollout_origin": "/home/toligrim/.codex/sessions/2026/09/01/rollout-2026-09-01T08-52-50-01a05b87-039e-7e23-8682-57948c34298f.jsonl",
+   "actions_total": 49,
+   "tool_calls": 10,
+   "agent_messages": 2,
+   "reasoning_items": 23,
+   "reasoning_readable": false,
+   "dangers": []
+  },
+  {
+   "session_id": "01a05b74-4cea-7660-b554-dd296844bfba",
+   "source": {
+    "subagent": {
+     "thread_spawn": {
+      "parent_thread_id": "01a05b74-4cea-7660-b554-dd296844bfba",
+      "depth": 1,
+      "agent_path": null,
+      "agent_nickname": "Nash",
+      "agent_role": null
+     }
+    }
+   },
+   "is_delegate": false,
+   "cwd": "/home/toligrim/projects/ShortVideo",
+   "cli_version": "0.149.0",
+   "started_at": "2026-09-01T05:58:27.782Z",
+   "rollout_origin": "/home/toligrim/.codex/sessions/2026/09/01/rollout-2026-09-01T08-58-27-01a05b8c-2aa1-7843-918b-be2b56420432.jsonl",
+   "actions_total": 22,
+   "tool_calls": 1,
+   "agent_messages": 2,
+   "reasoning_items": 13,
+   "reasoning_readable": false,
+   "dangers": []
+  },
+  {
+   "session_id": "01a05ba5-243d-7523-b584-149e863c71a3",
+   "source": "mcp",
+   "is_delegate": true,
+   "cwd": "/home/toligrim/projects/ShortVideo",
+   "cli_version": "0.149.0",
+   "started_at": "2026-09-01T06:25:44.551Z",
+   "rollout_origin": "/home/toligrim/.codex/sessions/2026/09/01/rollout-2026-09-01T09-25-44-01a05ba5-243d-7523-b584-149e863c71a3.jsonl",
+   "actions_total": 148,
+   "tool_calls": 36,
+   "agent_messages": 11,
+   "reasoning_items": 62,
+   "reasoning_readable": false,
+   "dangers": []
+  }
+ ]
+}

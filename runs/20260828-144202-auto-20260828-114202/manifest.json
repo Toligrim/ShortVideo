@@ -1,0 +1,107 @@
+{
+ "schema_version": 1,
+ "run_id": "20260828-144202-auto-20260828-114202",
+ "slug": "auto-20260828-114202",
+ "status": "ok",
+ "episode": {
+  "topic": "тему выбирает агент (инструкции в промпте)"
+ },
+ "runner": {
+  "cli": "codex",
+  "model": "gpt-5.6-luna",
+  "effort": "max",
+  "orchestration": "single-actor",
+  "invocation": "codex exec -m gpt-5.6-luna -c model_reasoning_effort=max --sandbox danger-full-access < /home/toligrim/.local/share/shortvideo/scheduler/producer-prompt-j1k57fjo.md"
+ },
+ "timing": {
+  "started_at": "2026-08-28T11:42:02.105Z",
+  "finished_at": "2026-08-28T13:10:26.154Z",
+  "wall_sec": 5304.05,
+  "unaccounted_sec": 5304.05,
+  "coverage_pct": 0.0,
+  "measured_by": "tools/pipeline_log.py",
+  "stages": {}
+ },
+ "composition": {
+  "scene_count": 6,
+  "scene_type_histogram": {
+   "story": 5,
+   "outro": 1
+  },
+  "spoken_words": 142,
+  "visuals_used": [
+   "usb-pd-negotiation"
+  ],
+  "audio_sec": 70.73,
+  "mp4_bytes": 30787411,
+  "video_sec": 73.69
+ },
+ "library_growth": {
+  "new_scene_types": [],
+  "new_story_visuals": [
+   "usb-pd-negotiation"
+  ],
+  "new_components": [
+   "video/src/scenes/UsbPdNegotiationVisual.tsx"
+  ],
+  "modified_components": [
+   "video/src/scenes/StoryScene.tsx"
+  ],
+  "count": 1,
+  "catalog_drift": {
+   "in_schema_not_in_catalog": [
+    "amdahl-speedup",
+    "ariane-overflow",
+    "bbp-digit",
+    "bbp-extract",
+    "busy-beaver",
+    "consistent-hash-ring",
+    "cuckoo-cycle",
+    "cuckoo-stash",
+    "cuckoo-table",
+    "elias-fano",
+    "gps-relativity",
+    "gray-code",
+    "hamming-syndrome",
+    "hamming-word",
+    "hilbert-curve",
+    "inverse-sqrt-bits",
+    "median-of-medians",
+    "merkle-tree",
+    "mincut-contract",
+    "minimal-perfect-hash",
+    "mt-recovery",
+    "recursion-call",
+    "reservoir-sampling",
+    "secret-sharing",
+    "stable-matching",
+    "stack-compare",
+    "stack-grow",
+    "suffix-automaton",
+    "timsort-runs",
+    "trie-growth"
+   ],
+   "in_catalog_not_in_schema": []
+  },
+  "detected_by": [
+   "snapshot-diff",
+   "git-diff"
+  ],
+  "git_before": "e6b4ed29106caaaaf8b9bb89e03d810ecddddbcc",
+  "git_after": "ed66d1b41c22bef9929969c44a5fc87926c88c26"
+ },
+ "incidents": [],
+ "verdicts": [],
+ "artifacts": {
+  "draft_json": "episodes/drafts/auto-20260828-114202.draft.json",
+  "episode_json": "episodes/auto-20260828-114202.json",
+  "meta_json": "video/public/episodes/auto-20260828-114202/meta.json",
+  "script_json": "video/public/episodes/auto-20260828-114202/script.json",
+  "audio_dir": "video/public/episodes/auto-20260828-114202/audio",
+  "mp4": "video/out/auto-20260828-114202.mp4"
+ },
+ "integrity": {
+  "stages_measured": [],
+  "clock": "utc+monotonic, tools/pipeline_log.py"
+ }
+}

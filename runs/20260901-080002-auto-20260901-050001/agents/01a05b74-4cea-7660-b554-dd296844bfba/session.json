@@ -1,0 +1,25 @@
+{
+ "session_id": "01a05b74-4cea-7660-b554-dd296844bfba",
+ "source": {
+  "subagent": {
+   "thread_spawn": {
+    "parent_thread_id": "01a05b74-4cea-7660-b554-dd296844bfba",
+    "depth": 1,
+    "agent_path": null,
+    "agent_nickname": "Nash",
+    "agent_role": null
+   }
+  }
+ },
+ "is_delegate": false,
+ "cwd": "/home/toligrim/projects/ShortVideo",
+ "cli_version": "0.149.0",
+ "started_at": "2026-09-01T05:58:27.782Z",
+ "rollout_origin": "/home/toligrim/.codex/sessions/2026/09/01/rollout-2026-09-01T08-58-27-01a05b8c-2aa1-7843-918b-be2b56420432.jsonl",
+ "actions_total": 22,
+ "tool_calls": 1,
+ "agent_messages": 2,
+ "reasoning_items": 13,
+ "reasoning_readable": false,
+ "dangers": []
+}

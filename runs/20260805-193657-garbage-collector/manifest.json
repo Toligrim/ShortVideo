@@ -1,0 +1,214 @@
+{
+ "schema_version": 1,
+ "run_id": "20260805-193657-garbage-collector",
+ "slug": "garbage-collector",
+ "status": "ok",
+ "episode": {
+  "topic": "сборщик мусора: как язык сам убирает из памяти то, что программе больше не нужно"
+ },
+ "runner": {
+  "cli": "codex",
+  "model": "gpt-5.6-luna",
+  "effort": "max",
+  "orchestration": "single-actor",
+  "invocation": "codex exec -m gpt-5.6-luna -c model_reasoning_effort=max --sandbox danger-full-access < /tmp/claude-1000/-home-toligrim-projects-ShortVideo/e034fc2d-814f-4bf5-8a40-eea4e3b33899/scratchpad/codex_task_gc.md"
+ },
+ "timing": {
+  "started_at": "2026-08-05T16:36:57.529Z",
+  "finished_at": "2026-08-05T17:33:38.849Z",
+  "wall_sec": 3401.321,
+  "unaccounted_sec": 1116.369,
+  "coverage_pct": 67.2,
+  "measured_by": "tools/pipeline_log.py",
+  "stages": {
+   "scriptwriter": {
+    "wall_sec": 170.551,
+    "status": "ok",
+    "inferred_start": false
+   },
+   "forge": {
+    "wall_sec": 207.478,
+    "status": "ok",
+    "inferred_start": true
+   },
+   "validate": {
+    "wall_sec": 1.643,
+    "status": "ok",
+    "inferred_start": false
+   },
+   "director": {
+    "wall_sec": 493.571,
+    "status": "ok",
+    "inferred_start": false
+   },
+   "tts": {
+    "wall_sec": 587.828,
+    "status": "ok",
+    "inferred_start": false
+   },
+   "critic": {
+    "wall_sec": 227.165,
+    "status": "ok",
+    "inferred_start": false
+   },
+   "render": {
+    "wall_sec": 596.716,
+    "status": "ok",
+    "inferred_start": false
+   },
+   "commit": {
+    "wall_sec": 0.0,
+    "status": "ok",
+    "inferred_start": true
+   }
+  }
+ },
+ "composition": {
+  "scene_count": 7,
+  "scene_type_histogram": {
+   "story": 5,
+   "terminal": 1,
+   "outro": 1
+  },
+  "spoken_words": 123,
+  "visuals_used": [
+   "gc-sweep",
+   "heap-graph",
+   "title-slam"
+  ],
+  "audio_sec": 65.38,
+  "mp4_bytes": 28555694,
+  "video_sec": 68.76
+ },
+ "library_growth": {
+  "new_scene_types": [],
+  "new_story_visuals": [
+   "gc-sweep",
+   "heap-graph"
+  ],
+  "new_components": [],
+  "modified_components": [
+   "video/src/scenes/StoryScene.tsx"
+  ],
+  "count": 2,
+  "catalog_drift": {
+   "in_schema_not_in_catalog": [
+    "recursion-call",
+    "stack-compare",
+    "stack-grow"
+   ],
+   "in_catalog_not_in_schema": []
+  },
+  "detected_by": [
+   "snapshot-diff",
+   "git-diff"
+  ],
+  "git_before": "5ba12540603aca718eab9ffdac85790b38a08c78",
+  "git_after": "ff13ef4f2e36797bffb2b00fdf008a802ff6e2b3"
+ },
+ "incidents": [
+  {
+   "stage": "tts",
+   "severity": "warn",
+   "detail": "fallback"
+  },
+  {
+   "stage": "tts",
+   "severity": "error",
+   "detail": "error"
+  },
+  {
+   "stage": "tts",
+   "severity": "error",
+   "detail": "command_failed"
+  },
+  {
+   "stage": "tts",
+   "severity": "error",
+   "detail": "command_failed"
+  },
+  {
+   "stage": "tts",
+   "severity": "error",
+   "detail": "command_failed"
+  },
+  {
+   "stage": "tts",
+   "severity": "error",
+   "detail": "command_failed"
+  },
+  {
+   "stage": "tts",
+   "severity": "error",
+   "detail": "command_failed"
+  },
+  {
+   "stage": "tts",
+   "severity": "error",
+   "detail": "command_failed"
+  },
+  {
+   "stage": "validate",
+   "severity": "error",
+   "detail": "command_failed"
+  },
+  {
+   "stage": "tts",
+   "severity": "error",
+   "detail": "command_failed"
+  },
+  {
+   "stage": "validate",
+   "severity": "error",
+   "detail": "validation_failed"
+  },
+  {
+   "stage": "validate",
+   "severity": "error",
+   "detail": "command_failed"
+  },
+  {
+   "stage": "tts",
+   "severity": "error",
+   "detail": "command_failed"
+  },
+  {
+   "stage": "validate",
+   "severity": "error",
+   "detail": "command_failed"
+  },
+  {
+   "stage": "tts",
+   "severity": "error",
+   "detail": "command_failed"
+  }
+ ],
+ "verdicts": [
+  {
+   "round": 1,
+   "verdict": "accepted",
+   "issues": 0
+  }
+ ],
+ "artifacts": {
+  "draft_json": "episodes/drafts/garbage-collector.draft.json",
+  "episode_json": "episodes/garbage-collector.json",
+  "meta_json": "video/public/episodes/garbage-collector/meta.json",
+  "script_json": "video/public/episodes/garbage-collector/script.json",
+  "audio_dir": "video/public/episodes/garbage-collector/audio",
+  "mp4": "video/out/garbage-collector.mp4"
+ },
+ "integrity": {
+  "stages_measured": [
+   "commit",
+   "critic",
+   "director",
+   "forge",
+   "render",
+   "scriptwriter",
+   "tts",
+   "validate"
+  ],
+  "clock": "utc+monotonic, tools/pipeline_log.py"
+ }
+}

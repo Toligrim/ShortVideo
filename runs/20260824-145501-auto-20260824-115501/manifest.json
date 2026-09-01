@@ -1,0 +1,95 @@
+{
+ "schema_version": 1,
+ "run_id": "20260824-145501-auto-20260824-115501",
+ "slug": "auto-20260824-115501",
+ "status": "ok",
+ "episode": {
+  "topic": "тему выбирает агент (инструкции в промпте)"
+ },
+ "runner": {
+  "cli": "codex",
+  "model": "gpt-5.6-luna",
+  "effort": "max",
+  "orchestration": "single-actor",
+  "invocation": "codex exec -m gpt-5.6-luna -c model_reasoning_effort=max --sandbox danger-full-access < /home/toligrim/.local/share/shortvideo/scheduler/producer-prompt-0a_re7oi.md"
+ },
+ "timing": {
+  "started_at": "2026-08-24T11:55:01.397Z",
+  "finished_at": "2026-08-24T13:14:39.070Z",
+  "wall_sec": 4777.674,
+  "unaccounted_sec": 4777.674,
+  "coverage_pct": 0.0,
+  "measured_by": "tools/pipeline_log.py",
+  "stages": {}
+ },
+ "composition": {
+  "scene_count": 6,
+  "scene_type_histogram": {
+   "hook": 1,
+   "story": 4,
+   "outro": 1
+  },
+  "spoken_words": 139,
+  "visuals_used": [
+   "sudoku-exact-cover"
+  ],
+  "audio_sec": 72.91,
+  "mp4_bytes": 41336872,
+  "video_sec": 75.88
+ },
+ "library_growth": {
+  "new_scene_types": [],
+  "new_story_visuals": [
+   "sudoku-exact-cover"
+  ],
+  "new_components": [
+   "video/src/scenes/SudokuExactCoverVisual.tsx"
+  ],
+  "modified_components": [
+   "video/src/scenes/StoryScene.tsx"
+  ],
+  "count": 1,
+  "catalog_drift": {
+   "in_schema_not_in_catalog": [
+    "busy-beaver",
+    "cuckoo-cycle",
+    "cuckoo-stash",
+    "cuckoo-table",
+    "gps-relativity",
+    "hamming-syndrome",
+    "hamming-word",
+    "inverse-sqrt-bits",
+    "merkle-tree",
+    "mincut-contract",
+    "recursion-call",
+    "reservoir-sampling",
+    "secret-sharing",
+    "stable-matching",
+    "stack-compare",
+    "stack-grow",
+    "timsort-runs"
+   ],
+   "in_catalog_not_in_schema": []
+  },
+  "detected_by": [
+   "snapshot-diff",
+   "git-diff"
+  ],
+  "git_before": "7d39c1aa95f02bac87eb8f7e62e561f98cc64fc5",
+  "git_after": "29c06b1cc9f6c939ffb861ad7f583d799f186a72"
+ },
+ "incidents": [],
+ "verdicts": [],
+ "artifacts": {
+  "draft_json": "episodes/drafts/auto-20260824-115501.draft.json",
+  "episode_json": "episodes/auto-20260824-115501.json",
+  "meta_json": "video/public/episodes/auto-20260824-115501/meta.json",
+  "script_json": "video/public/episodes/auto-20260824-115501/script.json",
+  "audio_dir": "video/public/episodes/auto-20260824-115501/audio",
+  "mp4": "video/out/auto-20260824-115501.mp4"
+ },
+ "integrity": {
+  "stages_measured": [],
+  "clock": "utc+monotonic, tools/pipeline_log.py"
+ }
+}

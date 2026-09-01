@@ -1,0 +1,97 @@
+{
+ "schema_version": 1,
+ "run_id": "20260826-080002-auto-20260826-050002",
+ "slug": "auto-20260826-050002",
+ "status": "ok",
+ "episode": {
+  "topic": "тему выбирает агент (инструкции в промпте)"
+ },
+ "runner": {
+  "cli": "codex",
+  "model": "gpt-5.6-luna",
+  "effort": "max",
+  "orchestration": "single-actor",
+  "invocation": "codex exec -m gpt-5.6-luna -c model_reasoning_effort=max --sandbox danger-full-access < /home/toligrim/.local/share/shortvideo/scheduler/producer-prompt-kh080bhy.md"
+ },
+ "timing": {
+  "started_at": "2026-08-26T05:00:02.133Z",
+  "finished_at": "2026-08-26T05:37:48.723Z",
+  "wall_sec": 2266.591,
+  "unaccounted_sec": 2266.591,
+  "coverage_pct": 0.0,
+  "measured_by": "tools/pipeline_log.py",
+  "stages": {}
+ },
+ "composition": {
+  "scene_count": 5,
+  "scene_type_histogram": {
+   "story": 2,
+   "diagram": 2,
+   "outro": 1
+  },
+  "spoken_words": 127,
+  "visuals_used": [
+   "quic-migration"
+  ]
+ },
+ "library_growth": {
+  "new_scene_types": [],
+  "new_story_visuals": [
+   "quic-migration"
+  ],
+  "new_components": [],
+  "modified_components": [
+   "video/src/scenes/StoryScene.tsx"
+  ],
+  "count": 1,
+  "catalog_drift": {
+   "in_schema_not_in_catalog": [
+    "amdahl-speedup",
+    "bbp-digit",
+    "bbp-extract",
+    "busy-beaver",
+    "consistent-hash-ring",
+    "cuckoo-cycle",
+    "cuckoo-stash",
+    "cuckoo-table",
+    "gps-relativity",
+    "gray-code",
+    "hamming-syndrome",
+    "hamming-word",
+    "inverse-sqrt-bits",
+    "median-of-medians",
+    "merkle-tree",
+    "mincut-contract",
+    "minimal-perfect-hash",
+    "mt-recovery",
+    "recursion-call",
+    "reservoir-sampling",
+    "secret-sharing",
+    "stable-matching",
+    "stack-compare",
+    "stack-grow",
+    "suffix-automaton",
+    "timsort-runs",
+    "trie-growth"
+   ],
+   "in_catalog_not_in_schema": []
+  },
+  "detected_by": [
+   "snapshot-diff",
+   "git-diff"
+  ],
+  "git_before": "3319ab62e47461154b0955ba86035e38454841d2",
+  "git_after": "44797313a3cdb1997b49b2692e0250c77649396c"
+ },
+ "incidents": [],
+ "verdicts": [],
+ "artifacts": {
+  "draft_json": "episodes/drafts/auto-20260826-050002.draft.json",
+  "episode_json": "episodes/auto-20260826-050002.json",
+  "audio_dir": "video/public/episodes/auto-20260826-050002/audio"
+ },
+ "integrity": {
+  "stages_measured": [],
+  "clock": "utc+monotonic, tools/pipeline_log.py"
+ }
+}

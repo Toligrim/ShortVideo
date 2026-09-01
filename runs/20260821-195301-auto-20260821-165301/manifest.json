@@ -1,0 +1,83 @@
+{
+ "schema_version": 1,
+ "run_id": "20260821-195301-auto-20260821-165301",
+ "slug": "auto-20260821-165301",
+ "status": "ok",
+ "episode": {
+  "topic": "тему выбирает агент (инструкции в промпте)"
+ },
+ "runner": {
+  "cli": "codex",
+  "model": "gpt-5.6-luna",
+  "effort": "max",
+  "orchestration": "single-actor",
+  "invocation": "codex exec -m gpt-5.6-luna -c model_reasoning_effort=max --sandbox danger-full-access < /home/toligrim/.local/share/shortvideo/scheduler/producer-prompt-jhzjkanr.md"
+ },
+ "timing": {
+  "started_at": "2026-08-21T16:53:01.490Z",
+  "finished_at": "2026-08-21T18:12:57.409Z",
+  "wall_sec": 4795.919,
+  "unaccounted_sec": 4795.919,
+  "coverage_pct": 0.0,
+  "measured_by": "tools/pipeline_log.py",
+  "stages": {}
+ },
+ "composition": {
+  "scene_count": 6,
+  "scene_type_histogram": {
+   "story": 5,
+   "outro": 1
+  },
+  "spoken_words": 143,
+  "visuals_used": [
+   "ancient-code",
+   "fft-wave",
+   "orbit-fft-groups",
+   "title-slam"
+  ],
+  "audio_sec": 67.78,
+  "mp4_bytes": 28980305,
+  "video_sec": 70.76
+ },
+ "library_growth": {
+  "new_scene_types": [],
+  "new_story_visuals": [
+   "orbit-fft-groups"
+  ],
+  "new_components": [
+   "video/src/scenes/OrbitFftGroups.tsx"
+  ],
+  "modified_components": [
+   "video/src/scenes/StoryScene.tsx"
+  ],
+  "count": 1,
+  "catalog_drift": {
+   "in_schema_not_in_catalog": [
+    "recursion-call",
+    "stack-compare",
+    "stack-grow"
+   ],
+   "in_catalog_not_in_schema": []
+  },
+  "detected_by": [
+   "snapshot-diff",
+   "git-diff"
+  ],
+  "git_before": "eefaf4c0f0fe8931a7d6f3b63169fb54757e7955",
+  "git_after": "414d8604aecde07d232a7020f707f5436ea73be4"
+ },
+ "incidents": [],
+ "verdicts": [],
+ "artifacts": {
+  "draft_json": "episodes/drafts/auto-20260821-165301.draft.json",
+  "episode_json": "episodes/auto-20260821-165301.json",
+  "meta_json": "video/public/episodes/auto-20260821-165301/meta.json",
+  "script_json": "video/public/episodes/auto-20260821-165301/script.json",
+  "audio_dir": "video/public/episodes/auto-20260821-165301/audio",
+  "mp4": "video/out/auto-20260821-165301.mp4"
+ },
+ "integrity": {
+  "stages_measured": [],
+  "clock": "utc+monotonic, tools/pipeline_log.py"
+ }
+}
