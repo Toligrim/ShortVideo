@@ -382,7 +382,7 @@ class Registry:
             if not _finite_number(expires_at):
                 raise RegistryInvalidError
             lease_sec = claim.get("lease_sec")
-            if not _finite_number(lease_sec) or lease_sec <= 0:
+            if not _finite_number(lease_sec) or lease_sec < 0:
                 raise RegistryInvalidError
             if "worktree" not in claim:
                 raise RegistryInvalidError

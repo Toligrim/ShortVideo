@@ -124,6 +124,40 @@ def test_invalid_registry_is_not_replaced(sandbox, capsys, content: bytes):
     assert "leaked" not in output.out + output.err
 
 
+def test_invalid_registry_blocks_all_mutations_and_gc(sandbox, capsys):
+    path = registry(sandbox)
+    invalid_bytes = b'{"version": 1, "claims": {}}'
+    path.write_bytes(invalid_bytes)
+    before_index = (sandbox["root"] / ".git" / "index").read_bytes()
+    wt = make_actual_worktree(sandbox, "corrupt-registry")
+
+    assert sandbox["agent_log"].main([
+        "delegate-claim", "--task-id", "task:new", "--role", "tester",
+        "--agent-id", "new",
+    ]) == 2
+    capsys.readouterr()
+    assert sandbox["agent_log"].main([
+        "delegate-heartbeat", "--agent-id", "new",
+    ]) == 2
+    capsys.readouterr()
+    assert sandbox["dw"].main([
+        "close", "--agent-id", "new", "--allow", "result.txt",
+    ]) == 2
+    capsys.readouterr()
+    assert sandbox["dw"].main(["gc"]) == 2
+    gc_output = json.loads(capsys.readouterr().out)
+
+    assert gc_output["removed"] == []
+    assert str(wt) in gc_output["kept"]
+    assert wt.is_dir()
+    assert path.read_bytes() == invalid_bytes
+    assert (sandbox["root"] / ".git" / "index").read_bytes() == before_index
+
+    assert run_git(
+        sandbox["root"], "worktree", "remove", str(wt), check=False,
+    ).returncode == 0
+
+
 def test_unreadable_registry_is_not_replaced(sandbox, capsys, monkeypatch):
     path = registry(sandbox)
     path.write_text('{"version": 2, "claims": {}}', encoding="utf-8")
@@ -330,3 +364,40 @@ def test_gc_keeps_worktree_when_registry_is_missing_or_invalid(
     else:
         assert path.read_bytes() == before
     assert run_git(sandbox["root"], "worktree", "remove", str(wt), check=False).returncode == 0
+
+
+def test_gc_quarantines_only_the_run_with_an_invalid_registry(sandbox, capsys):
+    dw = sandbox["dw"]
+    assert dw.main([
+        "open", "--task-id", "task:valid-gc", "--role", "tester",
+        "--agent-id", "valid-gc",
+    ]) == 0
+    capsys.readouterr()
+    valid_wt = sandbox["worktrees"] / sandbox["run_dir"].name / "valid-gc"
+    set_claim(sandbox, "valid-gc", state="failed", result_class="policy_failure")
+
+    corrupt_run = "20260901-120001-corrupt-gc"
+    corrupt_run_dir = sandbox["root"] / "runs" / corrupt_run
+    corrupt_run_dir.mkdir(parents=True)
+    corrupt_registry = corrupt_run_dir / "delegations.json"
+    corrupt_bytes = b'{"version": 1, "claims": {}}'
+    corrupt_registry.write_bytes(corrupt_bytes)
+    corrupt_wt = sandbox["worktrees"] / corrupt_run / "orphan"
+    corrupt_wt.parent.mkdir(parents=True)
+    run_git(sandbox["root"], "worktree", "add", "--detach", str(corrupt_wt), "HEAD")
+    (corrupt_wt / "unreviewed.txt").write_bytes(b"keep me\n")
+
+    rc = dw.main(["gc"])
+    result = json.loads(capsys.readouterr().out)
+
+    assert rc == 2
+    assert str(valid_wt) in result["removed"]
+    assert not valid_wt.exists()
+    assert str(corrupt_wt) in result["kept"]
+    assert corrupt_wt.is_dir()
+    assert corrupt_registry.read_bytes() == corrupt_bytes
+
+    (corrupt_wt / "unreviewed.txt").unlink()
+    assert run_git(
+        sandbox["root"], "worktree", "remove", str(corrupt_wt), check=False,
+    ).returncode == 0

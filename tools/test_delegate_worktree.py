@@ -470,6 +470,7 @@ def _assert_conflict_does_not_partially_merge(
 
     dw = sandbox["dw"]
     root = sandbox["root"]
+    before_head = head(root)
     before_index = index_bytes(dw, root)
     before_status = status_raw(dw, root, clean_path, conflict_path)
 
@@ -482,6 +483,7 @@ def _assert_conflict_does_not_partially_merge(
     assert result["conflicts"] == [conflict_path]
     assert (root / clean_path).read_bytes() == b"clean-base\n"
     assert (root / conflict_path).read_bytes() == b"main-wins\n"
+    assert head(root) == before_head
     assert index_bytes(dw, root) == before_index
     assert status_raw(dw, root, clean_path, conflict_path) == before_status
     assert wt.is_dir()

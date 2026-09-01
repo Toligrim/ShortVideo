@@ -1113,12 +1113,15 @@ def cmd_gc(args: argparse.Namespace) -> int:
         print("каталога worktree нет")
         return 0
 
-    # Read every registry before removing anything.  A missing or invalid
-    # registry is not evidence that its worktrees are disposable; it also
-    # aborts removals from otherwise valid runs to avoid a partial GC pass.
+    # Read every registry before removing anything from that run.  A missing
+    # or invalid registry is not evidence that its worktrees are disposable.
+    # Runs are independent safety domains, so quarantine only the affected
+    # run; otherwise one old/corrupt registry would make unrelated valid
+    # worktrees impossible to clean up forever.  The command still returns an
+    # error if any run was quarantined.
     worktrees_by_run: dict[str, list[Path]] = {}
     claims_by_run: dict[str, dict[str, Any]] = {}
-    registry_invalid = False
+    invalid_runs: set[str] = set()
     for run_path in sorted(WORKTREES_ROOT.iterdir()):
         if not run_path.is_dir():
             continue
@@ -1130,25 +1133,20 @@ def cmd_gc(args: argparse.Namespace) -> int:
         except OSError:
             registry_exists = False
         if not registry_exists:
-            registry_invalid = True
+            invalid_runs.add(run_path.name)
+            kept.extend(str(wt) for wt in worktrees)
             continue
         try:
             with agent_log.Registry(reg_path.parent) as reg:
                 claims_by_run[run_path.name] = dict(reg.claims)
         except (agent_log.RegistryInvalidError, OSError):
-            registry_invalid = True
-
-    if registry_invalid:
-        kept = [str(wt) for worktrees in worktrees_by_run.values() for wt in worktrees]
-        print(json.dumps({
-            "removed": [], "kept": kept, "dry_run": bool(args.dry_run),
-            "error": agent_log.REGISTRY_INVALID_ERROR_CODE,
-            "error_code": agent_log.REGISTRY_INVALID_ERROR_CODE,
-        }, ensure_ascii=False, indent=1))
-        return 2
+            invalid_runs.add(run_path.name)
+            kept.extend(str(wt) for wt in worktrees)
 
     candidates: list[tuple[Path, bool]] = []
     for run_name, worktrees in worktrees_by_run.items():
+        if run_name in invalid_runs:
+            continue
         registry = claims_by_run[run_name]
         for wt in worktrees:
             claim = registry.get(wt.name)
@@ -1201,8 +1199,13 @@ def cmd_gc(args: argparse.Namespace) -> int:
         else:
             kept.append(str(wt))
     print(json.dumps({"removed": removed, "kept": kept,
-                      "dry_run": bool(args.dry_run)}, ensure_ascii=False, indent=1))
-    return 0
+                      "dry_run": bool(args.dry_run),
+                      **({
+                          "error": agent_log.REGISTRY_INVALID_ERROR_CODE,
+                          "error_code": agent_log.REGISTRY_INVALID_ERROR_CODE,
+                      } if invalid_runs else {})},
+               ensure_ascii=False, indent=1))
+    return 2 if invalid_runs else 0
 
 
 def build_parser() -> argparse.ArgumentParser:
