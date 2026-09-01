@@ -338,6 +338,14 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
       const phase = beat.params?.phase as MultiFrameStackPhase | undefined;
       impact = start + Math.round(dur * (phase === "reject" ? 0.68 : phase === "capture" ? 0.55 : 0.62));
     }
+    if (beat.visual === "mail-queue") {
+      const phase = beat.params?.phase as MailQueuePhase | undefined;
+      impact = start + Math.round(dur * (phase === "retry" ? 0.66 : phase === "backoff" ? 0.64 : phase === "wait" ? 0.62 : 0.58));
+    }
+    if (beat.visual === "mail-server-handoff") {
+      const phase = beat.params?.phase as MailServerHandoffPhase | undefined;
+      impact = start + Math.round(dur * (phase === "mailbox" ? 0.68 : phase === "relay" ? 0.62 : 0.58));
+    }
     return { beat, start, end, impact };
   });
 };
@@ -650,6 +658,16 @@ export const storySfx = (
     if (s.beat.visual === "multi-frame-stack") {
       const ph = s.beat.params?.phase as MultiFrameStackPhase | undefined;
       const sound = ph === "reject" ? "slam" : ph === "average" ? "ding" : ph === "align" ? "pop" : "click";
+      events.push({ frame: s.impact, sound });
+    }
+    if (s.beat.visual === "mail-queue") {
+      const ph = s.beat.params?.phase as MailQueuePhase | undefined;
+      const sound = ph === "retry" ? "slam" : ph === "backoff" ? "click" : ph === "wait" ? "ding" : "pop";
+      events.push({ frame: s.impact, sound });
+    }
+    if (s.beat.visual === "mail-server-handoff") {
+      const ph = s.beat.params?.phase as MailServerHandoffPhase | undefined;
+      const sound = ph === "mailbox" ? "ding" : ph === "relay" ? "whoosh" : "pop";
       events.push({ frame: s.impact, sound });
     }
   }
@@ -10765,6 +10783,679 @@ export const QuicMigrationVisual: React.FC<{
   );
 };
 
+/* ──────────────────────── почтовые визуалы ──────────────────────── */
+
+export type MailQueuePhase = "offline" | "queued" | "retry" | "backoff" | "wait";
+export type MailServerHandoffPhase = "accept" | "relay" | "mailbox";
+
+const mailMono: React.CSSProperties = { fontFamily: theme.mono, fontWeight: 800, letterSpacing: 1 };
+
+const MailHeader: React.FC<{ icon: string; text: string; color: string; opacity: number }> = ({
+  icon,
+  text,
+  color,
+  opacity,
+}) => (
+  <div
+    style={{
+      position: "absolute",
+      left: W / 2,
+      top: 225,
+      transform: "translateX(-50%)",
+      display: "flex",
+      alignItems: "center",
+      gap: 12,
+      color: theme.subtext,
+      fontSize: 24,
+      whiteSpace: "nowrap",
+      opacity,
+      ...mailMono,
+    }}
+  >
+    <IconGlyph name={icon} size={31} color={color} strokeWidth={1.8} />
+    <span>{text}</span>
+  </div>
+);
+
+const MailBadge: React.FC<{ text: string; tone?: string; opacity: number }> = ({
+  text,
+  tone = theme.accent,
+  opacity,
+}) => (
+  <div
+    style={{
+      position: "absolute",
+      left: W / 2,
+      top: 1190,
+      transform: "translateX(-50%)",
+      padding: "14px 30px",
+      borderRadius: 999,
+      background: `${tone}18`,
+      border: `2px solid ${tone}99`,
+      color: tone,
+      ...mailMono,
+      fontSize: 24,
+      whiteSpace: "nowrap",
+      opacity,
+      boxShadow: `0 0 30px ${tone}25`,
+    }}
+  >
+    {text}
+  </div>
+);
+
+const MailEnvelope: React.FC<{
+  x: number;
+  y: number;
+  opacity?: number;
+  scale?: number;
+  color?: string;
+  label?: string;
+  rotate?: number;
+}> = ({ x, y, opacity = 1, scale = 1, color = theme.accent, label = "ПИСЬМО", rotate = 0 }) => (
+  <div
+    style={{
+      position: "absolute",
+      left: x,
+      top: y,
+      width: 150,
+      height: 86,
+      transform: `translate(-50%, -50%) rotate(${rotate}deg) scale(${scale})`,
+      transformOrigin: "center",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 10,
+      borderRadius: 16,
+      background: `${color}20`,
+      border: `3px solid ${color}AA`,
+      color,
+      boxShadow: `0 0 28px ${color}44`,
+      opacity,
+      zIndex: 4,
+    }}
+  >
+    <IconGlyph name="mail" size={34} color={color} strokeWidth={1.8} />
+    <span style={{ ...mailMono, fontSize: 18 }}>{label}</span>
+  </div>
+);
+
+const MailServerCard: React.FC<{
+  x: number;
+  y: number;
+  label: string;
+  detail?: string;
+  icon?: string;
+  color?: string;
+  opacity?: number;
+  width?: number;
+  height?: number;
+  scale?: number;
+}> = ({
+  x,
+  y,
+  label,
+  detail,
+  icon = "server",
+  color = theme.accent,
+  opacity = 1,
+  width = 300,
+  height = 270,
+  scale = 1,
+}) => (
+  <div
+    style={{
+      position: "absolute",
+      left: x - width / 2,
+      top: y,
+      width,
+      height,
+      transform: `scale(${scale})`,
+      transformOrigin: "center top",
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 12,
+      borderRadius: 26,
+      background: `${theme.panel}E8`,
+      border: `3px solid ${color}88`,
+      boxShadow: `0 0 38px ${color}22`,
+      opacity,
+    }}
+  >
+    <IconGlyph name={icon} size={76} color={color} strokeWidth={1.7} />
+    <div style={{ ...mailMono, color: theme.text, fontSize: 22, textAlign: "center", lineHeight: 1.1 }}>{label}</div>
+    {detail ? <div style={{ ...mailMono, color, fontSize: 16, textAlign: "center" }}>{detail}</div> : null}
+  </div>
+);
+
+const OfflinePhone: React.FC<{ x: number; y: number; opacity?: number; scale?: number }> = ({
+  x,
+  y,
+  opacity = 1,
+  scale = 1,
+}) => (
+  <div
+    style={{
+      position: "absolute",
+      left: x - 145,
+      top: y,
+      width: 290,
+      height: 300,
+      transform: `scale(${scale})`,
+      transformOrigin: "center top",
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 10,
+      borderRadius: 26,
+      background: `${theme.panel}E8`,
+      border: `3px solid ${theme.warning}88`,
+      boxShadow: `0 0 38px ${theme.warning}22`,
+      opacity,
+    }}
+  >
+    <div style={{ position: "relative", height: 94 }}>
+      <IconGlyph name="smartphone" size={82} color={theme.warning} strokeWidth={1.7} />
+      <div style={{ position: "absolute", right: -16, top: -8, transform: "rotate(-10deg)" }}>
+        <IconGlyph name="wifi-off" size={36} color={theme.danger} strokeWidth={2} />
+      </div>
+    </div>
+    <div style={{ ...mailMono, color: theme.text, fontSize: 23 }}>ТЕЛЕФОН ВЫКЛЮЧЕН</div>
+    <div style={{ ...mailMono, color: theme.danger, fontSize: 17 }}>СВЯЗИ НЕТ</div>
+  </div>
+);
+
+const MailQueuePanel: React.FC<{
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+  title?: string;
+  rows?: number;
+  opacity?: number;
+  activeRow?: number;
+  activeTone?: string;
+}> = ({
+  left,
+  top,
+  width,
+  height,
+  title = "ОЧЕРЕДЬ",
+  rows = 3,
+  opacity = 1,
+  activeRow = -1,
+  activeTone = theme.accent,
+}) => (
+  <div
+    style={{
+      position: "absolute",
+      left,
+      top,
+      width,
+      height,
+      borderRadius: 28,
+      background: `${theme.panel}D9`,
+      border: `3px solid ${theme.accent2}88`,
+      boxShadow: `0 0 44px ${theme.accent2}1F`,
+      opacity,
+      overflow: "hidden",
+    }}
+  >
+    <div
+      style={{
+        position: "absolute",
+        left: 24,
+        top: 20,
+        display: "flex",
+        alignItems: "center",
+        gap: 10,
+        color: theme.accent2,
+        ...mailMono,
+        fontSize: 23,
+      }}
+    >
+      <IconGlyph name="inbox" size={30} color={theme.accent2} strokeWidth={1.8} />
+      <span>{title}</span>
+    </div>
+    {Array.from({ length: rows }).map((_, i) => {
+      const tone = i === activeRow ? activeTone : theme.subtext;
+      return (
+        <div
+          key={i}
+          style={{
+            position: "absolute",
+            left: 24,
+            right: 24,
+            top: 105 + i * 112,
+            height: 78,
+            display: "flex",
+            alignItems: "center",
+            gap: 14,
+            padding: "0 18px",
+            borderRadius: 16,
+            background: `${tone}${i === activeRow ? "22" : "0D"}`,
+            border: `2px solid ${tone}${i === activeRow ? "AA" : "44"}`,
+            color: i === activeRow ? theme.text : theme.subtext,
+            transform: `translateX(${i === activeRow ? 4 : 0}px)`,
+          }}
+        >
+          <IconGlyph name="mail" size={30} color={tone} strokeWidth={1.7} />
+          <span style={{ ...mailMono, fontSize: 20 }}>{`ПИСЬМО · № ${i + 1}`}</span>
+          {i === activeRow ? <IconGlyph name="clock-3" size={22} color={activeTone} strokeWidth={1.8} /> : null}
+        </div>
+      );
+    })}
+  </div>
+);
+
+const mailQueueTitle: Record<MailQueuePhase, string> = {
+  offline: "АДРЕСАТ В ПОЛЁТЕ · СВЯЗИ НЕТ",
+  queued: "ПИСЬМО ЛЕЖИТ В ОЧЕРЕДИ",
+  retry: "ВРЕМЕННАЯ ОШИБКА · ПОВТОР",
+  backoff: "ПОВТОРЫ ИДУТ С ИНТЕРВАЛОМ",
+  wait: "СЕРВЕР ХРАНИТ ПИСЬМО",
+};
+
+/** Буквальная очередь store-and-forward: письмо ждёт, повторяется и не теряется. */
+export const MailQueueVisual: React.FC<{
+  local: number;
+  fps: number;
+  impactLocal: number;
+  phase?: MailQueuePhase;
+}> = ({ local, fps, impactLocal, phase = "queued" }) => {
+  const enter = spring({ frame: local, fps, config: { damping: 15, mass: 0.8 } });
+  const reveal = spring({ frame: Math.max(0, local - impactLocal), fps, config: { damping: 12, mass: 0.7 } });
+
+  if (phase === "offline") {
+    const sendP = smooth(clamp01((local - 7) / 28));
+    return (
+      <>
+        <MailHeader icon="plane" text={mailQueueTitle[phase]} color={theme.warning} opacity={enter} />
+        <OfflinePhone x={200} y={455} opacity={enter} />
+        <div style={{ position: "absolute", left: 465, top: 420, opacity: enter * (0.7 + 0.3 * sendP) }}>
+          <IconGlyph name="plane" size={74} color={theme.warning} strokeWidth={1.6} />
+          <div style={{ ...mailMono, color: theme.warning, fontSize: 18, marginTop: 8, textAlign: "center" }}>САМОЛЁТ</div>
+        </div>
+        <MailQueuePanel
+          left={585}
+          top={410}
+          width={370}
+          height={590}
+          title="СЕРВЕР"
+          rows={2}
+          opacity={enter}
+          activeRow={1}
+          activeTone={theme.accent}
+        />
+        <MailEnvelope
+          x={332 + 240 * sendP}
+          y={720 - 115 * sendP}
+          opacity={enter}
+          color={theme.accent}
+          rotate={-4 + 4 * sendP}
+          label="ПИСЬМО"
+        />
+        <MailBadge text="ПИСЬМО ЖДЁТ СВЯЗИ" tone={theme.accent} opacity={enter} />
+        <PulseRing x={760} y={650} triggerFrame={impactLocal} tone="accent" size={230} />
+      </>
+    );
+  }
+
+  if (phase === "queued") {
+    return (
+      <>
+        <MailHeader icon="inbox" text={mailQueueTitle[phase]} color={theme.accent2} opacity={enter} />
+        <MailQueuePanel
+          left={145}
+          top={405}
+          width={690}
+          height={620}
+          title="ОЧЕРЕДЬ ПОЧТОВОГО СЕРВЕРА"
+          rows={3}
+          opacity={enter}
+          activeRow={1}
+          activeTone={theme.accent}
+        />
+        <OfflinePhone x={950} y={500} opacity={enter} scale={0.65} />
+        <div
+          style={{
+            position: "absolute",
+            left: 875,
+            top: 850,
+            width: 120,
+            height: 3,
+            background: `${theme.warning}88`,
+            opacity: enter,
+          }}
+        />
+        <div style={{ position: "absolute", left: 895, top: 875, color: theme.warning, ...mailMono, fontSize: 17, opacity: enter }}>
+          ЖДЁМ СВЯЗИ
+        </div>
+        <MailBadge text="ХРАНИМ ДО ДОСТАВКИ" tone={theme.accent} opacity={enter} />
+        <PulseRing x={500} y={620} triggerFrame={impactLocal} tone="accent" size={250} />
+      </>
+    );
+  }
+
+  if (phase === "retry") {
+    const cycleP = smooth(clamp01(((local - impactLocal) % 72) / 50));
+    const routeP = local < impactLocal ? 0 : cycleP;
+    const returning = routeP > 0.62;
+    const mailX = returning ? 650 - ((routeP - 0.62) / 0.38) * 315 : 335 + (routeP / 0.62) * 315;
+    const mailY = returning ? 765 : 645;
+    const attempt = 1 + Math.floor(Math.max(0, local - impactLocal) / 72) % 3;
+    return (
+      <>
+        <MailHeader icon="rotate-cw" text={mailQueueTitle[phase]} color={theme.danger} opacity={enter} />
+        <MailQueuePanel
+          left={95}
+          top={420}
+          width={385}
+          height={570}
+          title="ОЧЕРЕДЬ"
+          rows={2}
+          opacity={enter}
+          activeRow={0}
+          activeTone={theme.warning}
+        />
+        <MailServerCard
+          x={880}
+          y={470}
+          label="СЕРВЕР ПОЛУЧАТЕЛЯ"
+          detail="ВРЕМЕННО НЕДОСТУПЕН"
+          color={theme.danger}
+          opacity={enter}
+          width={270}
+          height={270}
+        />
+        <div
+          style={{
+            position: "absolute",
+            left: 330,
+            top: 645,
+            width: 415,
+            height: 4,
+            borderTop: `3px dashed ${theme.accent}99`,
+            opacity: enter,
+          }}
+        />
+        <div
+          style={{
+            position: "absolute",
+            left: 330,
+            top: 765,
+            width: 415,
+            height: 4,
+            borderTop: `3px dashed ${theme.success}99`,
+            opacity: enter,
+          }}
+        />
+        <div style={{ position: "absolute", left: 565, top: 748, transform: "translateX(-50%)", opacity: enter }}>
+          <IconGlyph name="rotate-cw" size={40} color={theme.success} strokeWidth={1.8} />
+          <div style={{ ...mailMono, color: theme.success, fontSize: 17, marginTop: 2 }}>ПОВТОР</div>
+        </div>
+        <MailEnvelope
+          x={mailX}
+          y={mailY}
+          opacity={enter * (local >= impactLocal ? 1 : 0.5)}
+          color={returning ? theme.success : theme.accent}
+          label={`ПОПЫТКА ${attempt}`}
+          rotate={returning ? 180 : 0}
+        />
+        <MailBadge text="ОШИБКА ВРЕМЕННАЯ · ПОВТОР" tone={theme.danger} opacity={enter * (0.8 + 0.2 * reveal)} />
+        <PulseRing x={880} y={600} triggerFrame={impactLocal} tone="danger" size={230} />
+      </>
+    );
+  }
+
+  if (phase === "backoff") {
+    const points = [
+      { x: 175, icon: "send", label: "ПОПЫТКА 1", tone: theme.accent },
+      { x: 415, icon: "clock-3", label: "30 МИН", tone: theme.warning },
+      { x: 655, icon: "send", label: "ПОПЫТКА 2", tone: theme.accent },
+      { x: 895, icon: "clock-3", label: "2–3 ЧАСА", tone: theme.accent2 },
+    ];
+    const focus = smooth(clamp01((local - impactLocal) / 18));
+    return (
+      <>
+        <MailHeader icon="clock-3" text={mailQueueTitle[phase]} color={theme.warning} opacity={enter} />
+        <div
+          style={{
+            position: "absolute",
+            left: 175,
+            top: 605,
+            width: 720,
+            height: 4,
+            background: `${theme.subtext}66`,
+            opacity: enter,
+          }}
+        />
+        {points.map((point, i) => {
+          const pointP = spring({ frame: Math.max(0, local - 5 - i * 5), fps, config: { damping: 14, mass: 0.7 } });
+          const active = i === 2 || i === 3;
+          return (
+            <div
+              key={point.label}
+              style={{
+                position: "absolute",
+                left: point.x - 86,
+                top: 500,
+                width: 172,
+                height: 208,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 13,
+                borderRadius: 22,
+                background: `${active && focus > 0.2 ? point.tone : theme.panel}E8`,
+                border: `3px solid ${point.tone}${active && focus > 0.2 ? "CC" : "66"}`,
+                boxShadow: active && focus > 0.2 ? `0 0 30px ${point.tone}33` : "none",
+                opacity: enter * pointP,
+                transform: `translateY(${(1 - pointP) * 20}px) scale(${0.9 + pointP * 0.1})`,
+              }}
+            >
+              <IconGlyph name={point.icon} size={54} color={point.tone} strokeWidth={1.8} />
+              <span style={{ ...mailMono, fontSize: 18, color: active && focus > 0.2 ? theme.text : theme.subtext, textAlign: "center" }}>{point.label}</span>
+            </div>
+          );
+        })}
+        <div style={{ position: "absolute", left: W / 2, top: 820, transform: "translateX(-50%)", ...mailMono, color: theme.subtext, fontSize: 22, opacity: enter }}>
+          ПОТОМ — ОДНА ПОПЫТКА РАЗ В 2–3 ЧАСА
+        </div>
+        <MailBadge text="ПОВТОРЫ НЕ ЧАСТЯТ · ПИСЬМО НЕ ТЕРЯЕТСЯ" tone={theme.success} opacity={enter} />
+        <PulseRing x={655} y={605} triggerFrame={impactLocal} tone="success" size={190} />
+      </>
+    );
+  }
+
+  // wait
+  const days = ["1", "2", "3", "4", "5"];
+  return (
+    <>
+      <MailHeader icon="calendar-days" text={mailQueueTitle[phase]} color={theme.accent2} opacity={enter} />
+      <MailQueuePanel
+        left={135}
+        top={420}
+        width={550}
+        height={550}
+        title="ОЧЕРЕДЬ СЕРВЕРА"
+        rows={2}
+        opacity={enter}
+        activeRow={0}
+        activeTone={theme.accent}
+      />
+      <div
+        style={{
+          position: "absolute",
+          left: 735,
+          top: 435,
+          width: 250,
+          height: 520,
+          borderRadius: 24,
+          background: `${theme.panel}E8`,
+          border: `3px solid ${theme.accent2}88`,
+          opacity: enter,
+          boxShadow: `0 0 38px ${theme.accent2}22`,
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 8, position: "absolute", left: 22, top: 22, ...mailMono, fontSize: 20, color: theme.accent2 }}>
+          <IconGlyph name="calendar-days" size={28} color={theme.accent2} strokeWidth={1.8} />
+          СРОК ХРАНЕНИЯ
+        </div>
+        {days.map((day, i) => {
+          const dayP = spring({ frame: Math.max(0, local - 7 - i * 3), fps, config: { damping: 15, mass: 0.7 } });
+          return (
+            <div
+              key={day}
+              style={{
+                position: "absolute",
+                left: 25,
+                top: 105 + i * 70,
+                width: 200,
+                height: 48,
+                display: "flex",
+                alignItems: "center",
+                gap: 12,
+                padding: "0 14px",
+                borderRadius: 12,
+                background: `${i >= 3 ? theme.warning : theme.accent2}18`,
+                border: `2px solid ${i >= 3 ? theme.warning : theme.accent2}66`,
+                opacity: enter * dayP,
+              }}
+            >
+              <IconGlyph name="clock-3" size={23} color={i >= 3 ? theme.warning : theme.accent2} strokeWidth={1.8} />
+              <span style={{ ...mailMono, color: theme.text, fontSize: 19 }}>{`ДЕНЬ ${day}`}</span>
+            </div>
+          );
+        })}
+      </div>
+      <div style={{ position: "absolute", left: 860, top: 1010, transform: "translateX(-50%)", ...mailMono, color: theme.warning, fontSize: 25, opacity: enter, whiteSpace: "nowrap" }}>
+        4–5 ДНЕЙ
+      </div>
+      <MailBadge text="ХРАНИМ ДО ОКОНЧАТЕЛЬНОГО ОТКАЗА" tone={theme.warning} opacity={enter} />
+      <PulseRing x={410} y={620} triggerFrame={impactLocal} tone="warning" size={220} />
+    </>
+  );
+};
+
+const mailboxTitle: Record<MailServerHandoffPhase, string> = {
+  accept: "СЕРВЕР ПРИНИМАЕТ КОНВЕРТ",
+  relay: "КОНВЕРТ ПЕРЕДАЁТСЯ ДАЛЬШЕ",
+  mailbox: "ПИСЬМО В ПОЧТОВОМ ЯЩИКЕ",
+};
+
+/** Буквальный путь письма: принятие, передача узлу и финальный серверный ящик. */
+export const MailServerHandoffVisual: React.FC<{
+  local: number;
+  fps: number;
+  impactLocal: number;
+  phase?: MailServerHandoffPhase;
+}> = ({ local, fps, impactLocal, phase = "accept" }) => {
+  const enter = spring({ frame: local, fps, config: { damping: 15, mass: 0.8 } });
+
+  if (phase === "accept") {
+    const sendP = smooth(clamp01((local - 8) / 30));
+    const envelopeOpacity = enter * (1 - smooth(clamp01((sendP - 0.78) / 0.18)));
+    return (
+      <>
+        <MailHeader icon="send" text={mailboxTitle[phase]} color={theme.accent} opacity={enter} />
+        <MailServerCard x={190} y={465} label="ОТПРАВИТЕЛЬ" detail="ТЕЛЕФОН" icon="smartphone" color={theme.accent} opacity={enter} />
+        <MailServerCard x={850} y={465} label="ПОЧТОВЫЙ СЕРВЕР" detail="ПРИНЯЛ ПИСЬМО" color={theme.accent2} opacity={enter} width={330} />
+        <div style={{ position: "absolute", left: 330, top: 625, width: 350, height: 4, borderTop: `3px dashed ${theme.accent}99`, opacity: enter }} />
+        <MailEnvelope x={340 + 260 * sendP} y={625} opacity={envelopeOpacity} color={theme.accent} />
+        <div style={{ position: "absolute", left: 850, top: 800, transform: "translateX(-50%)", display: "flex", alignItems: "center", gap: 8, color: theme.success, ...mailMono, fontSize: 21, opacity: enter }}>
+          <IconGlyph name="check" size={28} color={theme.success} strokeWidth={2} />
+          ПРИНЯТО
+        </div>
+        <MailBadge text="ПИСЬМО ПРИНЯТО СЕРВЕРОМ" tone={theme.success} opacity={enter} />
+        <PulseRing x={850} y={625} triggerFrame={impactLocal} tone="success" size={220} />
+      </>
+    );
+  }
+
+  if (phase === "relay") {
+    const relayP = smooth(clamp01((local - 8) / 54));
+    const firstP = smooth(clamp01(relayP / 0.45));
+    const secondP = smooth(clamp01((relayP - 0.55) / 0.45));
+    const firstOpacity = enter * (1 - smooth(clamp01((relayP - 0.34) / 0.14)));
+    const secondOpacity = enter * smooth(clamp01((relayP - 0.52) / 0.14));
+    return (
+      <>
+        <MailHeader icon="arrow-right" text={mailboxTitle[phase]} color={theme.accent2} opacity={enter} />
+        <MailServerCard x={165} y={480} label="СЕРВЕР 1" detail="ПРИНЯЛ · ХРАНИТ" color={theme.accent} opacity={enter} width={230} height={245} />
+        <MailServerCard x={540} y={480} label="СЕРВЕР 2" detail="ХРАНИТ · ПЕРЕДАЁТ" color={theme.accent2} opacity={enter} width={230} height={245} />
+        <MailServerCard x={915} y={480} label="СЕРВЕР 3" detail="ПОЛУЧАЕТ" color={theme.success} opacity={enter} width={230} height={245} />
+        <div style={{ position: "absolute", left: 280, top: 625, width: 150, height: 4, borderTop: `3px dashed ${theme.accent}99`, opacity: enter }} />
+        <div style={{ position: "absolute", left: 655, top: 625, width: 150, height: 4, borderTop: `3px dashed ${theme.accent2}99`, opacity: enter }} />
+        <MailEnvelope x={285 + 65 * firstP} y={625} opacity={firstOpacity} color={theme.accent} />
+        <MailEnvelope x={655 + 65 * secondP} y={625} opacity={secondOpacity} color={theme.success} />
+        <MailBadge text="КАЖДЫЙ УЗЕЛ: ПРИНЯЛ · СОХРАНИЛ · ПЕРЕДАЛ" tone={theme.accent2} opacity={enter} />
+        <PulseRing x={915} y={625} triggerFrame={impactLocal} tone="success" size={220} />
+      </>
+    );
+  }
+
+  // mailbox
+  const dropP = smooth(clamp01((local - 8) / 34));
+  const envelopeOpacity = enter * (1 - smooth(clamp01((dropP - 0.72) / 0.2)));
+  return (
+    <>
+      <MailHeader icon="inbox" text={mailboxTitle[phase]} color={theme.success} opacity={enter} />
+      <MailServerCard x={210} y={465} label="СЕРВЕР ПОЛУЧАТЕЛЯ" detail="ПРИНЯЛ ПИСЬМО" color={theme.accent2} opacity={enter} width={320} height={320} />
+      <div
+        style={{
+          position: "absolute",
+          left: 555,
+          top: 420,
+          width: 410,
+          height: 535,
+          borderRadius: 28,
+          background: `${theme.panel}E8`,
+          border: `3px solid ${theme.success}99`,
+          boxShadow: `0 0 46px ${theme.success}26`,
+          opacity: enter,
+        }}
+      >
+        <div style={{ position: "absolute", left: 28, top: 24, display: "flex", alignItems: "center", gap: 10, ...mailMono, fontSize: 23, color: theme.success }}>
+          <IconGlyph name="inbox" size={31} color={theme.success} strokeWidth={1.8} />
+          ПОЧТОВЫЙ ЯЩИК
+        </div>
+        {[0, 1, 2].map((i) => (
+          <div
+            key={i}
+            style={{
+              position: "absolute",
+              left: 28,
+              right: 28,
+              top: 105 + i * 116,
+              height: 82,
+              borderRadius: 16,
+              background: `${i === 1 ? theme.success : theme.subtext}12`,
+              border: `2px solid ${i === 1 ? theme.success : theme.subtext}55`,
+              display: "flex",
+              alignItems: "center",
+              padding: "0 16px",
+              color: i === 1 ? theme.text : theme.subtext,
+              ...mailMono,
+              fontSize: 19,
+            }}
+          >
+            <span>{i === 1 ? "НОВОЕ ПИСЬМО" : `СООБЩЕНИЕ № ${i + 1}`}</span>
+          </div>
+        ))}
+      </div>
+      <div style={{ position: "absolute", left: 365, top: 625, width: 210, height: 4, borderTop: `3px dashed ${theme.success}99`, opacity: enter }} />
+      <MailEnvelope x={370 + 380 * dropP} y={625} opacity={envelopeOpacity} color={theme.success} />
+      <MailBadge text="ПИСЬМО ЖДЁТ ЧТЕНИЯ" tone={theme.success} opacity={enter} />
+      <PulseRing x={760} y={625} triggerFrame={impactLocal} tone="success" size={240} />
+    </>
+  );
+};
+
 /* ──────────────────────────── сцена-сториборд ──────────────────────────── */
 
 /** Каждая фраза диктора — свой бит с движением камеры между битами. */
@@ -10860,6 +11551,8 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     "attention-cost": { scale: 0.9, y: -20 },
     "wallet-copy": { scale: 0.92, y: -20 },
     "multi-frame-stack": { scale: 0.9, y: -20 },
+    "mail-queue": { scale: 0.9, y: -20 },
+    "mail-server-handoff": { scale: 0.9, y: -20 },
   };
   const cur = cams[slot.beat.visual] ?? { scale: 1, y: 0 };
   const prev = idx > 0 ? cams[slots[idx - 1].beat.visual] ?? cur : cur;
@@ -11745,6 +12438,24 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             fps={fps}
             impactLocal={impactLocal}
             phase={(slot.beat.params?.phase as MultiFrameStackPhase | undefined) ?? "capture"}
+          />
+        );
+      case "mail-queue":
+        return (
+          <MailQueueVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as MailQueuePhase | undefined) ?? "queued"}
+          />
+        );
+      case "mail-server-handoff":
+        return (
+          <MailServerHandoffVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as MailServerHandoffPhase | undefined) ?? "accept"}
           />
         );
       default:

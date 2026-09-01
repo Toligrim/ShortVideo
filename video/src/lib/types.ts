@@ -163,7 +163,9 @@ export interface StoryBeat {
   | "context-window"
   | "attention-cost"
   | "wallet-copy"
-  | "multi-frame-stack";
+  | "multi-frame-stack"
+  | "mail-queue"
+  | "mail-server-handoff";
   onWord?: string; // бит начинается на этом слове реплики
   params?: Record<string, unknown>;
 }
