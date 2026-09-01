@@ -11144,8 +11144,20 @@ export const MailQueueVisual: React.FC<{
     const cycleP = smooth(clamp01(((local - impactLocal) % 72) / 50));
     const routeP = local < impactLocal ? 0 : cycleP;
     const returning = routeP > 0.62;
-    const mailX = returning ? 650 - ((routeP - 0.62) / 0.38) * 315 : 335 + (routeP / 0.62) * 315;
-    const mailY = returning ? 765 : 645;
+    // Обе дорожки проходят ниже строк очереди; вертикальный участок справа
+    // визуально связывает их с временно недоступным сервером.
+    const retryPath = {
+      left: 480,
+      right: 745,
+      startX: 500,
+      endX: 650,
+      outboundY: 815,
+      returnY: 1040,
+    };
+    const mailX = returning
+      ? retryPath.endX - ((routeP - 0.62) / 0.38) * (retryPath.endX - retryPath.startX)
+      : retryPath.startX + (routeP / 0.62) * (retryPath.endX - retryPath.startX);
+    const mailY = returning ? retryPath.returnY : retryPath.outboundY;
     const attempt = 1 + Math.floor(Math.max(0, local - impactLocal) / 72) % 3;
     return (
       <>
@@ -11174,9 +11186,9 @@ export const MailQueueVisual: React.FC<{
         <div
           style={{
             position: "absolute",
-            left: 330,
-            top: 645,
-            width: 415,
+            left: retryPath.left,
+            top: retryPath.outboundY,
+            width: retryPath.right - retryPath.left,
             height: 4,
             borderTop: `3px dashed ${theme.accent}99`,
             opacity: enter,
@@ -11185,15 +11197,37 @@ export const MailQueueVisual: React.FC<{
         <div
           style={{
             position: "absolute",
-            left: 330,
-            top: 765,
-            width: 415,
+            left: retryPath.left,
+            top: retryPath.returnY,
+            width: retryPath.right - retryPath.left,
             height: 4,
             borderTop: `3px dashed ${theme.success}99`,
             opacity: enter,
           }}
         />
-        <div style={{ position: "absolute", left: 565, top: 748, transform: "translateX(-50%)", opacity: enter }}>
+        <div
+          style={{
+            position: "absolute",
+            left: retryPath.right - 3,
+            top: 740,
+            width: 3,
+            height: retryPath.outboundY - 740,
+            borderLeft: `3px dashed ${theme.accent}99`,
+            opacity: enter,
+          }}
+        />
+        <div
+          style={{
+            position: "absolute",
+            left: retryPath.right - 3,
+            top: retryPath.outboundY,
+            width: 3,
+            height: retryPath.returnY - retryPath.outboundY,
+            borderLeft: `3px dashed ${theme.success}99`,
+            opacity: enter,
+          }}
+        />
+        <div style={{ position: "absolute", left: 615, top: 900, transform: "translateX(-50%)", opacity: enter }}>
           <IconGlyph name="rotate-cw" size={40} color={theme.success} strokeWidth={1.8} />
           <div style={{ ...mailMono, color: theme.success, fontSize: 17, marginTop: 2 }}>ПОВТОР</div>
         </div>
