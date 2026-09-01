@@ -1,0 +1,57 @@
+{
+  "id": "auto-20260901-093424",
+  "title": "Почему телефон выключается на морозе, хотя заряд ещё есть?",
+  "scenes": [
+    {
+      "type": "story",
+      "narration": "Телефон показывает заряд, ты достаёшь его на морозе — и он внезапно гаснет. Подозреваемый найден? Не батарея без заряда, а холод, который мешает ей отдать ток.",
+      "beats": [
+        { "visual": "cold-battery-voltage-drop", "params": { "phase": "cold" } },
+        { "visual": "cold-battery-voltage-drop", "onWord": "морозе", "params": { "phase": "cold" } },
+        { "visual": "cold-battery-voltage-drop", "onWord": "гаснет", "params": { "phase": "shutdown" } },
+        { "visual": "cold-battery-voltage-drop", "onWord": "холод", "params": { "phase": "resistance" } }
+      ]
+    },
+    {
+      "type": "story",
+      "narration": "Проверяем улику: в литий-ионной батарее ионы двигаются медленнее. Батарее труднее быстро отдать ток, когда телефон резко просит больше мощности для нормальной работы.",
+      "beats": [
+        { "visual": "cold-battery-voltage-drop", "params": { "phase": "cold" } },
+        { "visual": "cold-battery-voltage-drop", "onWord": "ионы", "params": { "phase": "resistance" } },
+        { "visual": "cold-battery-voltage-drop", "onWord": "отдать", "params": { "phase": "resistance" } },
+        { "visual": "cold-battery-voltage-drop", "onWord": "мощности", "params": { "phase": "drop" } }
+      ]
+    },
+    {
+      "type": "story",
+      "narration": "Растёт внутреннее сопротивление — это как узкая труба: насос толкает, но поток на выходе слабее. Поэтому под нагрузкой напряжение проседает сильнее.",
+      "beats": [
+        { "visual": "cold-battery-voltage-drop", "params": { "phase": "resistance" } },
+        { "visual": "cold-battery-voltage-drop", "onWord": "узкая", "params": { "phase": "resistance" } },
+        { "visual": "cold-battery-voltage-drop", "onWord": "напряжение", "params": { "phase": "drop" } }
+      ]
+    },
+    {
+      "type": "story",
+      "narration": "Контроллер питания видит: напряжение опустилось ниже минимума, нужного электронике. Защита выключает телефон, чтобы сохранить компоненты, хотя химическая энергия внутри ещё не исчерпана.",
+      "beats": [
+        { "visual": "cold-battery-voltage-drop", "params": { "phase": "drop" } },
+        { "visual": "cold-battery-voltage-drop", "onWord": "ниже", "params": { "phase": "shutdown" } },
+        { "visual": "cold-battery-voltage-drop", "onWord": "выключает", "params": { "phase": "shutdown" } },
+        { "visual": "cold-battery-voltage-drop", "onWord": "энергия", "params": { "phase": "shutdown" } }
+      ]
+    },
+    {
+      "type": "outro",
+      "title": "РАЗГАДКА",
+      "bullets": [
+        "Мороз замедляет ионы",
+        "Сопротивление растёт",
+        "Напряжение проседает",
+        "Защита выключает телефон"
+      ],
+      "cta": "Подпишись: дальше — скрытый сбой",
+      "narration": "Итак: мороз замедляет ионы, повышает внутреннее сопротивление, нагрузка роняет напряжение — телефон спасается выключением. В следующем ролике разберём другой скрытый сбой, а за такими механизмами подписывайся."
+    }
+  ]
+}
