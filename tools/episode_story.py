@@ -133,6 +133,81 @@ def shell_of(tool_input: str | None) -> str | None:
     return tool_input.strip().splitlines()[0] if tool_input.strip() else None
 
 
+def plan_of(tool_input: str | None) -> str | None:
+    """Достаёт explanation из tools.update_plan({explanation:"...", ...}).
+
+    Планы-вслух тонут в общем списке команд как обрезанная JS-строка вида
+    `const r = await tools.update_plan({explanation:"..."`, хотя explanation —
+    осмысленный текст, того же сорта, что agent_message. Для --detail их
+    стоит показывать отдельно, целиком, а не как «команду».
+    """
+    if not tool_input or "update_plan" not in tool_input:
+        return None
+    m = re.search(r'explanation\s*:\s*"((?:[^"\\]|\\.)*)"', tool_input)
+    if not m:
+        return None
+    try:
+        return json.loads(f'"{m.group(1)}"')
+    except ValueError:
+        return m.group(1)
+
+
+def clean_output(raw: str) -> str:
+    """output_head часто хранит не голый текст, а сериализованный список
+    content-блоков MCP (`[{"type": "input_text", "text": "..."}]`) — читать
+    это как JSON неудобнее, чем сам текст внутри. Достаём text-поля; если
+    структура другая — отдаём как есть, не выдумывая формат."""
+    raw = raw.strip()
+    if not raw or raw[0] not in "[{":
+        return raw
+    try:
+        parsed = json.loads(raw)
+    except ValueError:
+        return raw
+    if isinstance(parsed, list):
+        texts = [str(b.get("text")) for b in parsed
+                 if isinstance(b, dict) and isinstance(b.get("text"), str)]
+        if texts:
+            return "\n".join(texts)
+    elif isinstance(parsed, dict) and isinstance(parsed.get("text"), str):
+        return parsed["text"]
+    return raw
+
+
+def detailed_actions(actions: list[dict[str, Any]], *, char_limit: int = 4000,
+                     output_limit: int = 800) -> list[str]:
+    """Полная хронология для --detail: команда целиком (не только первая
+    строка), сразу под ней — что она вернула, планы-вслух — отдельной
+    строкой своим текстом, а не как обрезанная JS-обёртка.
+
+    Ограничен потолок, который не убрать: сырые размышления модели между
+    действиями (kind="reasoning") зашифрованы Codex и недоступны ни в каком
+    режиме — см. предупреждение в part_agents().
+    """
+    results: dict[str, str] = {}
+    for act in actions:
+        if act.get("kind") == "tool_result" and act.get("call_id"):
+            results[str(act["call_id"])] = str(act.get("output_head") or "")
+
+    lines: list[str] = []
+    for act in actions:
+        if act.get("kind") != "tool_call":
+            continue
+        plan = plan_of(act.get("input"))
+        if plan is not None:
+            lines.append(f"{hhmm(act.get('ts'))}  [план] {plan[:char_limit]}")
+            continue
+        cmd = shell_of(act.get("input"))
+        if not cmd:
+            continue
+        lines.append(f"{hhmm(act.get('ts'))}  {cmd.strip()[:char_limit]}")
+        raw_out = results.get(str(act.get("call_id") or ""), "")
+        out = clean_output(raw_out).strip() if raw_out else ""
+        if out:
+            lines.append(f"          → {out[:output_limit]}")
+    return lines
+
+
 def summarize_commands(actions: list[dict[str, Any]], limit: int | None = 12,
                        char_limit: int = 150) -> list[str]:
     """Короткая выжимка того, что делегат реально запускал.
@@ -314,11 +389,14 @@ class RunStory:
                     out.append(f"_(и ещё {len(msgs) - 6} реплик — смотри `--detail`)_")
                     out.append("")
 
-            cmd_limit = None if self.detail else 12
-            cmd_char_limit = 300 if self.detail else 150
-            cmds = summarize_commands(actions, limit=cmd_limit, char_limit=cmd_char_limit)
+            if self.detail:
+                cmds = detailed_actions(actions)
+                label = "Что запускала (целиком, с результатами и планами вслух):"
+            else:
+                cmds = summarize_commands(actions, limit=12, char_limit=150)
+                label = "Что запускала:"
             if cmds:
-                out.append("Что запускала:")
+                out.append(label)
                 out.append("")
                 out.append("```")
                 out.extend(cmds)
@@ -560,8 +638,10 @@ def build_parser() -> argparse.ArgumentParser:
     r.add_argument("--brief", action="store_true",
                    help="напечатать бриф для LLM вместо готового рассказа")
     r.add_argument("--detail", action="store_true",
-                   help="все реплики и все команды каждой сессии, не только "
-                        "первые 6 реплик / 12 команд с обрезкой середины")
+                   help="все реплики и все команды каждой сессии целиком "
+                        "(не только первая строка), с выводом каждой команды "
+                        "и планами-вслух отдельно — не только первые 6 реплик "
+                        "/ 12 команд с обрезкой середины")
 
     s = sub.add_parser("slug", help="рассказ по всем прогонам эпизода")
     s.add_argument("--slug", required=True)

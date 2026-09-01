@@ -136,6 +136,29 @@ def session_meta(path: Path) -> dict[str, Any] | None:
     return None
 
 
+def plain_output_text(out: str) -> str:
+    """MCP-инструменты часто отдают output не голым текстом, а сериализованным
+    списком content-блоков (`[{"type": "input_text", "text": "..."}]`). Если
+    достать текст до обрезки в 2000 символов, а не после — output_head не
+    превращается в обрубок JSON с незакрытыми скобками. Не парсится —
+    отдаём как есть, это не единственный формат, который тут встречается."""
+    stripped = out.strip()
+    if not stripped or stripped[0] not in "[{":
+        return out
+    try:
+        parsed = json.loads(stripped)
+    except ValueError:
+        return out
+    if isinstance(parsed, list):
+        texts = [str(b.get("text")) for b in parsed
+                 if isinstance(b, dict) and isinstance(b.get("text"), str)]
+        if texts:
+            return "\n".join(texts)
+    elif isinstance(parsed, dict) and isinstance(parsed.get("text"), str):
+        return parsed["text"]
+    return out
+
+
 def normalize(path: Path) -> list[dict[str, Any]]:
     """rollout-*.jsonl → плоский список действий в едином формате."""
     actions: list[dict[str, Any]] = []
@@ -167,7 +190,7 @@ def normalize(path: Path) -> list[dict[str, Any]]:
             actions.append({
                 "ts": ts, "kind": "tool_result",
                 "call_id": payload.get("call_id"),
-                "output_head": out[:2000],
+                "output_head": plain_output_text(out)[:2000],
                 "output_bytes": len(out),
             })
         elif rtype == "event_msg" and ptype == "agent_message":

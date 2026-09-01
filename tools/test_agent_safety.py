@@ -403,6 +403,51 @@ def test_detail_flag_shows_everything_default_truncates(sandbox):
     assert "и ещё" not in detailed
 
 
+def test_detail_flag_shows_full_commands_outputs_and_plans(sandbox):
+    """Запрос оператора 2026-09-01: --detail был реализован, но у него ещё три
+    потолка — многострочные команды обрезались до первой строки, вывод команд
+    вообще не показывался ни в каком режиме, update_plan тонул в списке команд
+    как обрезанная JS-строка вместо осмысленного текста. Все три убраны в
+    detailed_actions()/plan_of() — этот тест их фиксирует."""
+    import episode_story
+    importlib.reload(episode_story)
+    run_dir = sandbox["run_dir"]
+    agents_dir = run_dir / "agents" / "s1"
+    agents_dir.mkdir(parents=True)
+    (run_dir / "agents" / "index.json").write_text(json.dumps({"sessions": [
+        {"session_id": "s1", "is_delegate": True, "source": "mcp",
+         "cwd": "/x", "started_at": "2026-09-01T08:00:00Z",
+         "actions_total": 3, "tool_calls": 2, "agent_messages": 0,
+         "reasoning_items": 0},
+    ]}))
+    actions = [
+        {"kind": "tool_call", "ts": "2026-09-01T08:00:00Z", "call_id": "c1",
+         "input": 'await tools.exec_command({cmd:"printf line-one\\nline-two\\n; git status", workdir:"."})'},
+        {"kind": "tool_result", "call_id": "c1",
+         "output_head": "line-one\nline-two\nOn branch master, clean"},
+        {"kind": "tool_call", "ts": "2026-09-01T08:01:00Z", "call_id": "c2",
+         "input": 'await tools.update_plan({explanation:"Сначала собрать данные, потом обработать их", plan:[]})'},
+    ]
+    (agents_dir / "actions.jsonl").write_text(
+        "\n".join(json.dumps(a, ensure_ascii=False) for a in actions) + "\n")
+
+    plain = episode_story.RunStory(run_dir, detail=False).render()
+    detailed = episode_story.RunStory(run_dir, detail=True).render()
+
+    # По умолчанию — только первая строка команды, вывод не показан, план
+    # тонет в общем списке как сырая JS-строка, а не осмысленный текст.
+    assert "printf line-one" in plain
+    assert "line-two" not in plain
+    assert "On branch master" not in plain
+    assert "[план]" not in plain
+
+    # В --detail: команда целиком, её вывод, и план вслух отдельной строкой.
+    assert "printf line-one" in detailed and "line-two" in detailed
+    assert "git status" in detailed
+    assert "On branch master, clean" in detailed
+    assert "[план] Сначала собрать данные, потом обработать их" in detailed
+
+
 # ---------------------------------------------------------------------------
 # Изоляция в worktree
 # ---------------------------------------------------------------------------
