@@ -716,16 +716,44 @@ def cmd_open(args: argparse.Namespace) -> int:
             return 2
         identity = _claim_identity(claim)
 
-    with AllocLock():
-        wt.parent.mkdir(parents=True, exist_ok=True)
-        # --detach: делегату не нужна именованная ветка, а detached HEAD
-        # исключает случайный захват ветки, на которой сидит основное дерево.
-        git(["worktree", "add", "--detach", str(wt), base])
-        (wt / ".delegate-base").write_text(base, encoding="utf-8")
-        _identity_marker_path(wt).write_text(
-            json.dumps(identity, ensure_ascii=False, sort_keys=True),
-            encoding="utf-8",
-        )
+    try:
+        with AllocLock():
+            wt.parent.mkdir(parents=True, exist_ok=True)
+            # --detach: делегату не нужна именованная ветка, а detached HEAD
+            # исключает случайный захват ветки, на которой сидит основное дерево.
+            git(["worktree", "add", "--detach", str(wt), base])
+            (wt / ".delegate-base").write_text(base, encoding="utf-8")
+            _identity_marker_path(wt).write_text(
+                json.dumps(identity, ensure_ascii=False, sort_keys=True),
+                encoding="utf-8",
+            )
+    except (OSError, RuntimeError):
+        # Claim first, worktree second: a failed git allocation must consume
+        # an explicit infrastructure attempt immediately, not remain
+        # ``running`` until the lease expires.  Do not attempt force cleanup;
+        # a partially-created path is evidence for the operator to inspect.
+        release_rc = agent_log.main([
+            "delegate-release", "--agent-id", agent_id, "--status", "failed",
+            "--result-class", "infrastructure_failure",
+            "--error-code", "worktree_add_failed",
+            "--note", "не удалось создать worktree",
+        ])
+        if release_rc != 0:
+            return release_rc
+        pipeline_log.append_event(rd, {
+            "kind": "anomaly", "anomaly_kind": "worktree_add_failed",
+            "actor": agent_id, "severity": "error",
+            "detail": "worktree не создан после выдачи lease",
+            "error_code": "worktree_add_failed",
+        })
+        print(json.dumps({
+            "opened": False,
+            "error": "worktree_add_failed",
+            "error_code": "worktree_add_failed",
+            "worktree": str(wt),
+            "claim_released": True,
+        }, ensure_ascii=False, indent=1))
+        return 2
 
     pipeline_log.append_event(rd, {
         "kind": "worktree_open", "actor": agent_id, "task_id": args.task_id,
@@ -1001,18 +1029,44 @@ def cmd_close(args: argparse.Namespace) -> int:
         return 0
 
 
-def _remove_worktree(wt: Path) -> bool:
+def _remove_worktree(wt: Path, *, allow_force_cleanup: bool = False) -> bool:
     """Убрать worktree делегата.
 
     `git worktree remove` без --force намеренно: если внутри осталось что-то
     незапланированное, каталог должен пережить уборку и дождаться человека.
-    Потерять чужие файлы молча — это ровно то, чем кончился инцидент.
+    Потерять чужие файлы молча — это ровно то, чем кончился инцидент. Перед
+    обычным удалением успешного close убирается только служебный marker,
+    созданный `open`. Force cleanup — отдельный GC-only режим, который
+    разрешается только после положительного доказательства полного успешного
+    close.
     """
     with AllocLock():
+        marker = wt / ".delegate-base"
+        try:
+            marker_info = marker.lstat()
+        except FileNotFoundError:
+            marker_info = None
+        except OSError:
+            return False
+        if marker_info is not None:
+            # Never follow or remove a replacement symlink/directory under a
+            # service filename.  Such a path is not disposable metadata.
+            if not stat.S_ISREG(marker_info.st_mode):
+                return False
+            try:
+                marker.unlink()
+            except OSError:
+                return False
         try:
             git(["worktree", "remove", str(wt)])
             return True
         except RuntimeError:
+            if allow_force_cleanup:
+                try:
+                    git(["worktree", "remove", "--force", str(wt)])
+                    return wt.exists() is False
+                except RuntimeError:
+                    pass
             git(["worktree", "prune"], check=False)
             return wt.exists() is False
 
@@ -1058,37 +1112,94 @@ def cmd_gc(args: argparse.Namespace) -> int:
     if not WORKTREES_ROOT.is_dir():
         print("каталога worktree нет")
         return 0
+
+    # Read every registry before removing anything.  A missing or invalid
+    # registry is not evidence that its worktrees are disposable; it also
+    # aborts removals from otherwise valid runs to avoid a partial GC pass.
+    worktrees_by_run: dict[str, list[Path]] = {}
+    claims_by_run: dict[str, dict[str, Any]] = {}
+    registry_invalid = False
     for run_path in sorted(WORKTREES_ROOT.iterdir()):
         if not run_path.is_dir():
             continue
+        worktrees = sorted(wt for wt in run_path.iterdir() if wt.is_dir())
+        worktrees_by_run[run_path.name] = worktrees
         reg_path = pipeline_log.RUNS / run_path.name / "delegations.json"
-        registry: dict[str, Any] = {}
         try:
-            registry = json.loads(reg_path.read_text(encoding="utf-8")).get("claims", {})
-        except (OSError, ValueError):
-            registry = {}
-        for wt in sorted(run_path.iterdir()):
-            if not wt.is_dir():
-                continue
+            registry_exists = reg_path.is_file()
+        except OSError:
+            registry_exists = False
+        if not registry_exists:
+            registry_invalid = True
+            continue
+        try:
+            with agent_log.Registry(reg_path.parent) as reg:
+                claims_by_run[run_path.name] = dict(reg.claims)
+        except (agent_log.RegistryInvalidError, OSError):
+            registry_invalid = True
+
+    if registry_invalid:
+        kept = [str(wt) for worktrees in worktrees_by_run.values() for wt in worktrees]
+        print(json.dumps({
+            "removed": [], "kept": kept, "dry_run": bool(args.dry_run),
+            "error": agent_log.REGISTRY_INVALID_ERROR_CODE,
+            "error_code": agent_log.REGISTRY_INVALID_ERROR_CODE,
+        }, ensure_ascii=False, indent=1))
+        return 2
+
+    candidates: list[tuple[Path, bool]] = []
+    for run_name, worktrees in worktrees_by_run.items():
+        registry = claims_by_run[run_name]
+        for wt in worktrees:
             claim = registry.get(wt.name)
-            if isinstance(claim, dict) and agent_log.termination_unconfirmed(claim):
+            if not isinstance(claim, dict):
+                # Unknown/missing claims are explicitly kept.  GC needs
+                # positive lifecycle evidence, never absence of evidence.
+                kept.append(str(wt))
+                continue
+            if claim.get("agent_id") != wt.name:
+                kept.append(str(wt))
+                continue
+            if agent_log.termination_unconfirmed(claim):
                 # A timed-out actor may still mutate this worktree. Lease
                 # expiry is not a safe deletion signal, so quarantine wins.
                 kept.append(str(wt))
                 continue
-            terminal = claim is not None and claim.get("state") in agent_log.TERMINAL_STATES
-            expired = claim is not None and now >= claim.get("expires_at", 0)
-            unknown = claim is None
-            if not (terminal or expired or unknown):
+
+            removable = claim.get("state") in agent_log.TERMINAL_STATES
+            if not removable and claim.get("state") == "running":
+                try:
+                    expires_at = float(claim["expires_at"])
+                except (KeyError, TypeError, ValueError):
+                    expires_at = math.inf
+                removable = math.isfinite(expires_at) and now >= expires_at
+            if not removable:
+                # An unknown state or malformed expiry is ambiguous and must
+                # survive this pass.
                 kept.append(str(wt))
                 continue
-            if args.dry_run:
-                removed.append(str(wt))
-                continue
-            if _remove_worktree(wt):
-                removed.append(str(wt))
-            else:
-                kept.append(str(wt))
+            allow_force_cleanup = False
+            if (claim.get("state") == "ok"
+                    and claim.get("result_class") == "success"
+                    and re.fullmatch(
+                        r"влито путей: [0-9]+",
+                        str(claim.get("release_reason", "")),
+                    )):
+                registered = claim.get("worktree")
+                if isinstance(registered, str) and registered:
+                    try:
+                        allow_force_cleanup = Path(registered).resolve() == wt.resolve()
+                    except (OSError, RuntimeError):
+                        allow_force_cleanup = False
+            candidates.append((wt, allow_force_cleanup))
+
+    for wt, allow_force_cleanup in candidates:
+        if args.dry_run:
+            removed.append(str(wt))
+        elif _remove_worktree(wt, allow_force_cleanup=allow_force_cleanup):
+            removed.append(str(wt))
+        else:
+            kept.append(str(wt))
     print(json.dumps({"removed": removed, "kept": kept,
                       "dry_run": bool(args.dry_run)}, ensure_ascii=False, indent=1))
     return 0
@@ -1135,8 +1246,15 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    return {"open": cmd_open, "close": cmd_close, "abandon": cmd_abandon,
-            "list": cmd_list, "gc": cmd_gc}[args.cmd](args)
+    try:
+        return {"open": cmd_open, "close": cmd_close, "abandon": cmd_abandon,
+                "list": cmd_list, "gc": cmd_gc}[args.cmd](args)
+    except agent_log.RegistryInvalidError:
+        print(json.dumps({
+            "error": agent_log.REGISTRY_INVALID_ERROR_CODE,
+            "error_code": agent_log.REGISTRY_INVALID_ERROR_CODE,
+        }, ensure_ascii=False))
+        return 2
 
 
 if __name__ == "__main__":

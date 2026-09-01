@@ -50,6 +50,7 @@ from __future__ import annotations
 import argparse
 import fcntl
 import json
+import math
 import os
 import sys
 import time
@@ -71,6 +72,7 @@ DEFAULT_LEASE_SEC = 45 * 60
 
 REGISTRY_FILENAME = "delegations.json"
 REGISTRY_VERSION = 2
+REGISTRY_INVALID_ERROR_CODE = "delegation_registry_invalid"
 
 TERMINAL_STATES = {"ok", "failed", "abandoned", "denied"}
 
@@ -96,6 +98,7 @@ INFRASTRUCTURE_ERROR_CODES = {
     "codex_sandbox_unavailable",
     "mcp_transport_timeout",
     "delegate_startup_timeout",
+    "worktree_add_failed",
     "model_unavailable",
     "worktree_missing",
     "worktree_not_visible",
@@ -262,6 +265,15 @@ def now_epoch() -> float:
     return time.time()
 
 
+def _finite_number(value: Any) -> bool:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return False
+    try:
+        return math.isfinite(float(value))
+    except (OverflowError, ValueError):
+        return False
+
+
 def iso(ts: float) -> str:
     return datetime.fromtimestamp(ts, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.") + \
         f"{int((ts % 1) * 1000):03d}Z"
@@ -269,6 +281,12 @@ def iso(ts: float) -> str:
 
 def registry_path(run_dir: Path) -> Path:
     return run_dir / REGISTRY_FILENAME
+
+
+class RegistryInvalidError(RuntimeError):
+    """The registry cannot be trusted for a mutating operation."""
+
+    error_code = REGISTRY_INVALID_ERROR_CODE
 
 
 class Registry:
@@ -293,7 +311,13 @@ class Registry:
         self.run_dir.mkdir(parents=True, exist_ok=True)
         self._fd = os.open(self.lock_path, os.O_CREAT | os.O_RDWR, 0o600)
         fcntl.flock(self._fd, fcntl.LOCK_EX)
-        self.data = self._read()
+        try:
+            self.data = self._read()
+        except BaseException:
+            fcntl.flock(self._fd, fcntl.LOCK_UN)
+            os.close(self._fd)
+            self._fd = None
+            raise
         return self
 
     def __exit__(self, *exc: object) -> None:
@@ -305,17 +329,66 @@ class Registry:
     def _read(self) -> dict[str, Any]:
         try:
             data = json.loads(self.path.read_text(encoding="utf-8"))
-            if isinstance(data, dict) and "claims" in data:
-                return data
-        except (OSError, ValueError):
-            pass
-        return {"version": REGISTRY_VERSION, "claims": {}}
+        except FileNotFoundError:
+            # A missing file is the only state in which a mutating command may
+            # initialize a new empty registry.  A read race that leaves a
+            # file behind is treated as invalid below, never as empty.
+            if not self.path.exists() and not self.path.is_symlink():
+                return {"version": REGISTRY_VERSION, "claims": {}}
+            raise RegistryInvalidError from None
+        except (OSError, UnicodeError, ValueError):
+            raise RegistryInvalidError from None
+
+        self._validate_data(data)
+        return data
 
     def save(self) -> None:
+        # Do not turn an in-memory schema violation into a valid-looking
+        # replacement file.  Loaded registries have already passed this check;
+        # it also protects callers that mutate ``data`` directly in tests or
+        # maintenance code.
+        self._validate_data(self.data)
         self.data["version"] = REGISTRY_VERSION
         tmp = self.path.with_suffix(".tmp")
         tmp.write_text(json.dumps(self.data, ensure_ascii=False, indent=1), encoding="utf-8")
         os.replace(tmp, self.path)
+
+    @staticmethod
+    def _validate_data(data: dict[str, Any]) -> None:
+        if not isinstance(data, dict):
+            raise RegistryInvalidError
+        if type(data.get("version")) is not int or data["version"] != REGISTRY_VERSION:
+            raise RegistryInvalidError
+        claims = data.get("claims")
+        if not isinstance(claims, dict):
+            raise RegistryInvalidError
+        valid_states = TERMINAL_STATES | {"running", TERMINATION_UNCONFIRMED_STATE}
+        for agent_id, claim in claims.items():
+            if not isinstance(agent_id, str) or not isinstance(claim, dict):
+                raise RegistryInvalidError
+            if claim.get("agent_id") != agent_id:
+                raise RegistryInvalidError
+            if not isinstance(claim.get("task_id"), str):
+                raise RegistryInvalidError
+            if not isinstance(claim.get("role"), str):
+                raise RegistryInvalidError
+            attempt = claim.get("attempt")
+            if type(attempt) is not int or attempt < 1:
+                raise RegistryInvalidError
+            if not isinstance(claim.get("state"), str) \
+                    or claim.get("state") not in valid_states:
+                raise RegistryInvalidError
+            expires_at = claim.get("expires_at")
+            if not _finite_number(expires_at):
+                raise RegistryInvalidError
+            lease_sec = claim.get("lease_sec")
+            if not _finite_number(lease_sec) or lease_sec <= 0:
+                raise RegistryInvalidError
+            if "worktree" not in claim:
+                raise RegistryInvalidError
+            if claim.get("worktree") is not None \
+                    and not isinstance(claim.get("worktree"), str):
+                raise RegistryInvalidError
 
     @property
     def claims(self) -> dict[str, Any]:
@@ -550,8 +623,21 @@ def cmd_delegate_heartbeat(args: argparse.Namespace) -> int:
                 file=sys.stderr,
             )
             return 7
+        if not _claim_identity_matches(claim, args):
+            print(f"agent_log: lease identity для {args.agent_id!r} изменилась",
+                  file=sys.stderr)
+            return 5
+        expires_at = claim.get("expires_at")
+        if claim.get("state") != "running" or not _finite_number(expires_at) \
+                or now >= float(expires_at):
+            print(f"agent_log: lease для {args.agent_id!r} не активна", file=sys.stderr)
+            return 5
+        lease_sec = claim.get("lease_sec", DEFAULT_LEASE_SEC)
+        if not _finite_number(lease_sec) or lease_sec <= 0:
+            print(f"agent_log: lease для {args.agent_id!r} не активна", file=sys.stderr)
+            return 5
         claim["heartbeat_at"] = now
-        claim["expires_at"] = now + claim.get("lease_sec", DEFAULT_LEASE_SEC)
+        claim["expires_at"] = now + lease_sec
         if args.thread_id:
             claim["thread_id"] = args.thread_id
         reg.save()
@@ -993,6 +1079,9 @@ def build_parser() -> argparse.ArgumentParser:
     dh = sub.add_parser("delegate-heartbeat", help="продлить лизу живого делегата")
     dh.add_argument("--agent-id", required=True)
     dh.add_argument("--thread-id", default=None)
+    dh.add_argument("--task-id", default=None)
+    dh.add_argument("--role", default=None)
+    dh.add_argument("--attempt", type=int, default=None)
 
     dst = sub.add_parser("delegate-start", help="зафиксировать передачу задачи MCP-делегату")
     dst.add_argument("--agent-id", required=True)
@@ -1060,7 +1149,16 @@ def main(argv: list[str] | None = None) -> int:
         "action": cmd_action,
         "anomaly": cmd_anomaly,
     }
-    return handlers[args.cmd](args)
+    try:
+        return handlers[args.cmd](args)
+    except RegistryInvalidError:
+        # Keep the diagnostic stable and deliberately omit the parser/OS
+        # exception, which can contain registry contents or local paths.
+        print(json.dumps({
+            "error": REGISTRY_INVALID_ERROR_CODE,
+            "error_code": REGISTRY_INVALID_ERROR_CODE,
+        }, ensure_ascii=False))
+        return 2
 
 
 if __name__ == "__main__":
