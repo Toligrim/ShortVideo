@@ -252,6 +252,11 @@ def test_animation_director_policy_is_workspace_write():
     assert delegate_invoke.load_policy("animation-director").sandbox == "workspace-write"
 
 
+@pytest.mark.parametrize("role", ["scriptwriter", "animation-director", "critic"])
+def test_all_roles_use_raised_delegate_timeout(role):
+    assert delegate_invoke.load_policy(role).timeout_seconds == 1200
+
+
 def test_bridge_refuses_render_for_quarantined_claim(delegation, capsys):
     run_dir, prompt_file, claim = delegation
     prompt_file.write_text("safe", encoding="utf-8")

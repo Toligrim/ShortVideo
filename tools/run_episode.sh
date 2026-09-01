@@ -235,6 +235,17 @@ python3 tools/pipeline_log.py snapshot --label after
 STATUS="ok"
 RESULT_CLASS="success"
 ERROR_CODE=""
+if [[ $CODE -eq 0 ]]; then
+  if [[ ! -f "episodes/${SLUG}.json" ]]; then
+    STATUS="failed"
+    RESULT_CLASS="semantic_failure"
+    ERROR_CODE="pipeline_incomplete"
+  elif ! python3 tools/validate.py "episodes/${SLUG}.json"; then
+    STATUS="failed"
+    RESULT_CLASS="semantic_failure"
+    ERROR_CODE="pipeline_incomplete"
+  fi
+fi
 if [[ $CODE -ne 0 ]]; then
   STATUS="failed"
   RESULT_CLASS="semantic_failure"

@@ -1,7 +1,7 @@
 {
   "version": 1,
   "approval_policy": "never",
-  "timeout_seconds": 300,
+  "timeout_seconds": 1200,
   "max_infrastructure_attempts": 3,
   "infrastructure_circuit_repeat": 2,
   "roles": {
