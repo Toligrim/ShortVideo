@@ -1,0 +1,64 @@
+{
+  "id": "auto-20260901-050001",
+  "title": "Почему письмо приходит, даже если человек был без интернета?",
+  "scenes": [
+    {
+      "type": "story",
+      "narration": "Ты отправил письмо человеку в самолёте: интернета нет, телефон выключен, а после посадки оно уже ждёт. Оно летело за ним?",
+      "beats": [
+        { "visual": "mail-server-handoff", "onWord": "отправил", "params": { "phase": "accept" } },
+        { "visual": "mail-queue", "onWord": "самолёте", "params": { "phase": "offline" } },
+        { "visual": "mail-queue", "onWord": "ждёт", "params": { "phase": "queued" } },
+        { "visual": "title-slam", "onWord": "летело", "params": { "text": "ЛЕТЕЛО ЗА НИМ?" } }
+      ]
+    },
+    {
+      "type": "story",
+      "narration": "Телефон отправителя говорит: «Я нажал отправить». Почтовый сервер отвечает: «Принято. Адресат без связи: я сохраню письмо и подожду».",
+      "beats": [
+        { "visual": "mail-server-handoff", "onWord": "отправить", "params": { "phase": "accept" } },
+        { "visual": "mail-queue", "onWord": "Принято", "params": { "phase": "queued" } },
+        { "visual": "mail-queue", "onWord": "связи", "params": { "phase": "offline" } },
+        { "visual": "mail-queue", "onWord": "подожду", "params": { "phase": "wait" } }
+      ]
+    },
+    {
+      "type": "story",
+      "narration": "Это механизм «сохрани́ и переда́й», или стор-энд-фо́рвард: сервер словно почтовое отделение: принимает конверт, хранит его и отправляет дальше.",
+      "beats": [
+        { "visual": "mail-queue", "onWord": "механизм", "params": { "phase": "queued" } },
+        { "visual": "mail-server-handoff", "onWord": "сервер", "params": { "phase": "relay" } },
+        { "visual": "mail-queue", "onWord": "хранит", "params": { "phase": "queued" } },
+        { "visual": "mail-server-handoff", "onWord": "отправляет", "params": { "phase": "relay" } }
+      ]
+    },
+    {
+      "type": "story",
+      "narration": "Внутри сервер {SMTP|эс эм ти пи} принимает сообщение, кладёт его в очередь, повторяет попытки доставки до приёма сервером получателя, а тот сохраняет письмо в почтовом ящике.",
+      "beats": [
+        { "visual": "mail-server-handoff", "onWord": "SMTP", "params": { "phase": "accept" } },
+        { "visual": "mail-queue", "onWord": "очередь", "params": { "phase": "queued" } },
+        { "visual": "mail-queue", "onWord": "повторяет", "params": { "phase": "retry" } },
+        { "visual": "mail-server-handoff", "onWord": "ящике", "params": { "phase": "mailbox" } }
+      ]
+    },
+    {
+      "type": "story",
+      "narration": "Вау-факт: после временного сбоя почта не сдаётся. Стандарт описывает две попытки за час, потом одну раз в два-три часа; ждать можно четыре-пять дней.",
+      "beats": [
+        { "visual": "mail-queue", "onWord": "сбоя", "params": { "phase": "retry" } },
+        { "visual": "mail-queue", "onWord": "почта", "params": { "phase": "retry" } },
+        { "visual": "mail-queue", "onWord": "две", "params": { "phase": "backoff" } },
+        { "visual": "mail-queue", "onWord": "одну", "params": { "phase": "backoff" } },
+        { "visual": "mail-queue", "onWord": "дней", "params": { "phase": "wait" } }
+      ]
+    },
+    {
+      "type": "outro",
+      "title": "Сначала сервер",
+      "bullets": ["Сервер хранит письмо", "Повторяет после сбоя", "Человек читает позже"],
+      "cta": "Дальше: почему письма возвращаются",
+      "narration": "Итак, письмо сначала приходит на сервер: он хранит его до ответа сервера получателя, а человек читает позже. Дальше: почему письма возвращаются. Подпишись."
+    }
+  ]
+}
