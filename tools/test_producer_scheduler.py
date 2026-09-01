@@ -278,15 +278,18 @@ class PromptTests(unittest.TestCase):
 
     def test_prompt_forbids_duplicate_delegation_and_stash_kill(self):
         """Incident 2026-08-31 (auto-20260831-164055): triple-delegated scriptwriter
-        raced on the same slug; the third delegate ran `git stash push
-        --include-untracked` on its own initiative, never restored it, then killed
-        the parent orchestrator process tree after hitting the race. The prompt must
-        explicitly forbid re-delegating the same stage on the same slug without
-        confirming the prior call is done/dead, and must explicitly forbid delegates
-        from destructive git commands and from killing arbitrary processes.
+        raced on the same slug; one delegate ran `git stash push
+        --include-untracked` on its own initiative, never restored it, another
+        killed the parent orchestrator process tree after hitting the race. The
+        prompt must route delegation through delegate_worktree.py (structural
+        prevention of the race, not just a text ban) and must still explicitly
+        forbid delegates from destructive git commands and killing arbitrary
+        processes as a second line of defense.
         """
         text = sched.build_prompt(ROOT, "auto-x", sched.PROMPT_TOPIC_LABEL)
-        self.assertIn("НЕ делегируй один и тот же шаг", text)
+        self.assertIn("delegate_worktree.py open", text)
+        self.assertIn("delegate_worktree.py close", text)
+        self.assertIn("Код выхода 4", text)
         self.assertIn("git stash", text)
         self.assertIn("--include-untracked", text)
         self.assertIn("kill", text)
