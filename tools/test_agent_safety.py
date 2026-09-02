@@ -532,3 +532,27 @@ def test_worktree_open_denied_when_task_already_claimed(sandbox, monkeypatch, ca
     wt2 = sandbox["root"].parent / "wt3" / sandbox["run_dir"].name / "w2"
     assert not wt2.exists(), \
         "при отказе реестра worktree не создаётся вовсе — ни каталога, ни мусора"
+
+
+def test_default_lease_exceeds_delegate_policy_timeout_for_every_role():
+    """Structural regression guard for the 02.09.2026 finding: a delegate
+    call legitimately runs up to delegate_policy.json's timeout_seconds
+    (currently 5400s/90min), but delegate_invoke.py's bridge never sends a
+    delegation_heartbeat while awaiting that single blocking request - so
+    DEFAULT_LEASE_SEC must stay comfortably above every role's configured
+    timeout, or a live, still-working delegate can hit a bare lease_expired
+    (which, per docs/agent-safety-architecture.md, grants the orchestrator
+    permission to redelegate without the termination_unconfirmed quarantine
+    protection mcp_transport_timeout gets) before it ever finishes.
+    """
+    import agent_log
+    import delegate_invoke
+
+    policy_raw = json.loads(delegate_invoke.POLICY_PATH.read_text(encoding="utf-8"))
+    for role in policy_raw["roles"]:
+        timeout = delegate_invoke.load_policy(role).timeout_seconds
+        assert agent_log.DEFAULT_LEASE_SEC > timeout, (
+            f"DEFAULT_LEASE_SEC ({agent_log.DEFAULT_LEASE_SEC}s) must exceed "
+            f"role {role!r}'s timeout_seconds ({timeout}s), or a legitimately "
+            f"long delegate call can outlive its own lease"
+        )
