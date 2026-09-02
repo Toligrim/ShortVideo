@@ -30,6 +30,17 @@ PROMPT_TOPIC_PLACEHOLDER = "тему выбирает агент (инструк
 PROGRESS_STATE_PREFIX = "telegram_progress:"
 PROGRESS_RETRY_SECONDS = 10
 PROGRESS_RATE_LIMIT_SECONDS = 3
+PROGRESS_RATE_LIMIT_BACKOFF_SECONDS = 30
+
+# tools/telegram_bot.py never forwards the HTTP status code into TelegramError
+# (only Telegram's own `description` text) — a raw "429" substring check
+# against that text never matches, since the digits belong to the HTTP status
+# line, not the description. Match Telegram's actual 429 description instead
+# ("Too Many Requests: retry after N"), case-insensitively, plus the literal
+# code as a defensive fallback in case a future transport change does surface it.
+def _is_rate_limited(exc: BaseException) -> bool:
+    text = str(exc).casefold()
+    return "too many requests" in text or "429" in text
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -333,6 +344,34 @@ def _attempt_label(delegate: dict[str, Any]) -> str:
     return f"попытка {_escaped(attempt)}" if attempt is not None else "попытка —"
 
 
+# Telegram's sendMessage/editMessageText hard cap (UTF-16 code units, but we
+# stay well clear of that distinction by budgeting in plain characters).
+TELEGRAM_TEXT_LIMIT = 4096
+_TRUNCATION_MARKER = "\n…"
+
+
+def _fit_to_telegram_limit(lines: list[str]) -> str:
+    """Join rendered lines, dropping whole trailing lines to stay under
+    Telegram's message-length limit. Cutting on line boundaries (rather than
+    a raw character slice) guarantees an HTML entity emitted by `_escaped()`
+    is never split in half."""
+    text = "\n".join(lines)
+    if len(text) <= TELEGRAM_TEXT_LIMIT:
+        return text
+    budget = TELEGRAM_TEXT_LIMIT - len(_TRUNCATION_MARKER)
+    kept: list[str] = []
+    length = 0
+    for line in lines:
+        added = len(line) + (1 if kept else 0)
+        if length + added > budget:
+            break
+        kept.append(line)
+        length += added
+    if not kept:
+        return text[:budget] + _TRUNCATION_MARKER
+    return "\n".join(kept) + _TRUNCATION_MARKER
+
+
 def render(state: ProgressState) -> str:
     """Render only allow-listed reducer fields as Telegram HTML."""
     lines = ["🎬 ShortVideo · production run"]
@@ -364,7 +403,7 @@ def render(state: ProgressState) -> str:
             lines.append(f"Статус: {_escaped(state.run_status)}")
         if state.last_event_ts is not None:
             lines.append(f"Последнее событие: {_format_timestamp(state.last_event_ts)}")
-        return "\n".join(lines)
+        return _fit_to_telegram_limit(lines)
 
     lines.extend(
         [
@@ -423,7 +462,7 @@ def render(state: ProgressState) -> str:
 
     if state.last_event_ts is not None:
         lines.append(f"Последнее событие: {_format_timestamp(state.last_event_ts)}")
-    return "\n".join(lines)
+    return _fit_to_telegram_limit(lines)
 
 
 def _parse_datetime(value: Any) -> datetime | None:
@@ -520,7 +559,7 @@ class ProgressCardSync:
             if isinstance(exc, TelegramError) and "message is not modified" in str(exc).casefold():
                 message_id = old_message_id
             else:
-                backoff = 30 if "429" in str(exc) else PROGRESS_RETRY_SECONDS
+                backoff = PROGRESS_RATE_LIMIT_BACKOFF_SECONDS if _is_rate_limited(exc) else PROGRESS_RETRY_SECONDS
                 retry_state = {
                     "run_id": run_id,
                     "slug": state.slug,

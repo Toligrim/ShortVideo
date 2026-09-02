@@ -403,6 +403,47 @@ class ProgressCardTests(unittest.TestCase):
         self.assertEqual(len(self.api.edits), 2)
         self.assertEqual(self.api.edits[-1]["message_id"], old_state["message_id"])
 
+    def test_realistic_429_description_gets_rate_limit_backoff_not_generic_backoff(self):
+        # tools/telegram_bot.py never forwards the HTTP status code, only
+        # Telegram's own description text, and a genuine 429 response reads
+        # like "Too Many Requests: retry after 5" — no literal "429" digits
+        # anywhere in it. A detector keyed only on the substring "429" never
+        # matches this real shape and silently always falls back to the
+        # generic 10s backoff instead of the intended 30s.
+        self.write_events([self.run_start()])
+        self.sync()
+        self.write_events([self.run_start(), self.event("stage_start", 2, stage="critic")])
+        self.clock.advance(4)
+        self.api.next_edit_error = TelegramError("Telegram API: Too Many Requests: retry after 5")
+
+        self.sync()
+
+        calls_after_failure = len(self.api.calls)
+        self.clock.advance(10)
+        self.sync()
+        self.assertEqual(
+            len(self.api.calls), calls_after_failure,
+            "10s generic backoff must not be enough to retry a real 429",
+        )
+        self.clock.advance(20)
+        self.sync()
+        self.assertEqual(len(self.api.edits), 2)
+
+    def test_long_card_is_truncated_to_telegram_message_limit(self):
+        events = [self.run_start()]
+        # Enough completed stages to push the rendered card past Telegram's
+        # 4096-character sendMessage/editMessageText limit.
+        for i in range(400):
+            events.append(self.event("stage_start", 2 + 2 * i, stage="critic"))
+            events.append(self.event("stage_end", 3 + 2 * i, stage="critic", status="ok"))
+        self.write_events(events)
+
+        self.sync()
+
+        sent_text = self.api.sends[0]["text"]
+        self.assertLessEqual(len(sent_text), 4096)
+        self.assertTrue(sent_text.endswith("…"))
+
     def test_renderer_never_exposes_forbidden_event_fields(self):
         text = render(
             reduce_events(
