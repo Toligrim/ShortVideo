@@ -268,8 +268,13 @@ class ProgressCardTests(unittest.TestCase):
             )
         )
 
-        self.assertIn("☣️", quarantined)
-        self.assertNotIn("☣️", confirmed)
+        # The active quarantine banner (current-state) must disappear once
+        # confirmed - but the chronological trace legitimately keeps a
+        # historical record that it happened, so this checks the specific
+        # banner sentence, not "no ☣️ emoji anywhere in the whole card"
+        # (which would also match a correct, intentional trace entry).
+        self.assertIn("Termination не подтверждён", quarantined)
+        self.assertNotIn("Termination не подтверждён", confirmed)
 
     def test_circuit_breaker_denial_is_rendered(self):
         text = render(
@@ -444,6 +449,50 @@ class ProgressCardTests(unittest.TestCase):
         self.assertLessEqual(len(sent_text), 4096)
         self.assertTrue(sent_text.endswith("…"))
 
+    def test_timeline_shows_ordered_significant_events_with_times(self):
+        text = render(
+            reduce_events(
+                self.run_id,
+                [
+                    self.run_start(),
+                    self.event(
+                        "delegate_requested", 2,
+                        actor="scriptwriter-abc12345", task_id="scriptwriter:x",
+                        role="scriptwriter", infrastructure_attempt=1,
+                    ),
+                    self.event(
+                        "delegate_result_classified", 3,
+                        actor="scriptwriter-abc12345", task_id="scriptwriter:x",
+                        role="scriptwriter", result_class="success",
+                    ),
+                ],
+            )
+        )
+        self.assertIn("🧾 Ход событий:", text)
+        # Chronological (oldest first): start, then request, then outcome.
+        start_i = text.index("Старт прогона")
+        req_i = text.index("запрошен")
+        ok_i = text.index("Сценарист: успех")
+        self.assertLess(start_i, req_i)
+        self.assertLess(req_i, ok_i)
+        self.assertIn("03:00:01", text)  # run_start's ts, converted to MSK
+
+    def test_timeline_caps_to_recent_entries_on_a_long_run(self):
+        events = [self.run_start()]
+        for i in range(20):
+            events.append(
+                self.event(
+                    "verdict", 2 + i,
+                    round=i, verdict="revisions", issues=i,
+                )
+            )
+        text = render(reduce_events(self.run_id, events))
+        # 1 (run_start) + 20 verdicts = 21 timeline-worthy events, capped to
+        # TIMELINE_VISIBLE_ENTRIES with an explicit "N more" note - not an
+        # unbounded, ever-growing wall of text.
+        self.assertIn("более ранних событий", text)
+        self.assertLessEqual(len(text), 4096)
+
     def test_current_stage_falls_back_to_delegate_role_when_stage_start_missing(self):
         # This pipeline's own stage_start/stage_end telemetry is emitted
         # inconsistently (many real runs have none at all) — without a
@@ -491,6 +540,19 @@ class ProgressCardTests(unittest.TestCase):
                         worktree_path="/home/toligrim/private-worktree",
                         reason="SECRET_FREE_FORM_REASON",
                     ),
+                    # delegation_denied also has a free-form "reason" in real
+                    # telemetry - the timeline label must key off the safe
+                    # "detail" enum value only, never echo "reason" itself.
+                    self.event(
+                        "delegation_denied",
+                        3,
+                        actor="worker-abc",
+                        task_id="task-1",
+                        role="critic",
+                        detail="infrastructure_circuit_open",
+                        reason="ANOTHER_SECRET_FREE_FORM_REASON",
+                        error_code="mcp_transport_timeout",
+                    ),
                 ],
             )
         )
@@ -498,6 +560,10 @@ class ProgressCardTests(unittest.TestCase):
         self.assertNotIn("worktree_path", text)
         self.assertNotIn("/home/toligrim/private-worktree", text)
         self.assertNotIn("SECRET_FREE_FORM_REASON", text)
+        self.assertNotIn("ANOTHER_SECRET_FREE_FORM_REASON", text)
+        # And the timeline trace did pick these events up with safe labels.
+        self.assertIn("🧾 Ход событий:", text)
+        self.assertIn("circuit breaker открыт", text)
 
     def test_missing_current_run_is_a_noop(self):
         (self.runs / ".current").unlink()

@@ -134,6 +134,7 @@ class ProgressState:
     last_verdict: dict[str, Any] | None = None
     last_event_ts: str | None = None
     started_at: str | None = None
+    timeline: list[dict[str, str]] = field(default_factory=list)
 
 
 def _ordered_events(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -303,6 +304,11 @@ def reduce_events(run_id: str, events: list[dict[str, Any]]) -> ProgressState:
             event_ts = event.get("ts")
             state.last_event_ts = event_ts if isinstance(event_ts, str) else None
 
+        label = _timeline_label(event)
+        if label is not None:
+            ts = event.get("ts")
+            state.timeline.append({"ts": ts if isinstance(ts, str) else "", "label": label})
+
         if _is_successful_worktree_close(event) or _is_scriptwriter_success(event):
             _refresh_topic_from_draft(state)
 
@@ -322,22 +328,83 @@ def _escaped(value: Any, fallback: str = "—") -> str:
 DISPLAY_TZ = timezone(timedelta(hours=3), name="MSK")
 
 
-def _format_timestamp(value: str | None) -> str:
+def _to_display_dt(value: str | None) -> datetime | None:
     if not value:
-        return "—"
+        return None
     try:
         parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
-        if parsed.tzinfo is None:
-            return html.escape(value)
-        return html.escape(parsed.astimezone(DISPLAY_TZ).strftime("%H:%M:%S MSK"))
     except (TypeError, ValueError):
-        return html.escape(value)
+        return None
+    if parsed.tzinfo is None:
+        return None
+    return parsed.astimezone(DISPLAY_TZ)
+
+
+def _format_timestamp(value: str | None) -> str:
+    dt = _to_display_dt(value)
+    if dt is None:
+        return html.escape(value) if value else "—"
+    return html.escape(dt.strftime("%H:%M:%S MSK"))
+
+
+def _format_time_only(value: str | None) -> str:
+    """Same as _format_timestamp but without the repeated 'MSK' suffix, for
+    compact per-line use in the timeline trace."""
+    dt = _to_display_dt(value)
+    if dt is None:
+        return html.escape(value) if value else "—"
+    return html.escape(dt.strftime("%H:%M:%S"))
 
 
 def _stage_name(stage: Any) -> str:
     if not isinstance(stage, str):
         return "—"
     return html.escape(STAGE_NAMES.get(stage, stage))
+
+
+def _role_label(role: Any) -> str:
+    return _stage_name(role) if isinstance(role, str) else "делегат"
+
+
+def _timeline_label(event: dict[str, Any]) -> str | None:
+    """A short, allow-listed, human-readable line for one significant event.
+
+    Only ever built from fields already safe to show (role, stage, verdict,
+    result_class, error_code, status) — never from free-form fields like
+    reason/detail/worktree_path. Returns None for kinds not worth a trace
+    line (kept distinct from MEANINGFUL_EVENT_KINDS/last_event_ts, which
+    tracks a broader set for staleness purposes)."""
+    kind = event.get("kind")
+    if kind == "run_start":
+        return "🎬 Старт прогона"
+    if kind == "stage_start":
+        stage = event.get("stage")
+        return f"📍 Этап: {_stage_name(stage)}" if isinstance(stage, str) else None
+    if kind == "delegate_requested":
+        role_label = _role_label(event.get("role"))
+        attempt = event.get("infrastructure_attempt")
+        attempt_part = f" (попытка {_escaped(attempt)})" if attempt is not None else ""
+        return f"👤 {role_label}: запрошен{attempt_part}"
+    if kind == "delegate_result_classified":
+        role_label = _role_label(event.get("role"))
+        result_class = event.get("result_class")
+        if result_class == "success":
+            return f"✅ {role_label}: успех"
+        marker = " ☣️" if event.get("termination_unconfirmed") is True else ""
+        return f"❌ {role_label}: {_escaped(result_class)}/{_escaped(event.get('error_code'))}{marker}"
+    if kind == "delegate_termination_confirmed":
+        return f"✅ {_role_label(event.get('role'))}: завершение подтверждено, quarantine снят"
+    if kind == "delegation_denied":
+        if event.get("detail") != "infrastructure_circuit_open":
+            return None
+        return f"⛔ {_role_label(event.get('role'))}: circuit breaker открыт"
+    if kind == "verdict":
+        return f"🧐 Критик: раунд {_escaped(event.get('round'))} — {_escaped(event.get('verdict'))}"
+    if kind == "publication_created":
+        return "📮 Заявка на публикацию создана"
+    if kind == "run_end":
+        return f"🏁 Прогон завершён: {_escaped(event.get('status'))}"
+    return None
 
 
 def _short_agent_id(value: Any) -> str:
@@ -385,6 +452,25 @@ def _fit_to_telegram_limit(lines: list[str]) -> str:
     return "\n".join(kept) + _TRUNCATION_MARKER
 
 
+TIMELINE_VISIBLE_ENTRIES = 12
+
+
+def _timeline_lines(state: ProgressState) -> list[str]:
+    """Chronological trace of significant events, oldest first, capped to
+    the most recent TIMELINE_VISIBLE_ENTRIES so the card stays readable
+    (and stays clear of Telegram's length limit) on a long-running episode."""
+    if not state.timeline:
+        return []
+    visible = state.timeline[-TIMELINE_VISIBLE_ENTRIES:]
+    out = ["", "🧾 Ход событий:"]
+    dropped = len(state.timeline) - len(visible)
+    if dropped > 0:
+        out.append(f"…и ещё {dropped} более ранних событий")
+    for entry in visible:
+        out.append(f"{_format_time_only(entry.get('ts'))} {entry.get('label', '')}")
+    return out
+
+
 def render(state: ProgressState) -> str:
     """Render only allow-listed reducer fields as Telegram HTML."""
     lines = ["🎬 ShortVideo · production run"]
@@ -414,6 +500,7 @@ def render(state: ProgressState) -> str:
             lines.append(f"🏷 <b>{_escaped(state.slug)}</b>")
         if state.run_status is not None:
             lines.append(f"Статус: {_escaped(state.run_status)}")
+        lines.extend(_timeline_lines(state))
         if state.last_event_ts is not None:
             lines.append(f"Последнее событие: {_format_timestamp(state.last_event_ts)}")
         return _fit_to_telegram_limit(lines)
@@ -482,6 +569,7 @@ def render(state: ProgressState) -> str:
             f"{_escaped(verdict.get('verdict'))}, issues={_escaped(verdict.get('issues'))}"
         )
 
+    lines.extend(_timeline_lines(state))
     if state.last_event_ts is not None:
         lines.append(f"Последнее событие: {_format_timestamp(state.last_event_ts)}")
     return _fit_to_telegram_limit(lines)
