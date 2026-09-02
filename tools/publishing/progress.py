@@ -200,6 +200,15 @@ def reduce_events(run_id: str, events: list[dict[str, Any]]) -> ProgressState:
     """Reduce the append-only run events into the card's safe public state."""
     state = ProgressState(run_id=run_id)
     ordered = _ordered_events(events)
+    # task_ids with a recorded (non-success) delegate_result_classified that
+    # hasn't yet been followed by a fresh mcp_request_started - local to
+    # this reduction pass, not part of ProgressState. Drives the retry
+    # marker below. Keyed on "has this task_id failed", not "has this
+    # task_id dispatched before": a pre-dispatch failure (the real case
+    # this was built for - failBeforeRequest() in delegate_invoke.py fires
+    # before mcp_request_started is ever emitted) means the FIRST
+    # mcp_request_started for a task_id can itself be the retry.
+    task_ids_with_unretried_failure: set[str] = set()
 
     for event in ordered:
         kind = event.get("kind")
@@ -238,6 +247,23 @@ def reduce_events(run_id: str, events: list[dict[str, Any]]) -> ProgressState:
         elif kind in {"delegate_requested", "delegate_started"}:
             state.current_delegate = _delegate_fields(event)
 
+        elif kind == "mcp_request_started":
+            # A dispatch for a task_id that previously recorded a failure
+            # means the delegate is actually live again — same claim,
+            # retried after e.g. a pre-dispatch failure (see
+            # delegate_invoke.py's bounded infra backoff in cmd_render) —
+            # which the card must say explicitly rather than leave the
+            # reader to infer from a stale "Прошлая попытка" line sitting
+            # next to an unchanged "👤 ... попытка N".
+            task_id = event.get("task_id")
+            if isinstance(task_id, str) and task_id in task_ids_with_unretried_failure:
+                ts = event.get("ts")
+                state.timeline.append({
+                    "ts": ts if isinstance(ts, str) else "",
+                    "label": f"🔁 {_role_label(event.get('role'))}: повторная попытка",
+                })
+                task_ids_with_unretried_failure.discard(task_id)
+
         elif kind == "delegate_result_classified":
             result_class = event.get("result_class")
             if result_class != "success":
@@ -247,6 +273,9 @@ def reduce_events(run_id: str, events: list[dict[str, Any]]) -> ProgressState:
                     "result_class": result_class,
                     "error_code": event.get("error_code"),
                 }
+                task_id = event.get("task_id")
+                if isinstance(task_id, str):
+                    task_ids_with_unretried_failure.add(task_id)
             if event.get("termination_unconfirmed") is True:
                 state.quarantine = {
                     "role": event.get("role"),

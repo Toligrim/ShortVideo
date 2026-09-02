@@ -449,6 +449,47 @@ class ProgressCardTests(unittest.TestCase):
         self.assertLessEqual(len(sent_text), 4096)
         self.assertTrue(sent_text.endswith("…"))
 
+    def test_timeline_marks_a_live_retry_after_a_pre_dispatch_failure(self):
+        # Real scenario from a live run: a pre-dispatch failure
+        # (mcp_invocation_invalid, termination_unconfirmed=False) doesn't
+        # release the claim - the orchestrator just re-renders and re-
+        # dispatches on the SAME task_id/agent_id. Without an explicit
+        # marker, the card's "👤 ... попытка 1" line just sits there after
+        # a "❌ ... failed" trace entry with no visible sign that a retry
+        # is actually live again.
+        text = render(
+            reduce_events(
+                self.run_id,
+                [
+                    self.run_start(),
+                    self.event(
+                        "delegate_requested", 2,
+                        actor="animation-director-abc", task_id="director:x",
+                        role="animation-director", infrastructure_attempt=1,
+                    ),
+                    self.event(
+                        "mcp_request_started", 3,
+                        task_id="director:x", role="animation-director",
+                    ),
+                    self.event(
+                        "delegate_result_classified", 4,
+                        actor="animation-director-abc", task_id="director:x",
+                        role="animation-director", result_class="control_plane_failure",
+                        error_code="mcp_invocation_invalid",
+                    ),
+                    # Same task_id, second dispatch - a live retry.
+                    self.event(
+                        "mcp_request_started", 5,
+                        task_id="director:x", role="animation-director",
+                    ),
+                ],
+            )
+        )
+        self.assertIn("🔁 Режиссёр: повторная попытка", text)
+        # Only the SECOND dispatch is a retry - the first must not be
+        # mislabeled as one.
+        self.assertEqual(text.count("повторная попытка"), 1)
+
     def test_timeline_shows_ordered_significant_events_with_times(self):
         text = render(
             reduce_events(
