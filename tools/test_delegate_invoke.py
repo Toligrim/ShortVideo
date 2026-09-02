@@ -332,7 +332,15 @@ def test_animation_director_policy_is_workspace_write():
 
 @pytest.mark.parametrize("role", ["scriptwriter", "animation-director", "critic"])
 def test_all_roles_use_raised_delegate_timeout(role):
-    assert delegate_invoke.load_policy(role).timeout_seconds == 1200
+    # 1800s (30 min) is delegate_invoke.load_policy()'s own hard cap
+    # (`not 1 <= timeout <= 1_800` below) — the highest this wrapper timeout
+    # can go without also changing that validator. Keep it below the
+    # underlying nested MCP transport's own tool_timeout_sec (configured in
+    # ~/.codex/config.toml, outside this repo — see
+    # docs/agent-safety-architecture.md), so this controlled,
+    # telemetry-integrated Promise.race always fires first and remains the
+    # authoritative classification path instead of a raw transport reject.
+    assert delegate_invoke.load_policy(role).timeout_seconds == 1800
 
 
 def test_bridge_refuses_render_for_quarantined_claim(delegation, capsys):
