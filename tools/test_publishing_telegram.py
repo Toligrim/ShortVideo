@@ -269,6 +269,24 @@ class TelegramApprovalTests(unittest.TestCase):
         self.assertEqual(notifications, ["READY=1", "WATCHDOG=1"])
         sleep.assert_called_once_with(2)
 
+    def test_progress_observer_failure_does_not_block_review_or_poll(self):
+        class BrokenProgressSync:
+            def sync(self):
+                raise RuntimeError("progress observer failed")
+
+        api = FakeTelegramApi()
+        publication = self.create_publication()
+        service = self.service(api, progress_sync=BrokenProgressSync())
+
+        with contextlib.redirect_stderr(io.StringIO()):
+            processed = service.run_once(timeout=0)
+
+        self.assertEqual(processed, 0)
+        self.assertEqual(len(api.video_calls), 1)
+        self.assertEqual(len(api.message_calls), 1)
+        self.assertEqual(api.calls[-1][0], "get_updates")
+        self.assertIsNotNone(self.store.get_publication(publication.id).review_card_message_id)
+
     def deliver(self, api=None):
         api = api or FakeTelegramApi()
         publication = self.create_publication()

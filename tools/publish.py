@@ -16,6 +16,7 @@ import subprocess
 import sys
 from typing import Any
 
+import pipeline_log
 from publishing.adapters.base import PublishError
 from publishing.adapters.live import CombinedLiveAdapterFactory, instagram_doctor
 from publishing.adapters.r2 import R2AssetError, R2Config, R2ConfigurationError, R2OperationError, R2TemporaryMedia
@@ -275,6 +276,21 @@ def main(argv: list[str] | None = None) -> int:
                 config=config,
                 execution_mode=args.mode,
             )
+            try:
+                run_id = pipeline_log.current_run_id()
+                if run_id:
+                    run_dir = pipeline_log.run_dir_for(run_id)
+                    if run_dir.is_dir():
+                        pipeline_log.append_event(
+                            run_dir,
+                            {
+                                "kind": "publication_created",
+                                "publication_id": review.publication.id,
+                                "slug": review.publication.slug,
+                            },
+                        )
+            except Exception:
+                pass  # telemetry must not break a successful review command
             _print_json(
                 {
                     "publication_id": review.publication.id,
@@ -299,6 +315,7 @@ def main(argv: list[str] | None = None) -> int:
             # Keep the transport import inside this explicitly networked
             # command, so validation/review/status remain local-only.
             from publishing.telegram import TelegramApprovalSettings, TelegramReviewService
+            from publishing.progress import ProgressCardSync
             from telegram_bot import get_api
 
             config.ensure_directories()
@@ -313,11 +330,20 @@ def main(argv: list[str] | None = None) -> int:
                 except PublishError:
                     return False
 
+            store = PublishingStore(config.database_path)
+            api = get_api()
+            settings = TelegramApprovalSettings.from_environment()
+            progress_sync = ProgressCardSync(
+                store=store,
+                api=api,
+                chat_id=settings.allowed_chat_id,
+            )
             service = TelegramReviewService(
-                store=PublishingStore(config.database_path),
-                api=get_api(),
-                settings=TelegramApprovalSettings.from_environment(),
+                store=store,
+                api=api,
+                settings=settings,
                 instagram_configured=_instagram_configured,
+                progress_sync=progress_sync,
             )
             if args.once:
                 service.run_once(timeout=args.timeout)

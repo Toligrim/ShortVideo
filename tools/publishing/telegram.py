@@ -27,6 +27,7 @@ from telegram_bot import (
 
 from .db import PublishingStore, StoreError
 from .models import OutboxItem, Publication, PublicationState, PublicationTarget, TelegramAction, TelegramActionKind
+from .progress import ProgressCardSync
 from .review import ReviewError, VerifiedReview, verify_review_snapshots
 
 
@@ -349,6 +350,7 @@ class TelegramReviewService:
         status_lease_seconds: int = STATUS_LEASE_SECONDS,
         clock: Clock = _utc_now,
         instagram_configured: Callable[[], bool] | None = None,
+        progress_sync: ProgressCardSync | None = None,
     ):
         if status_lease_seconds < 1:
             raise TelegramApprovalError("Telegram status lease must be positive")
@@ -361,6 +363,7 @@ class TelegramReviewService:
         # Local-only credential check injected by the caller; this module
         # must not construct provider clients itself (see module docstring).
         self._instagram_configured = instagram_configured
+        self._progress_sync = progress_sync
         self.last_delivery_failures: list[ReviewDeliveryFailure] = []
         self.last_status_failures: list[StatusDeliveryFailure] = []
         self._status_worker_id = f"telegram-status-{uuid.uuid4().hex}"
@@ -644,6 +647,15 @@ class TelegramReviewService:
         return processed
 
     def run_once(self, *, timeout: int = 25) -> int:
+        if self._progress_sync is not None:
+            try:
+                self._progress_sync.sync()
+            except Exception as exc:  # noqa: BLE001 — progress must not block review/callbacks
+                print(
+                    f"Telegram progress observer failed: {self._safe_error_text(exc)}",
+                    file=sys.stderr,
+                    flush=True,
+                )
         self.deliver_pending_reviews()
         self.deliver_pending_status_updates()
         return self.poll_once(timeout=timeout)
