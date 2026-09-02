@@ -186,12 +186,17 @@ setTimeout(() => process.stdout.write(JSON.stringify({outputs, commands})), 100)
     result = json.loads(executed.stdout)
     outputs = result["outputs"]
     assert json.loads(outputs[-1])["result_class"] == "control_plane_failure"
+    result_commands = [
+        command for command in result["commands"] if "delegate_invoke.py result " in command
+    ]
     assert any(
         "delegate_invoke.py result " in command
         and "control_plane_failure" in command
         and "mcp_invocation_invalid" in command
         for command in result["commands"]
     )
+    assert result_commands
+    assert all("--termination-uncertain" not in command for command in result_commands)
 
 
 def test_mcp_timeout_is_classified_by_generated_bridge(delegation):
@@ -246,6 +251,79 @@ setTimeout(() => process.stdout.write(JSON.stringify(outputs)), 1500);
     result = json.loads(json.loads(executed.stdout)[-1])
     assert result["result_class"] == "infrastructure_failure"
     assert result["error_code"] == "mcp_transport_timeout"
+
+
+def test_mcp_invocation_error_marks_termination_uncertain_by_generated_bridge(tmp_path):
+    """A fast MCP error after request start must quarantine the delegate claim."""
+
+    run_dir = tmp_path / "run-invocation-error"
+    run_dir.mkdir()
+    prompt_file = run_dir / "prompt.md"
+    prompt_file.write_text("safe", encoding="utf-8")
+    context = delegate_invoke.ClaimContext(
+        run_dir=run_dir,
+        run_id=run_dir.name,
+        task_id="scriptwriter:invocation-error",
+        agent_id="agent-1",
+        role="scriptwriter",
+        attempt=1,
+        worktree=tmp_path,
+        base_sha="a" * 40,
+        semantic_attempt=0,
+        infrastructure_attempt=1,
+        codex_path=Path("/usr/bin/codex"),
+        codex_version="test-codex",
+        policy=delegate_invoke.Policy(
+            model="gpt-5.6-luna",
+            sandbox="workspace-write",
+            approval_policy="never",
+            timeout_seconds=1,
+        ),
+    )
+    js_file = run_dir / "invocation-error.js"
+    js_file.write_text(delegate_invoke._render_js(context, prompt_file), encoding="utf-8")
+
+    node = _node()
+    runner = r'''
+const outputs = [];
+const commands = [];
+globalThis.text = (value) => outputs.push(String(value));
+globalThis.tools = {
+  exec_command: async ({cmd}) => {
+    commands.push(cmd);
+    return {exit_code: 0, output: cmd.includes("cat --") ? "safe" : ""};
+  },
+  mcp__codex__codex: async () => {
+    throw new Error("MCP tool call requires approval, but approval policy is never");
+  }
+};
+require(process.env.GENERATED_JS);
+setTimeout(() => process.stdout.write(JSON.stringify({outputs, commands})), 100);
+'''
+    executed = subprocess.run(
+        [node, "-e", runner],
+        env={**os.environ, "GENERATED_JS": str(js_file)},
+        capture_output=True,
+        text=True,
+        timeout=5,
+    )
+    assert executed.returncode == 0, executed.stderr
+    result = json.loads(executed.stdout)
+    failure = json.loads(result["outputs"][-1])
+    assert failure["ok"] is False
+    assert failure["result_class"] == "control_plane_failure"
+    assert failure["error_code"] == "mcp_invocation_invalid"
+    assert failure["timeout_seconds"] == 1
+    assert any("mcp_request_started" in command for command in result["commands"])
+    result_commands = [
+        command for command in result["commands"] if "delegate_invoke.py result " in command
+    ]
+    assert any(
+        "control_plane_failure" in command
+        and "mcp_invocation_invalid" in command
+        and "--termination-uncertain" in command
+        for command in result_commands
+    )
 
 
 def test_animation_director_policy_is_workspace_write():
@@ -444,6 +522,85 @@ def test_timeout_quarantine_blocks_release_and_retry_until_confirmed(tmp_path, m
     capsys.readouterr()
     assert agent_log.main([
         "delegate-release", "--agent-id", "timed-out", "--status", "failed",
+    ]) == 0
+    capsys.readouterr()
+    assert agent_log.main([
+        "delegate-claim", "--task-id", task, "--role", "critic", "--agent-id", "retry",
+    ]) == 0
+    capsys.readouterr()
+
+
+def test_invocation_invalid_with_termination_uncertain_blocks_release_and_retry_until_confirmed(
+    tmp_path, monkeypatch, capsys,
+):
+    run_dir = tmp_path / "run-invocation-quarantine"
+    run_dir.mkdir()
+    (run_dir / "mono_start").write_text(repr(time.monotonic()), encoding="utf-8")
+    monkeypatch.setenv("SV_RUN_DIR", str(run_dir))
+    monkeypatch.setenv("SV_RUN_ID", run_dir.name)
+    task = "critic:invocation-quarantine"
+
+    assert agent_log.main([
+        "delegate-claim", "--task-id", task, "--role", "critic", "--agent-id", "invalid",
+    ]) == 0
+    capsys.readouterr()
+    assert agent_log.main(["delegate-start", "--agent-id", "invalid"]) == 0
+    capsys.readouterr()
+    assert agent_log.main([
+        "delegate-result", "--agent-id", "invalid",
+        "--result-class", "control_plane_failure", "--error-code", "mcp_invocation_invalid",
+        "--termination-uncertain",
+    ]) == 0
+    assert json.loads(capsys.readouterr().out)["termination_unconfirmed"] is True
+
+    assert agent_log.main([
+        "delegate-release", "--agent-id", "invalid", "--status", "failed",
+    ]) == 7
+    assert json.loads(capsys.readouterr().out)["error_code"] == "delegate_termination_unconfirmed"
+    assert agent_log.main([
+        "delegate-claim", "--task-id", task, "--role", "critic", "--agent-id", "retry",
+    ]) == 7
+    assert json.loads(capsys.readouterr().out)["error_code"] == "delegate_termination_unconfirmed"
+
+    with agent_log.Registry(run_dir) as registry:
+        assert agent_log.task_counters(registry.claims, task) == (0, 0, [])
+
+    assert agent_log.main([
+        "delegate-confirm-termination", "--agent-id", "invalid",
+        "--evidence", "test actor was independently confirmed dead",
+    ]) == 0
+    capsys.readouterr()
+    assert agent_log.main([
+        "delegate-release", "--agent-id", "invalid", "--status", "failed",
+    ]) == 0
+    capsys.readouterr()
+    assert agent_log.main([
+        "delegate-claim", "--task-id", task, "--role", "critic", "--agent-id", "retry",
+    ]) == 0
+    capsys.readouterr()
+
+
+def test_invocation_invalid_without_termination_uncertain_releases_normally(
+    tmp_path, monkeypatch, capsys,
+):
+    run_dir = tmp_path / "run-invocation-safe"
+    run_dir.mkdir()
+    (run_dir / "mono_start").write_text(repr(time.monotonic()), encoding="utf-8")
+    monkeypatch.setenv("SV_RUN_DIR", str(run_dir))
+    monkeypatch.setenv("SV_RUN_ID", run_dir.name)
+    task = "critic:invocation-safe"
+
+    assert agent_log.main([
+        "delegate-claim", "--task-id", task, "--role", "critic", "--agent-id", "startup",
+    ]) == 0
+    capsys.readouterr()
+    assert agent_log.main([
+        "delegate-result", "--agent-id", "startup",
+        "--result-class", "control_plane_failure", "--error-code", "mcp_invocation_invalid",
+    ]) == 0
+    assert json.loads(capsys.readouterr().out)["termination_unconfirmed"] is False
+    assert agent_log.main([
+        "delegate-release", "--agent-id", "startup", "--status", "failed",
     ]) == 0
     capsys.readouterr()
     assert agent_log.main([

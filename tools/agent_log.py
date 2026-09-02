@@ -765,8 +765,10 @@ def cmd_delegate_result(args: argparse.Namespace) -> int:
         claim["pending_result_class"] = args.result_class
         claim["pending_error_code"] = args.error_code
         claim["pending_substantive_work"] = args.result_class in {"success", "semantic_failure"}
-        if args.error_code in TERMINATION_UNCONFIRMED_SOURCE_CODES:
-            _mark_termination_unconfirmed(claim, now, args.error_code)
+        if args.error_code in TERMINATION_UNCONFIRMED_SOURCE_CODES or args.termination_uncertain:
+            _mark_termination_unconfirmed(
+                claim, now, args.error_code or "termination_uncertain",
+            )
         termination_flag = termination_unconfirmed(claim)
         reg.save()
         task_id = claim.get("task_id")
@@ -1096,6 +1098,7 @@ def build_parser() -> argparse.ArgumentParser:
     dres.add_argument("--attempt", type=int, default=None)
     dres.add_argument("--result-class", required=True, choices=sorted(RESULT_CLASSES))
     dres.add_argument("--error-code", default=None)
+    dres.add_argument("--termination-uncertain", action="store_true", default=False)
 
     dr = sub.add_parser("delegate-release", help="закрыть лизу")
     dr.add_argument("--agent-id", required=True)

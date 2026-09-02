@@ -701,10 +701,11 @@ def _render_js(ctx: ClaimContext, prompt_path: Path) -> str:
     }}
   }}
 
-  async function classify(resultClass, errorCode) {{
+  async function classify(resultClass, errorCode, terminationUncertain = false) {{
     try {{
       await execCommand(resultBase + " --result-class " + quoteShell(resultClass) +
-        (errorCode === null ? "" : " --error-code " + quoteShell(errorCode)));
+        (errorCode === null ? "" : " --error-code " + quoteShell(errorCode)) +
+        (terminationUncertain ? " --termination-uncertain" : ""));
     }} catch (_) {{}}
   }}
 
@@ -816,7 +817,7 @@ def _render_js(ctx: ClaimContext, prompt_path: Path) -> str:
     const resultClass = infrastructureCodes.has(errorCode) ? "infrastructure_failure" : "control_plane_failure";
     await telemetry("delegate_last_event", elapsedMs, resultClass, errorCode, "response_boundary_proxy",
       "caller_boundary_proxy");
-    await classify(resultClass, errorCode);
+    await classify(resultClass, errorCode, true);
     await telemetry("delegate_failed", elapsedMs, resultClass, errorCode, "delegate_result");
     text(JSON.stringify({{ok: false, result_class: resultClass, error_code: errorCode,
       elapsed_ms: elapsedMs, timeout_seconds: timeoutSeconds}}));
