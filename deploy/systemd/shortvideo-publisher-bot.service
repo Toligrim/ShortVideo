@@ -4,7 +4,9 @@ After=network-online.target
 Wants=network-online.target
 
 [Service]
-Type=simple
+Type=notify
+NotifyAccess=main
+WatchdogSec=300
 WorkingDirectory=@PROJECT_DIR@
 EnvironmentFile=%h/.config/shortvideo/publisher.env
 UMask=0077

@@ -5,7 +5,9 @@ from datetime import datetime, timedelta, timezone
 from fractions import Fraction
 from hashlib import sha256
 import io
+import os
 from pathlib import Path
+import socket
 import tempfile
 import urllib.error
 import unittest
@@ -18,6 +20,7 @@ from publishing.preflight import MediaProbe
 from publishing.review import ReviewError, VerifiedReview
 from publishing.telegram import (
     UPDATE_CURSOR_KEY,
+    _sd_notify,
     TelegramApprovalSettings,
     TelegramReviewService,
     callback_data,
@@ -201,6 +204,70 @@ class TelegramApprovalTests(unittest.TestCase):
             review_loader=self.review_loader,
             **overrides,
         )
+
+    def test_sd_notify_sends_message_to_notify_socket(self):
+        socket_path = self.root / "notify.sock"
+        with socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM) as notify_socket:
+            try:
+                notify_socket.bind(str(socket_path))
+            except PermissionError as exc:
+                self.skipTest(f"AF_UNIX bind is unavailable in this environment: {exc}")
+            notify_socket.settimeout(1)
+            with patch.dict(os.environ, {"NOTIFY_SOCKET": str(socket_path)}):
+                _sd_notify("READY=1")
+            self.assertEqual(notify_socket.recv(128), b"READY=1")
+
+    def test_sd_notify_is_noop_without_notify_socket(self):
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("NOTIFY_SOCKET", None)
+            _sd_notify("READY=1")
+
+    def test_sd_notify_ignores_broken_notify_socket(self):
+        socket_path = self.root / "missing-notify.sock"
+        with patch.dict(os.environ, {"NOTIFY_SOCKET": str(socket_path)}):
+            _sd_notify("WATCHDOG=1")
+
+    def test_run_forever_notifies_ready_once_and_watchdog_after_each_completed_iteration(self):
+        notifications: list[str] = []
+        iteration_count = 3
+        run_count = 0
+
+        def run_once(*, timeout):
+            nonlocal run_count
+            run_count += 1
+            if run_count > iteration_count:
+                raise StopIteration("stop test loop")
+
+        service = self.service(FakeTelegramApi())
+        service.run_once = run_once
+        with patch("publishing.telegram._sd_notify", side_effect=notifications.append):
+            with self.assertRaisesRegex(StopIteration, "stop test loop"):
+                service.run_forever(timeout=17)
+
+        self.assertEqual(notifications.count("READY=1"), 1)
+        self.assertEqual(notifications.count("WATCHDOG=1"), iteration_count)
+
+    def test_run_forever_notifies_watchdog_after_handled_run_once_error(self):
+        notifications: list[str] = []
+        run_count = 0
+
+        def run_once(*, timeout):
+            nonlocal run_count
+            run_count += 1
+            if run_count == 1:
+                raise TelegramError("transient")
+            raise StopIteration("stop test loop")
+
+        service = self.service(FakeTelegramApi())
+        service.run_once = run_once
+        with patch("publishing.telegram._sd_notify", side_effect=notifications.append), patch(
+            "publishing.telegram.time.sleep"
+        ) as sleep:
+            with self.assertRaisesRegex(StopIteration, "stop test loop"):
+                service.run_forever()
+
+        self.assertEqual(notifications, ["READY=1", "WATCHDOG=1"])
+        sleep.assert_called_once_with(2)
 
     def deliver(self, api=None):
         api = api or FakeTelegramApi()

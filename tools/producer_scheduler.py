@@ -31,6 +31,7 @@ Exit codes:
     0  ok (not due / validated / dry-run completed / run finished 0)
     2  usage/config error (incl. any unknown flag such as --model/--effort)
     3  another tick or production holds the scheduler lock (busy)
+    4  real launch refused because SHORTVIDEO_PUBLISH_STATE_DIR is unset
     N  run_episode.sh exit code when a production actually launched
 """
 from __future__ import annotations
@@ -83,6 +84,7 @@ def publish_state_dir_env() -> str | None:
 EXIT_OK = 0
 EXIT_USAGE = 2
 EXIT_BUSY = 3
+EXIT_PUBLISH_STATE_DIR_UNSET = 4
 
 STATE_VERSION = 1
 STATE_FILENAME = "state.json"
@@ -518,6 +520,26 @@ def action_plan(args: argparse.Namespace, dry_run: bool) -> int:
                 log(f"dry-run: would launch slug={slug} next_run={next_run}")
                 return EXIT_OK
 
+            if publish_state_dir_env() is None and not getattr(
+                args, "allow_default_publish_state_dir", False
+            ):
+                log(
+                    f"refusing real launch: {PUBLISH_STATE_DIR_ENV} is not set; "
+                    "publication state would fall back to the repository var/publisher "
+                    "store, which the live bot/worker services do not read. Set the "
+                    "variable to the shared publisher store, or pass "
+                    "--allow-default-publish-state-dir for an intentional local test "
+                    "without live systemd services."
+                )
+                emit_json(
+                    {
+                        "launched": False,
+                        "reason": "publish_state_dir_env_unset",
+                        "slug": slug,
+                    }
+                )
+                return EXIT_PUBLISH_STATE_DIR_UNSET
+
             launch_state = {
                 "version": STATE_VERSION,
                 "last_run": now,
@@ -566,6 +588,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--force", action="store_true", help="treat the tick as due regardless of state")
     parser.add_argument("--dry-run", action="store_true", help="decide and print everything, launch nothing, write nothing")
     parser.add_argument("--validate", action="store_true", help="print resolved configuration and exit")
+    parser.add_argument(
+        "--allow-default-publish-state-dir",
+        action="store_true",
+        help="allow an intentional real launch without the shared publisher state directory (local test only)",
+    )
     return parser
 
 

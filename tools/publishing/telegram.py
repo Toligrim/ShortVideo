@@ -11,6 +11,7 @@ import html
 import json
 import os
 from pathlib import Path
+import socket
 import sys
 import time
 from typing import Any, Callable, Mapping
@@ -64,6 +65,22 @@ YOUTUBE_PRIVACY_LABELS_RU = {"private": "Приватное", "unlisted": "По 
 
 
 Clock = Callable[[], str]
+
+
+def _sd_notify(state: str) -> None:
+    """Send a systemd notify message without affecting the bot loop."""
+    addr = os.environ.get("NOTIFY_SOCKET")
+    if not addr:
+        return
+    if addr.startswith("@"):
+        addr = "\0" + addr[1:]
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM) as sock:
+            sock.setblocking(False)
+            sock.sendto(state.encode("ascii"), addr)
+    except Exception:
+        # Notifications are best-effort and must never stop or stall the bot.
+        pass
 
 
 def _utc_now() -> str:
@@ -632,12 +649,14 @@ class TelegramReviewService:
         return self.poll_once(timeout=timeout)
 
     def run_forever(self, *, timeout: int = 25) -> None:
+        _sd_notify("READY=1")
         while True:
             try:
                 self.run_once(timeout=timeout)
             except (OSError, ReviewError, StoreError, TelegramApprovalError, TelegramError) as exc:
                 print(f"Telegram approval bot error: {self._safe_error_text(exc)}", flush=True)
                 time.sleep(2)
+            _sd_notify("WATCHDOG=1")
 
     def process_update(self, update: Mapping[str, Any]) -> CallbackResult | None:
         callback = update.get("callback_query")

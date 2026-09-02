@@ -35,6 +35,24 @@ def run_main_state(tmp, argv):
     return code, out.getvalue(), err.getvalue()
 
 
+@contextlib.contextmanager
+def temporary_environment(**updates):
+    old = {key: os.environ.get(key) for key in updates}
+    try:
+        for key, value in updates.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+        yield
+    finally:
+        for key, value in old.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+
+
 def run_cron_wrapper(argv, *, publish_state_dir_env=None):
     """Run tools/producer_cron.sh hermetically (no codex/LLM, no external env
     files): HOME is a throwaway temp dir and the scheduler state dir is pinned
@@ -377,7 +395,9 @@ class FakeLaunchTransitionTests(unittest.TestCase):
             d = Path(td)
             os.environ[sched.FAKE_LAUNCH_ENV] = "1"
             try:
-                code, _out, err = run_main_state(td, ["--now", str(EPOCH)])
+                code, _out, err = run_main_state(
+                    td, ["--allow-default-publish-state-dir", "--now", str(EPOCH)]
+                )
                 self.assertEqual(code, 0)
                 state = sched.read_state(d)
                 self.assertEqual(state["next_run"], EPOCH + sched.INTERVAL_SECONDS)
@@ -393,12 +413,130 @@ class FakeLaunchTransitionTests(unittest.TestCase):
             sched.write_state(d, {"next_run": EPOCH + 5000, "last_slug": "auto-old"})
             os.environ[sched.FAKE_LAUNCH_ENV] = "1"
             try:
-                code, _out, err = run_main_state(td, ["--now", str(EPOCH)])
+                code, _out, err = run_main_state(
+                    td, ["--allow-default-publish-state-dir", "--now", str(EPOCH)]
+                )
                 self.assertEqual(code, 0)
                 self.assertIn("not due", err)
                 self.assertEqual(sched.read_state(d)["next_run"], EPOCH + 5000)
             finally:
                 os.environ.pop(sched.FAKE_LAUNCH_ENV, None)
+
+
+class PublishStateGuardTests(unittest.TestCase):
+    def test_real_tick_rejects_unset_publish_state_dir_before_launch(self):
+        with tempfile.TemporaryDirectory() as td:
+            state_dir = Path(td)
+            with temporary_environment(
+                **{
+                    sched.PUBLISH_STATE_DIR_ENV: None,
+                    sched.FAKE_LAUNCH_ENV: None,
+                }
+            ):
+                code, out, err = run_main_state(
+                    state_dir, ["--force", "--now", str(EPOCH)]
+                )
+
+            self.assertEqual(code, sched.EXIT_PUBLISH_STATE_DIR_UNSET)
+            data = json.loads(out)
+            self.assertFalse(data["launched"])
+            self.assertEqual(data["reason"], "publish_state_dir_env_unset")
+            self.assertTrue(data["slug"].startswith("auto-"))
+            # No launch state was ever written (write_state is only reached
+            # after this guard) — the scheduler lock file may still exist
+            # (SchedulerLock.acquire() creates it via O_CREAT before this
+            # guard runs; only the flock itself is released), but no state
+            # transition happened.
+            self.assertEqual(sched.read_state(state_dir), {})
+            self.assertFalse((state_dir / sched.STATE_FILENAME).exists())
+            self.assertIn(sched.PUBLISH_STATE_DIR_ENV, err)
+            self.assertIn("--allow-default-publish-state-dir", err)
+            self.assertNotIn("FAKE_LAUNCH", err)
+
+    def test_tick_not_due_skips_guard_even_with_unset_publish_state_dir(self):
+        """A routine not-due tick must stay a silent EXIT_OK skip — the
+        publish-state guard only applies to an actual launch attempt."""
+        with tempfile.TemporaryDirectory() as td:
+            state_dir = Path(td)
+            sched.write_state(state_dir, {"next_run": EPOCH + 5000, "last_slug": "auto-old"})
+            with temporary_environment(
+                **{
+                    sched.PUBLISH_STATE_DIR_ENV: None,
+                    sched.FAKE_LAUNCH_ENV: None,
+                }
+            ):
+                code, out, err = run_main_state(state_dir, ["--now", str(EPOCH)])
+
+            self.assertEqual(code, sched.EXIT_OK)
+            data = json.loads(out)
+            self.assertFalse(data["due"])
+            self.assertNotIn("publish_state_dir_env_unset", err)
+            self.assertIn("not due", err)
+
+    def test_allow_default_publish_state_dir_preserves_real_launch(self):
+        with tempfile.TemporaryDirectory() as td:
+            state_dir = Path(td)
+            with temporary_environment(
+                **{
+                    sched.PUBLISH_STATE_DIR_ENV: None,
+                    sched.FAKE_LAUNCH_ENV: "1",
+                }
+            ):
+                code, _out, err = run_main_state(
+                    state_dir,
+                    [
+                        "--force",
+                        "--now",
+                        str(EPOCH),
+                        "--allow-default-publish-state-dir",
+                    ],
+                )
+
+            self.assertEqual(code, sched.EXIT_OK)
+            state = sched.read_state(state_dir)
+            self.assertEqual(state["last_run"], EPOCH)
+            self.assertEqual(state["next_run"], EPOCH + sched.INTERVAL_SECONDS)
+            self.assertIn("FAKE_LAUNCH", err)
+
+    def test_explicit_publish_state_dir_allows_real_launch(self):
+        with tempfile.TemporaryDirectory() as td:
+            state_dir = Path(td)
+            with temporary_environment(
+                **{
+                    sched.PUBLISH_STATE_DIR_ENV: str(state_dir / "publisher"),
+                    sched.FAKE_LAUNCH_ENV: "1",
+                }
+            ):
+                code, _out, err = run_main_state(
+                    state_dir, ["--force", "--now", str(EPOCH)]
+                )
+
+            self.assertEqual(code, sched.EXIT_OK)
+            state = sched.read_state(state_dir)
+            self.assertEqual(state["last_run"], EPOCH)
+            self.assertIn("FAKE_LAUNCH", err)
+
+    def test_dry_run_allows_unset_publish_state_dir(self):
+        with tempfile.TemporaryDirectory() as td:
+            with temporary_environment(
+                **{sched.PUBLISH_STATE_DIR_ENV: None, sched.FAKE_LAUNCH_ENV: None}
+            ):
+                code, out, err = run_main_state(
+                    td, ["--force", "--dry-run", "--now", str(EPOCH)]
+                )
+
+            self.assertEqual(code, sched.EXIT_OK)
+            self.assertTrue(json.loads(out)["due"])
+            self.assertNotIn("publish_state_dir_env_unset", err)
+            self.assertFalse((Path(td) / sched.STATE_FILENAME).exists())
+
+    def test_validate_reports_unset_publish_state_dir(self):
+        with tempfile.TemporaryDirectory() as td:
+            with temporary_environment(**{sched.PUBLISH_STATE_DIR_ENV: None}):
+                code, out, _err = run_main_state(td, ["--validate"])
+
+            self.assertEqual(code, sched.EXIT_OK)
+            self.assertIsNone(json.loads(out)["publish_state_dir_env"])
 
 
 class PublishStateDirEnvTests(unittest.TestCase):
