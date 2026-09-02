@@ -70,7 +70,7 @@ const Header: React.FC<{ phase: OperationalTransformPhase; opacity: number }> = 
     style={{
       position: "absolute",
       left: CX,
-      top: 238,
+      top: 330,
       transform: "translateX(-50%)",
       display: "flex",
       alignItems: "center",
