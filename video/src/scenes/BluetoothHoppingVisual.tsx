@@ -30,6 +30,7 @@ const laneY = (index: number) => laneTop + index * laneGap;
 const routeX = [245, 365, 485, 605, 725, 845, 935];
 const route = [0, 3, 1, 5, 2, 6, 4];
 const noisyLane = 3;
+const channelLabelLeft = -126;
 
 const clamp01 = (value: number) => Math.min(1, Math.max(0, value));
 const smooth = (value: number) => {
@@ -216,7 +217,18 @@ const ChannelBoard: React.FC<{
               alignItems: "center",
             }}
           >
-            <span style={{ ...mono, marginLeft: 18, fontSize: 16, color: rowColor, width: 86 }}>
+            <span
+              style={{
+                ...mono,
+                position: "absolute",
+                left: channelLabelLeft,
+                top: "50%",
+                transform: "translateY(-50%)",
+                fontSize: 16,
+                color: rowColor,
+                width: 86,
+              }}
+            >
               КАНАЛ {String(i + 1).padStart(2, "0")}
             </span>
             <div
@@ -370,12 +382,15 @@ const CollisionPhase: React.FC<{
   pop: number;
 }> = ({ local, impactLocal, enter, pop }) => {
   const converge = smooth(clamp01((local - impactLocal + 12) / 22));
-  const transmitters = [
+  // Keep the signal cards converging, but remove their text before the cards
+  // reach the shared impact point so text leaves never stack there.
+  const labelsVisible = converge < 0.42;
+  const transmitters: Array<{ x: number; icon: string; label?: string; color: string }> = [
     { x: 155, icon: "smartphone", label: "ТЕЛЕФОН", color: theme.accent },
-    { x: 320, icon: "radio", label: "СОСЕД", color: theme.accent2 },
+    { x: 320, icon: "radio", color: theme.accent2 },
     { x: 500, icon: "headphones", label: "НАУШНИКИ", color: theme.accent },
-    { x: 680, icon: "radio", label: "СОСЕД", color: theme.accent2 },
-    { x: 925, icon: "radio", label: "СОСЕД", color: theme.accent2 },
+    { x: 680, icon: "radio", color: theme.accent2 },
+    { x: 925, icon: "radio", color: theme.accent2 },
   ];
   return (
     <>
@@ -429,7 +444,7 @@ const CollisionPhase: React.FC<{
               }}
             >
               <IconGlyph name={item.icon} size={38} color={item.color} strokeWidth={1.7} />
-              <span style={{ ...mono, fontSize: 13, letterSpacing: 0, color: theme.text }}>{item.label}</span>
+              {labelsVisible && item.label ? <span style={{ ...mono, fontSize: 13, letterSpacing: 0, color: theme.text }}>{item.label}</span> : null}
             </div>
           </div>
         );
