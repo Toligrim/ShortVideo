@@ -1,0 +1,59 @@
+{
+  "id": "auto-20260902-181907",
+  "title": "Почему Гугл Документы не затирают твой текст, когда вы печатаете вдвоём?",
+  "scenes": [
+    {
+      "type": "story",
+      "heading": "Два курсора — один документ",
+      "narration": "Ты с другом одновременно печатаешь в одном общем документе: вставляешь фразу, он удаляет слово — а твой текст не исчезает. Почему {Гугл Документы|Гугл Документы} разруливают конфликт правок?",
+      "beats": [
+        { "visual": "operational-transform", "onWord": "Ты", "params": { "phase": "document" } },
+        { "visual": "operational-transform", "onWord": "вставляешь", "params": { "phase": "commands" } },
+        { "visual": "operational-transform", "onWord": "исчезает", "params": { "phase": "document" } }
+      ]
+    },
+    {
+      "type": "story",
+      "heading": "Команды встречаются на сервере",
+      "narration": "Внутри спорят две команды. Вставка говорит: «Я первая». Удаление отвечает: «Я тоже». Это {операционное преобразование|операционное преобразование}: как двое за столом правят один лист, поздняя правка меняет позицию.",
+      "beats": [
+        { "visual": "operational-transform", "onWord": "Внутри", "params": { "phase": "commands" } },
+        { "visual": "operational-transform", "onWord": "Удаление", "params": { "phase": "commands" } },
+        { "visual": "operational-transform", "onWord": "позицию", "params": { "phase": "shift" } }
+      ]
+    },
+    {
+      "type": "story",
+      "heading": "Команда, а не весь документ",
+      "narration": "Публичный контракт показывает единицу работы: не целый новый документ, а команду, привязанную к версии: вставить фрагмент или удалить символы с позиции. Так сервер знает исходную точку.",
+      "beats": [
+        { "visual": "operational-transform", "onWord": "Публичный", "params": { "phase": "revision" } },
+        { "visual": "operational-transform", "onWord": "вставить", "params": { "phase": "insert" } },
+        { "visual": "operational-transform", "onWord": "удалить", "params": { "phase": "shift" } }
+      ]
+    },
+    {
+      "type": "story",
+      "heading": "Позиция переезжает вправо",
+      "narration": "Возьмём слово «дом». Один запрос вставляет перед ним «мой» с пробелом, другой удаляет первую букву. В этой модели вставка уже принята: сервер преобразует позицию удаления вправо, к исходной «д».",
+      "beats": [
+        { "visual": "operational-transform", "onWord": "Возьмём", "params": { "phase": "word" } },
+        { "visual": "operational-transform", "onWord": "вставляет", "params": { "phase": "insert" } },
+        { "visual": "operational-transform", "onWord": "удаляет", "params": { "phase": "shift" } },
+        { "visual": "operational-transform", "onWord": "вправо", "params": { "phase": "result" } }
+      ]
+    },
+    {
+      "type": "outro",
+      "title": "Одна версия у всех",
+      "bullets": [
+        "Вставка и удаление — команды",
+        "Команды привязаны к версии",
+        "Позиция сдвигается вправо",
+        "Одна версия текста у всех"
+      ],
+      "cta": "Подпишись: дальше — плохая связь",
+      "narration": "В этом примере обе команды сохраняются: вставка добавляет фрагмент, удаление убирает свою исходную букву, и все получают одну версию текста. Дальше разберём, почему правки переживают плохую связь. Подпишись."
+    }
+  ]
+}
