@@ -1,0 +1,66 @@
+{
+  "id": "auto-20260902-161136",
+  "title": "Почему экран гаснет у уха, хотя ты его не нажимал?",
+  "scenes": [
+    {
+      "type": "story",
+      "heading": "Ухо — не кнопка",
+      "narration": "Во время звонка ухо прижалось к стеклу, ты ничего не нажимал — а экран гаснет и перестаёт слушаться. Кто выключил касания?",
+      "beats": [
+        { "visual": "proximity-sensor", "onWord": "ухо", "params": { "phase": "near" } },
+        { "visual": "proximity-sensor", "onWord": "гаснет", "params": { "phase": "lock" } }
+      ]
+    },
+    {
+      "type": "story",
+      "heading": "Близко — не узнано",
+      "narration": "Кажется, телефон узнал именно ухо. Но в этой схеме он не распознаёт ухо: ему достаточно понять, что отражающая поверхность оказалась близко.",
+      "beats": [
+        { "visual": "proximity-sensor", "onWord": "узнал", "params": { "phase": "near" } },
+        { "visual": "proximity-sensor", "onWord": "близко", "params": { "phase": "threshold" } }
+      ]
+    },
+    {
+      "type": "story",
+      "heading": "Невидимый фонарик",
+      "narration": "В телефоне с такой схемой работает {инфракрасный датчик приближения|инфракрасный датчик приближения}: невидимый светодиод посылает свет как фонарик, а фотоприёмник — как светомер — ловит отражённый свет от лица.",
+      "beats": [
+        { "visual": "proximity-sensor", "onWord": "светодиод", "params": { "phase": "emit" } },
+        { "visual": "proximity-sensor", "onWord": "фотоприёмник", "params": { "phase": "emit" } },
+        { "visual": "proximity-sensor", "onWord": "отражённый", "params": { "phase": "threshold" } }
+      ]
+    },
+    {
+      "type": "story",
+      "heading": "Порог, не касание",
+      "narration": "Схема сравнивает количество отражённого света с порогом: выше порога — система считает поверхность близкой. Это измерение света, а не проверка того, коснулась ли кожа стекла.",
+      "beats": [
+        { "visual": "proximity-sensor", "onWord": "сравнивает", "params": { "phase": "threshold" } },
+        { "visual": "proximity-sensor", "onWord": "порогом", "params": { "phase": "threshold" } },
+        { "visual": "proximity-sensor", "onWord": "коснулась", "params": { "phase": "near" } }
+      ]
+    },
+    {
+      "type": "story",
+      "heading": "Экран блокирует тач",
+      "narration": "Во время звонка система получает состояние «близко», гасит экран и блокирует сенсорный ввод. Поэтому щека не набирает случайные кнопки и не кладёт трубку.",
+      "beats": [
+        { "visual": "proximity-sensor", "onWord": "близко", "params": { "phase": "threshold" } },
+        { "visual": "proximity-sensor", "onWord": "гасит", "params": { "phase": "lock" } },
+        { "visual": "proximity-sensor", "onWord": "блокирует", "params": { "phase": "lock" } }
+      ]
+    },
+    {
+      "type": "outro",
+      "title": "Близко — экран гаснет",
+      "bullets": [
+        "Ухо рядом со стеклом",
+        "ИК свет возвращается",
+        "Порог даёт «близко»",
+        "Экран блокирует тач"
+      ],
+      "cta": "Подпишись: дальше — новый механизм",
+      "narration": "Итак: датчик светит, ловит отражение, сравнивает его с порогом — и экран гаснет. Дальше — ещё один скрытый механизм телефона, подпишись."
+    }
+  ]
+}

@@ -146,6 +146,7 @@ export interface StoryBeat {
     | "ai-hallucination"
     | "password-hash"
     | "capacitive-touch"
+    | "proximity-sensor"
     | "digital-signature"
     | "bgp-reroute"
     | "usb-pd-negotiation"

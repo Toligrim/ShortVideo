@@ -42,6 +42,7 @@ import { EliasFanoVisual, type EliasFanoPhase } from "./EliasFanoVisual";
 import { RaftQuorumVisual, type RaftQuorumPhase } from "./RaftQuorumVisual";
 import { ArianeOverflowVisual, type ArianeOverflowPhase } from "./ArianeOverflowVisual";
 import { CapacitiveTouchVisual, type CapacitiveTouchPhase } from "./CapacitiveTouch";
+import { ProximitySensorVisual, type ProximitySensorPhase } from "./ProximitySensorVisual";
 import { FaceIdDepthVisual, type FaceIdDepthPhase } from "./FaceIdDepthVisual";
 import { BgpRerouteVisual, type BgpReroutePhase } from "./BgpRerouteVisual";
 import { UsbPdNegotiationVisual, type UsbPdNegotiationPhase } from "./UsbPdNegotiationVisual";
@@ -250,6 +251,10 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
     if (beat.visual === "password-hash") impact = start + Math.round(dur * 0.58);
     if (beat.visual === "digital-signature") impact = start + Math.round(dur * 0.58);
     if (beat.visual === "capacitive-touch") impact = start + Math.round(dur * 0.58);
+    if (beat.visual === "proximity-sensor") {
+      const phase = beat.params?.phase as ProximitySensorPhase | undefined;
+      impact = start + Math.round(dur * (phase === "lock" ? 0.72 : phase === "threshold" ? 0.66 : phase === "emit" ? 0.6 : 0.55));
+    }
     if (beat.visual === "bgp-reroute") {
       const phase = beat.params?.phase;
       impact = start + Math.round(dur * (phase === "break" ? 0.45 : phase === "withdraw" ? 0.55 : phase === "reroute" ? 0.62 : 0.68));
@@ -595,6 +600,11 @@ export const storySfx = (
     if (s.beat.visual === "capacitive-touch") {
       const phase = s.beat.params?.phase;
       events.push({ frame: s.impact, sound: phase === "touch" || phase === "glove" ? "pop" : "ding" });
+    }
+    if (s.beat.visual === "proximity-sensor") {
+      const phase = s.beat.params?.phase as ProximitySensorPhase | undefined;
+      const sound = phase === "lock" ? "slam" : phase === "threshold" ? "ding" : phase === "emit" ? "pop" : "click";
+      events.push({ frame: s.impact, sound });
     }
     if (s.beat.visual === "bgp-reroute") {
       const phase = s.beat.params?.phase;
@@ -11612,6 +11622,7 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     "ariane-overflow": { scale: 0.88, y: -20 },
     "password-hash": { scale: 0.92, y: -20 },
     "capacitive-touch": { scale: 0.94, y: -20 },
+    "proximity-sensor": { scale: 0.9, y: -20 },
     "face-id-depth": { scale: 0.94, y: -20 },
     "bgp-reroute": { scale: 0.92, y: -20 },
     "usb-pd-negotiation": { scale: 0.92, y: -20 },
@@ -12380,6 +12391,15 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             fps={fps}
             impactLocal={impactLocal}
             phase={(slot.beat.params?.phase as CapacitiveTouchPhase | undefined) ?? "grid"}
+          />
+        );
+      case "proximity-sensor":
+        return (
+          <ProximitySensorVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as ProximitySensorPhase | undefined) ?? "near"}
           />
         );
       case "bgp-reroute":
