@@ -444,6 +444,14 @@ class ProgressCardTests(unittest.TestCase):
         self.assertLessEqual(len(sent_text), 4096)
         self.assertTrue(sent_text.endswith("…"))
 
+    def test_timestamps_render_in_msk_not_utc(self):
+        # run_start's ts fixture is "2099-01-01T00:00:01.000Z" (UTC) -> the
+        # card must show local Moscow time (UTC+3): 03:00:01, not 00:00:01.
+        text = render(reduce_events(self.run_id, [self.run_start()]))
+        self.assertIn("03:00:01 MSK", text)
+        self.assertNotIn("00:00:01 UTC", text)
+        self.assertNotIn("UTC", text)
+
     def test_renderer_never_exposes_forbidden_event_fields(self):
         text = render(
             reduce_events(

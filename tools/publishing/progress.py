@@ -309,6 +309,13 @@ def _escaped(value: Any, fallback: str = "—") -> str:
     return html.escape(str(value))
 
 
+# Display-only: the operator reads this card locally in Moscow time. All
+# internal clock/throttle/backoff comparisons stay in UTC (see _as_utc,
+# _parse_datetime, _default_clock below) - only what's rendered for a human
+# is shifted.
+DISPLAY_TZ = timezone(timedelta(hours=3), name="MSK")
+
+
 def _format_timestamp(value: str | None) -> str:
     if not value:
         return "—"
@@ -316,7 +323,7 @@ def _format_timestamp(value: str | None) -> str:
         parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
         if parsed.tzinfo is None:
             return html.escape(value)
-        return html.escape(parsed.astimezone(timezone.utc).strftime("%H:%M:%S UTC"))
+        return html.escape(parsed.astimezone(DISPLAY_TZ).strftime("%H:%M:%S MSK"))
     except (TypeError, ValueError):
         return html.escape(value)
 
