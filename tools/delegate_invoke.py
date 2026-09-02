@@ -245,13 +245,22 @@ def load_policy(role: str) -> Policy:
     model = role_policy.get("model")
     sandbox = role_policy.get("sandbox")
     timeout = raw.get("timeout_seconds")
+    # Upper bound raised 2026-09-02 from 1_800 to 7_200 (2h) on empirical
+    # grounds: runs/*/events.jsonl delegation_release(status="ok").held_sec
+    # across historical successful delegate sessions shows p95=~3831s (64m)
+    # and a max of 4985s (83m) - a 1800s cap was silently truncating
+    # legitimate long research/work before this raise. Still finite on
+    # purpose: an unbounded timeout would defeat the quarantine/circuit-
+    # breaker machinery's need to eventually get a definitive signal (see
+    # docs/agent-safety-architecture.md). Re-measure and revisit this bound
+    # periodically as duration_ms telemetry accumulates uncensored samples.
     if (
         not isinstance(model, str)
         or not MODEL_RE.fullmatch(model)
         or sandbox not in SANDBOX_POLICIES
         or not isinstance(timeout, int)
         or isinstance(timeout, bool)
-        or not 1 <= timeout <= 1_800
+        or not 1 <= timeout <= 7_200
     ):
         raise BridgeError("policy_failure", "policy_config_invalid", "invalid role policy")
     return Policy(
