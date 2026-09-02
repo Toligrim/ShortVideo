@@ -259,7 +259,7 @@ const DocumentPhase: React.FC<{ enter: number }> = ({ enter }) => (
       </div>
       <div style={{ position: "absolute", left: 42, right: 42, top: 122, height: 2, background: `${theme.panelBorder}` }} />
       <div style={{ position: "absolute", left: 58, top: 184, color: theme.subtext, fontSize: 23, ...mono }}>ПИШЕМ ВМЕСТЕ · ОДНА КОПИЯ</div>
-      <div style={{ position: "absolute", left: 58, top: 284, color: theme.text, fontSize: 48, fontWeight: 800 }}>Твой текст остаётся</div>
+      <div style={{ position: "absolute", left: 58, top: 230, color: theme.text, fontSize: 48, fontWeight: 800 }}>Твой текст остаётся</div>
       <CursorMarker x={410} y={377} label="ТЫ" color={theme.accent} opacity={enter} />
       <CursorMarker x={704} y={377} label="ДРУГ" color={theme.accent2} opacity={enter} />
       <div style={{ position: "absolute", left: 58, top: 492, color: theme.subtext, fontSize: 23 }}>два курсора · один документ · правки идут одновременно</div>
@@ -294,7 +294,7 @@ const CommandsPhase: React.FC<{ local: number; impactLocal: number; enter: numbe
       <div
         style={{
           position: "absolute",
-          left: interpolate(flow, [0, 1], [290, 505]),
+          left: interpolate(flow, [0, 1], [370, 505]),
           top: 520,
           transform: "translate(-50%, -50%)",
           padding: "10px 18px",
@@ -312,7 +312,7 @@ const CommandsPhase: React.FC<{ local: number; impactLocal: number; enter: numbe
         style={{
           position: "absolute",
           left: interpolate(flow, [0, 1], [790, 575]),
-          top: 582,
+          top: 640,
           transform: "translate(-50%, -50%)",
           padding: "10px 18px",
           borderRadius: 999,
