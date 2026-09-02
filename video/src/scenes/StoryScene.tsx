@@ -48,6 +48,7 @@ import { UsbPdNegotiationVisual, type UsbPdNegotiationPhase } from "./UsbPdNegot
 import { ConvolutionStencilVisual, type ConvolutionStencilPhase } from "./ConvolutionStencilVisual";
 import { WifiAirtimeVisual, type WifiAirtimePhase } from "./WifiAirtimeVisual";
 import { WifiSignalVsAirtimeVisual } from "./WifiSignalVsAirtimeVisual";
+import { BluetoothHoppingVisual, type BluetoothHoppingPhase } from "./BluetoothHoppingVisual";
 import { FileDeleteRecoveryVisual, type FileDeleteRecoveryPhase } from "./FileDeleteRecovery";
 import { BlockChainVisual, type BlockChainPhase } from "./BlockChainVisual";
 import { MempoolRbfVisual, type MempoolRbfPhase } from "./MempoolRbfVisual";
@@ -360,6 +361,10 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
     if (beat.visual === "totp-window") {
       const phase = beat.params?.phase as TotpWindowPhase | undefined;
       impact = start + Math.round(dur * (phase === "hmac" ? 0.68 : phase === "match" ? 0.72 : phase === "mismatch" ? 0.7 : phase === "sealed-result" ? 0.62 : phase === "tolerance" ? 0.62 : phase === "skew" ? 0.58 : 0.58));
+    }
+    if (beat.visual === "bluetooth-hopping") {
+      const phase = beat.params?.phase as BluetoothHoppingPhase | undefined;
+      impact = start + Math.round(dur * (phase === "collision" ? 0.62 : phase === "hopping-collision" ? 0.7 : phase === "exclude" ? 0.66 : phase === "sync" ? 0.58 : 0.6));
     }
     return { beat, start, end, impact };
   });
@@ -697,6 +702,11 @@ export const storySfx = (
     if (s.beat.visual === "totp-window") {
       const ph = s.beat.params?.phase as TotpWindowPhase | undefined;
       const sound = ph === "mismatch" || (ph === "tolerance" && s.beat.params?.wide === true) ? "slam" : ph === "hmac" || ph === "match" || ph === "sealed-result" ? "ding" : "pop";
+      events.push({ frame: s.impact, sound });
+    }
+    if (s.beat.visual === "bluetooth-hopping") {
+      const ph = s.beat.params?.phase as BluetoothHoppingPhase | undefined;
+      const sound = ph === "collision" || ph === "hopping-collision" ? "slam" : ph === "exclude" ? "ding" : ph === "hopping" ? "whoosh" : "pop";
       events.push({ frame: s.impact, sound });
     }
   }
@@ -11608,6 +11618,7 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     "convolution-stencil": { scale: 0.92, y: -20 },
     "wifi-airtime": { scale: 0.92, y: -20 },
     "wifi-signal-vs-airtime": { scale: 0.9, y: -20 },
+    "bluetooth-hopping": { scale: 0.9, y: -20 },
     "diffusion-denoise": { scale: 0.92, y: -20 },
     "tls-handshake": { scale: 0.92, y: -20 },
     "cold-battery-voltage-drop": { scale: 0.9, y: -20 },
@@ -12409,6 +12420,15 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
         );
       case "wifi-signal-vs-airtime":
         return <WifiSignalVsAirtimeVisual local={local} fps={fps} impactLocal={impactLocal} />;
+      case "bluetooth-hopping":
+        return (
+          <BluetoothHoppingVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as BluetoothHoppingPhase | undefined) ?? "hopping"}
+          />
+        );
       case "file-delete-recovery":
         return (
           <FileDeleteRecoveryVisual

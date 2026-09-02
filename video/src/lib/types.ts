@@ -152,6 +152,7 @@ export interface StoryBeat {
     | "convolution-stencil"
   | "wifi-airtime"
   | "wifi-signal-vs-airtime"
+  | "bluetooth-hopping"
   | "file-delete-recovery"
   | "tls-handshake"
 | "block-chain"

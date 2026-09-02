@@ -1,0 +1,152 @@
+{
+  "id": "auto-20260902-114520",
+  "title": "Почему Bluetooth-наушники не путаются в толпе?",
+  "scenes": [
+    {
+      "type": "story",
+      "narration": "В вагоне метро вокруг тебя десятки телефонов и наушников. Ты включаешь музыку — и слышишь свою, а не чужую. Почему {Bluetooth|блютус} не путается в толпе?",
+      "beats": [
+        {
+          "visual": "bluetooth-hopping",
+          "onWord": "вагоне",
+          "params": { "phase": "crowd" }
+        },
+        {
+          "visual": "bluetooth-hopping",
+          "onWord": "включаешь",
+          "params": { "phase": "crowd" }
+        },
+        {
+          "visual": "bluetooth-hopping",
+          "onWord": "свою",
+          "params": { "phase": "hopping" }
+        },
+        {
+          "visual": "bluetooth-hopping",
+          "onWord": "Bluetooth",
+          "params": { "phase": "sync" }
+        }
+      ]
+    },
+    {
+      "type": "story",
+      "narration": "А теперь уберём прыжки по радиоканалам. Все передатчики начнут говорить на одной линии: сигналы наложатся, данные потеряются, музыка заикнётся. Но и с прыжками столкновения иногда бывают.",
+      "beats": [
+        {
+          "visual": "bluetooth-hopping",
+          "onWord": "уберём",
+          "params": { "phase": "collision" }
+        },
+        {
+          "visual": "bluetooth-hopping",
+          "onWord": "линии",
+          "params": { "phase": "collision" }
+        },
+        {
+          "visual": "bluetooth-hopping",
+          "onWord": "наложатся",
+          "params": { "phase": "collision" }
+        },
+        {
+          "visual": "bluetooth-hopping",
+          "onWord": "потеряются",
+          "params": { "phase": "collision" }
+        },
+        {
+          "visual": "bluetooth-hopping",
+          "onWord": "заикнётся",
+          "params": { "phase": "collision" }
+        },
+        {
+          "visual": "bluetooth-hopping",
+          "onWord": "столкновения",
+          "params": { "phase": "hopping-collision" }
+        }
+      ]
+    },
+    {
+      "type": "story",
+      "narration": "В классическом режиме {Bluetooth|блютус} подключённые устройства заранее синхронизируют {псевдослучайный порядок каналов|псевдослучайный порядок каналов}. Телефон и наушники прыгают по нему вместе — как двое курьеров с одним маршрутом, меняющие коридор.",
+      "beats": [
+        {
+          "visual": "bluetooth-hopping",
+          "onWord": "подключённые",
+          "params": { "phase": "sync" }
+        },
+        {
+          "visual": "bluetooth-hopping",
+          "onWord": "синхронизируют",
+          "params": { "phase": "sync" }
+        },
+        {
+          "visual": "bluetooth-hopping",
+          "onWord": "псевдослучайный",
+          "params": { "phase": "sync" }
+        },
+        {
+          "visual": "bluetooth-hopping",
+          "onWord": "прыгают",
+          "params": { "phase": "hopping" }
+        },
+        {
+          "visual": "bluetooth-hopping",
+          "onWord": "вместе",
+          "params": { "phase": "hopping" }
+        },
+        {
+          "visual": "bluetooth-hopping",
+          "onWord": "маршрутом",
+          "params": { "phase": "hopping" }
+        }
+      ]
+    },
+    {
+      "type": "story",
+      "narration": "Контроллер проверяет качество эфира. Если какой-то канал зашумлён соседним устройством, {адаптивная перестройка частоты|адаптивная перестройка частоты} помечает его плохим и временно вычёркивает из маршрута. Остальные каналы продолжают чередоваться.",
+      "beats": [
+        {
+          "visual": "bluetooth-hopping",
+          "onWord": "проверяет",
+          "params": { "phase": "exclude" }
+        },
+        {
+          "visual": "bluetooth-hopping",
+          "onWord": "зашумлён",
+          "params": { "phase": "exclude" }
+        },
+        {
+          "visual": "bluetooth-hopping",
+          "onWord": "адаптивная",
+          "params": { "phase": "exclude" }
+        },
+        {
+          "visual": "bluetooth-hopping",
+          "onWord": "помечает",
+          "params": { "phase": "exclude" }
+        },
+        {
+          "visual": "bluetooth-hopping",
+          "onWord": "вычёркивает",
+          "params": { "phase": "exclude" }
+        },
+        {
+          "visual": "bluetooth-hopping",
+          "onWord": "Остальные",
+          "params": { "phase": "exclude" }
+        }
+      ]
+    },
+    {
+      "type": "outro",
+      "title": "Музыка в толпе",
+      "bullets": [
+        "Пара держит общий порядок",
+        "Канал прыгает синхронно",
+        "Шумный канал вычёркивается",
+        "Столкновения возможны"
+      ],
+      "cta": "Подпишись: дальше — ещё один трюк",
+      "narration": "Итак, дело не в том, что у каждого свои частоты: пара прыгает по общему порядку, а шумные каналы убирает. Столкновения возможны, но музыка держится. Дальше — ещё один невидимый трюк. Подпишись."
+    }
+  ]
+}
