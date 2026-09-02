@@ -170,7 +170,8 @@ export interface StoryBeat {
   | "multi-frame-stack"
   | "mail-queue"
   | "mail-server-handoff"
-  | "totp-window";
+  | "totp-window"
+  | "operational-transform";
   onWord?: string; // бит начинается на этом слове реплики
   params?: Record<string, unknown>;
 }
