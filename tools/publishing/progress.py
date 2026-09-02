@@ -47,6 +47,12 @@ ROOT = Path(__file__).resolve().parents[2]
 STAGE_NAMES = {
     "scriptwriter": "Сценарист",
     "director": "Режиссёр",
+    # delegate_policy.json's actual role name for this stage (not "director")
+    # — the pipeline's stage_start/stage_end telemetry is emitted rarely (see
+    # commit da544a3's era analysis), so the card usually has to fall back to
+    # the *delegate's role* as a stand-in for "current stage" (see render()
+    # below); that role string needs its own entry here or it prints raw.
+    "animation-director": "Режиссёр",
     "forge": "Кузница визуалов",
     "validate": "Валидация",
     "tts": "Озвучка",
@@ -412,6 +418,15 @@ def render(state: ProgressState) -> str:
             lines.append(f"Последнее событие: {_format_timestamp(state.last_event_ts)}")
         return _fit_to_telegram_limit(lines)
 
+    # The pipeline's stage_start/stage_end telemetry is emitted inconsistently
+    # (many runs have none at all) — when it's missing, fall back to the
+    # active delegate's role as the best available stand-in for "what stage
+    # is this", rather than showing a bare dash while real work is visibly
+    # happening.
+    display_stage = state.current_stage
+    if not display_stage and state.current_delegate is not None:
+        display_stage = state.current_delegate.get("role")
+
     lines.extend(
         [
             "🟡 В работе",
@@ -421,7 +436,7 @@ def render(state: ProgressState) -> str:
             f"🧠 Тема: "
             + ("выбирается сценаристом…" if state.topic_pending else _escaped(state.topic)),
             "",
-            f"📍 Текущий этап: {_stage_name(state.current_stage)}",
+            f"📍 Текущий этап: {_stage_name(display_stage) if display_stage else '—'}",
         ]
     )
 

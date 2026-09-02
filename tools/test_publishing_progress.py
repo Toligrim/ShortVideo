@@ -444,6 +444,28 @@ class ProgressCardTests(unittest.TestCase):
         self.assertLessEqual(len(sent_text), 4096)
         self.assertTrue(sent_text.endswith("…"))
 
+    def test_current_stage_falls_back_to_delegate_role_when_stage_start_missing(self):
+        # This pipeline's own stage_start/stage_end telemetry is emitted
+        # inconsistently (many real runs have none at all) — without a
+        # fallback the card shows a bare "—" for "Текущий этап" while a
+        # delegate is visibly working, which read as broken/stuck to the
+        # operator. No stage_start event here on purpose.
+        text = render(
+            reduce_events(
+                self.run_id,
+                [
+                    self.run_start(),
+                    self.event(
+                        "delegate_requested", 2,
+                        actor="animation-director-abc12345", task_id="animation-director:x",
+                        role="animation-director", infrastructure_attempt=1, semantic_attempt=0,
+                    ),
+                ],
+            )
+        )
+        self.assertIn("Текущий этап: Режиссёр", text)
+        self.assertNotIn("Текущий этап: —", text)
+
     def test_timestamps_render_in_msk_not_utc(self):
         # run_start's ts fixture is "2099-01-01T00:00:01.000Z" (UTC) -> the
         # card must show local Moscow time (UTC+3): 03:00:01, not 00:00:01.
