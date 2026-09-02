@@ -61,6 +61,7 @@ import { ContextWindowVisual, type ContextWindowPhase } from "./ContextWindowVis
 import { AttentionCostVisual, type AttentionCostPhase } from "./AttentionCostVisual";
 import { MultiFrameStackVisual, type MultiFrameStackPhase } from "./MultiFrameStackVisual";
 import { TotpWindowVisual, type TotpWindowPhase } from "./TotpWindowVisual";
+import { SpellDistanceVisual, type SpellDistancePhase } from "./SpellDistanceVisual";
 
 /* ──────────────────────────── расписание битов ──────────────────────────── */
 
@@ -92,6 +93,10 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
     if (beat.visual === "browser-click") impact = start + Math.round(dur * 0.55);
     if (beat.visual === "handshake") impact = start + 10;
     if (beat.visual === "title-slam") impact = start + 8;
+    if (beat.visual === "spell-distance") {
+      const phase = beat.params?.phase as SpellDistancePhase | undefined;
+      impact = start + Math.round(dur * (phase === "typo" ? 0.62 : phase === "repair" ? 0.68 : phase === "rank" ? 0.72 : 0.64));
+    }
     if (beat.visual === "password-leak") impact = start + Math.round(dur * 0.4);
     if (beat.visual === "hash-table") impact = start + Math.round(dur * 0.62);
     if (beat.visual === "minimal-perfect-hash") {
@@ -375,6 +380,10 @@ export const storySfx = (
     if (s.beat.visual === "handshake")
       events.push({ frame: s.impact, sound: "slam" }, { frame: s.impact + 2, sound: "ding" });
     if (s.beat.visual === "title-slam") events.push({ frame: s.impact, sound: "slam" });
+    if (s.beat.visual === "spell-distance") {
+      const phase = s.beat.params?.phase as SpellDistancePhase | undefined;
+      events.push({ frame: s.impact, sound: phase === "repair" || phase === "rank" ? "ding" : phase === "typo" ? "click" : "pop" });
+    }
     if (s.beat.visual === "password-leak") events.push({ frame: s.impact, sound: "click" });
     if (s.beat.visual === "hash-table") events.push({ frame: s.impact, sound: "click" });
     if (s.beat.visual === "minimal-perfect-hash") {
@@ -11533,6 +11542,7 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     "devices-meet": { scale: 1.12, y: -60 },
     handshake: { scale: 1.22, y: -110 },
     "title-slam": { scale: 1.0, y: 0 },
+    "spell-distance": { scale: 0.9, y: -20 },
     "password-leak": { scale: 1.05, y: -30 },
     "hash-table": { scale: 0.98, y: -20 },
     "minimal-perfect-hash": { scale: 0.9, y: -20 },
@@ -11641,6 +11651,20 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             impactLocal={impactLocal}
             text={slot.beat.params?.text as string}
             sub={slot.beat.params?.sub as string | undefined}
+          />
+        );
+      case "spell-distance":
+        return (
+          <SpellDistanceVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as SpellDistancePhase | undefined) ?? "typo"}
+            query={slot.beat.params?.query as string | undefined}
+            correction={slot.beat.params?.correction as string | undefined}
+            source={slot.beat.params?.source as string | undefined}
+            target={slot.beat.params?.target as string | undefined}
+            limit={slot.beat.params?.limit as number | undefined}
           />
         );
       case "password-leak":

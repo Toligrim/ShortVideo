@@ -70,6 +70,7 @@ export interface StoryBeat {
     | "devices-meet"
     | "handshake"
     | "title-slam"
+    | "spell-distance"
     | "password-leak"
     | "hash-table"
     | "minimal-perfect-hash"
