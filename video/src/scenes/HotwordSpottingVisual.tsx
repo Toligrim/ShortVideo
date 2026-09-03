@@ -439,7 +439,7 @@ const FeaturesPhase: React.FC<{ local: number; enter: number; impactLocal: numbe
       <ArrowLine x1={655} x2={690} y={715} color={theme.warning} opacity={enter * (0.25 + 0.75 * featureProgress)} />
       <Panel x={690} y={500} width={260} height={430} color={theme.accent2} title="ПРИЗНАКИ" icon="sliders-horizontal" enter={enter}>
         <NumericVector x={25} y={142} color={theme.accent2} opacity={enter * (0.2 + 0.8 * featureProgress)} />
-        <div style={{ position: "absolute", left: 0, right: 0, top: 355, textAlign: "center", color: theme.accent2, ...mono, fontSize: 17 }}>НАБОР ЧИСЕЛ</div>
+        <div style={{ position: "absolute", left: 0, right: 0, top: 380, textAlign: "center", color: theme.accent2, ...mono, fontSize: 17 }}>НАБОР ЧИСЕЛ</div>
       </Panel>
       <BottomBadge text="ПОТОК → ОКНА → ЧИСЛОВЫЕ ПРИЗНАКИ" color={theme.accent2} enter={enter} />
       <PulseRing x={820} y={720} triggerFrame={impactLocal} tone="accent2" size={200} />
