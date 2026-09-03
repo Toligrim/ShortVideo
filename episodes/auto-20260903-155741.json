@@ -1,0 +1,67 @@
+{
+  "id": "auto-20260903-155741",
+  "title": "Почему биткоинов никогда не будет больше двадцати одного миллиона — кто поставил потолок?",
+  "scenes": [
+    {
+      "type": "story",
+      "narration": "Если завтра майнеры решат напечатать ещё один {биткоин|биткоин}, сеть скажет: нет. Но кто поставил потолок в двадцать один миллион?",
+      "beats": [
+        { "visual": "reward-check", "onWord": "напечатать", "params": { "phase": "attempt" } },
+        { "visual": "reward-check", "onWord": "нет", "params": { "phase": "reject" } },
+        { "visual": "reward-check", "onWord": "потолок", "params": { "phase": "rules" } }
+      ]
+    },
+    {
+      "type": "story",
+      "narration": "Это {субсидия блока|субсидия блока}, а её {халвинг|халвинг} — как пекарня с печатью: сначала она выдаёт пятьдесят булок, а через каждые двести десять тысяч партий уменьшает выдачу вдвое.",
+      "beats": [
+        { "visual": "halving-schedule", "onWord": "субсидия", "params": { "phase": "bakery" } },
+        { "visual": "halving-schedule", "onWord": "халвинг", "params": { "phase": "interval" } },
+        { "visual": "halving-schedule", "onWord": "сначала", "params": { "phase": "bakery" } },
+        { "visual": "halving-schedule", "onWord": "через", "params": { "phase": "interval" } }
+      ]
+    },
+    {
+      "type": "story",
+      "narration": "Изначальная субсидия — пятьдесят монет за блок. Через каждые двести десять тысяч блоков субсидия делится пополам: пятьдесят, двадцать пять, двенадцать с половиной — и дальше.",
+      "beats": [
+        { "visual": "halving-schedule", "onWord": "Изначальная", "params": { "phase": "bakery" } },
+        { "visual": "halving-schedule", "onWord": "Через", "params": { "phase": "interval" } },
+        { "visual": "halving-schedule", "onWord": "пополам", "params": { "phase": "halve" } },
+        { "visual": "halving-schedule", "onWord": "дальше", "params": { "phase": "tail" } }
+      ]
+    },
+    {
+      "type": "story",
+      "narration": "Вау-момент: узел сам считает награду блока — субсидию плюс комиссии — и проверяет сумму первой транзакции. Если там лишние монеты, он отвергает весь блок.",
+      "beats": [
+        { "visual": "reward-check", "onWord": "узел", "params": { "phase": "sum" } },
+        { "visual": "reward-check", "onWord": "первой", "params": { "phase": "coinbase" } },
+        { "visual": "reward-check", "onWord": "лишние", "params": { "phase": "reject" } },
+        { "visual": "reward-check", "onWord": "отвергает", "params": { "phase": "reject" } }
+      ]
+    },
+    {
+      "type": "story",
+      "narration": "Потолок задал Сатоши Накамото в исходных правилах, а сегодня его удерживают узлы сети: они повторяют одну проверку. Изменение формулы требует согласия сети.",
+      "beats": [
+        { "visual": "reward-check", "onWord": "Потолок", "params": { "phase": "rules" } },
+        { "visual": "reward-check", "onWord": "узлы", "params": { "phase": "nodes" } },
+        { "visual": "reward-check", "onWord": "повторяют", "params": { "phase": "nodes" } },
+        { "visual": "reward-check", "onWord": "Изменение", "params": { "phase": "consensus" } }
+      ]
+    },
+    {
+      "type": "outro",
+      "title": "Правила держат потолок",
+      "bullets": [
+        "21 млн из правил выпуска",
+        "Халвинг режет субсидию",
+        "Узел отбрасывает лишнее",
+        "Потерянные монеты — дальше"
+      ],
+      "cta": "Подпишись: дальше — потерянные монеты",
+      "narration": "Запомни: двадцать один миллион получается из правил выпуска. {Халвинг|халвинг} уменьшает субсидию, узел отбрасывает лишнюю награду. Дальше — куда деваются потерянные монеты. Подпишись."
+    }
+  ]
+}

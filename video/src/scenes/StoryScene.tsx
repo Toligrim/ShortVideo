@@ -69,6 +69,8 @@ import { RollingShutterVisual, type RollingShutterPhase } from "./RollingShutter
 import { MicrowaveDielectricVisual, type MicrowaveDielectricPhase } from "./MicrowaveDielectricVisual";
 import { MagnetronCavityVisual, type MagnetronCavityPhase } from "./MagnetronCavityVisual";
 import { HotwordSpottingVisual, type HotwordSpottingPhase } from "./HotwordSpottingVisual";
+import { HalvingScheduleVisual, type HalvingSchedulePhase } from "./HalvingScheduleVisual";
+import { RewardCheckVisual, type RewardCheckPhase } from "./RewardCheckVisual";
 
 /* ──────────────────────────── расписание битов ──────────────────────────── */
 
@@ -395,6 +397,14 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
     if (beat.visual === "hotword-spotting") {
       const phase = beat.params?.phase as HotwordSpottingPhase | undefined;
       impact = start + Math.round(dur * (phase === "trigger" ? 0.72 : phase === "offline" ? 0.62 : phase === "features" ? 0.6 : 0.55));
+    }
+    if (beat.visual === "halving-schedule") {
+      const phase = beat.params?.phase as HalvingSchedulePhase | undefined;
+      impact = start + Math.round(dur * (phase === "tail" ? 0.72 : phase === "halve" ? 0.64 : phase === "interval" ? 0.58 : 0.55));
+    }
+    if (beat.visual === "reward-check") {
+      const phase = beat.params?.phase as RewardCheckPhase | undefined;
+      impact = start + Math.round(dur * (phase === "reject" ? 0.68 : phase === "consensus" ? 0.7 : phase === "coinbase" ? 0.62 : phase === "nodes" ? 0.64 : phase === "rules" ? 0.58 : 0.6));
     }
     return { beat, start, end, impact };
   });
@@ -767,6 +777,16 @@ export const storySfx = (
     if (s.beat.visual === "hotword-spotting") {
       const ph = s.beat.params?.phase as HotwordSpottingPhase | undefined;
       const sound = ph === "trigger" ? "slam" : ph === "offline" ? "ding" : ph === "features" ? "pop" : "click";
+      events.push({ frame: s.impact, sound });
+    }
+    if (s.beat.visual === "halving-schedule") {
+      const ph = s.beat.params?.phase as HalvingSchedulePhase | undefined;
+      const sound = ph === "tail" ? "ding" : ph === "halve" ? "slam" : ph === "interval" ? "click" : "pop";
+      events.push({ frame: s.impact, sound });
+    }
+    if (s.beat.visual === "reward-check") {
+      const ph = s.beat.params?.phase as RewardCheckPhase | undefined;
+      const sound = ph === "reject" || ph === "consensus" ? "slam" : ph === "coinbase" || ph === "nodes" ? "ding" : ph === "rules" ? "pop" : "click";
       events.push({ frame: s.impact, sound });
     }
   }
@@ -11696,6 +11716,8 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     "microwave-dielectric": { scale: 0.9, y: -20 },
     "magnetron-cavity": { scale: 0.88, y: -20 },
     "hotword-spotting": { scale: 0.9, y: -20 },
+    "halving-schedule": { scale: 0.9, y: -20 },
+    "reward-check": { scale: 0.9, y: -20 },
   };
   const cur = cams[slot.beat.visual] ?? { scale: 1, y: 0 };
   const prev = idx > 0 ? cams[slots[idx - 1].beat.visual] ?? cur : cur;
@@ -12697,6 +12719,24 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             fps={fps}
             impactLocal={impactLocal}
             phase={(slot.beat.params?.phase as HotwordSpottingPhase | undefined) ?? "listen"}
+          />
+        );
+      case "halving-schedule":
+        return (
+          <HalvingScheduleVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as HalvingSchedulePhase | undefined) ?? "bakery"}
+          />
+        );
+      case "reward-check":
+        return (
+          <RewardCheckVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as RewardCheckPhase | undefined) ?? "attempt"}
           />
         );
       default:
