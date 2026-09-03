@@ -172,7 +172,9 @@ export interface StoryBeat {
   | "mail-server-handoff"
   | "totp-window"
   | "rolling-shutter"
-  | "operational-transform";
+  | "operational-transform"
+  | "microwave-dielectric"
+  | "magnetron-cavity";
   onWord?: string; // бит начинается на этом слове реплики
   params?: Record<string, unknown>;
 }

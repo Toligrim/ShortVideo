@@ -66,6 +66,8 @@ import { TotpWindowVisual, type TotpWindowPhase } from "./TotpWindowVisual";
 import { SpellDistanceVisual, type SpellDistancePhase } from "./SpellDistanceVisual";
 import { OperationalTransformVisual, type OperationalTransformPhase } from "./OperationalTransformVisual";
 import { RollingShutterVisual, type RollingShutterPhase } from "./RollingShutterVisual";
+import { MicrowaveDielectricVisual, type MicrowaveDielectricPhase } from "./MicrowaveDielectricVisual";
+import { MagnetronCavityVisual, type MagnetronCavityPhase } from "./MagnetronCavityVisual";
 
 /* ──────────────────────────── расписание битов ──────────────────────────── */
 
@@ -380,6 +382,14 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
     if (beat.visual === "rolling-shutter") {
       const phase = beat.params?.phase as RollingShutterPhase | undefined;
       impact = start + Math.round(dur * (phase === "scan" ? 0.62 : phase === "split" ? 0.65 : phase === "distort" ? 0.68 : 0.64));
+    }
+    if (beat.visual === "microwave-dielectric") {
+      const phase = beat.params?.phase as MicrowaveDielectricPhase | undefined;
+      impact = start + Math.round(dur * (phase === "dipoles" ? 0.7 : phase === "losses" ? 0.64 : phase === "afterheat" ? 0.62 : 0.58));
+    }
+    if (beat.visual === "magnetron-cavity") {
+      const phase = beat.params?.phase as MagnetronCavityPhase | undefined;
+      impact = start + Math.round(dur * (phase === "waveguide" ? 0.68 : phase === "resonance" ? 0.64 : 0.58));
     }
     return { beat, start, end, impact };
   });
@@ -737,6 +747,16 @@ export const storySfx = (
     if (s.beat.visual === "rolling-shutter") {
       const ph = s.beat.params?.phase as RollingShutterPhase | undefined;
       const sound = ph === "distort" ? "slam" : ph === "compare" ? "ding" : ph === "scan" ? "click" : "pop";
+      events.push({ frame: s.impact, sound });
+    }
+    if (s.beat.visual === "microwave-dielectric") {
+      const ph = s.beat.params?.phase as MicrowaveDielectricPhase | undefined;
+      const sound = ph === "afterheat" || ph === "losses" ? "ding" : ph === "dipoles" ? "pop" : "click";
+      events.push({ frame: s.impact, sound });
+    }
+    if (s.beat.visual === "magnetron-cavity") {
+      const ph = s.beat.params?.phase as MagnetronCavityPhase | undefined;
+      const sound = ph === "waveguide" ? "whoosh" : ph === "resonance" ? "ding" : "pop";
       events.push({ frame: s.impact, sound });
     }
   }
@@ -11663,6 +11683,8 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     "totp-window": { scale: 0.9, y: -20 },
     "rolling-shutter": { scale: 0.9, y: -20 },
     "operational-transform": { scale: 0.9, y: -20 },
+    "microwave-dielectric": { scale: 0.9, y: -20 },
+    "magnetron-cavity": { scale: 0.88, y: -20 },
   };
   const cur = cams[slot.beat.visual] ?? { scale: 1, y: 0 };
   const prev = idx > 0 ? cams[slots[idx - 1].beat.visual] ?? cur : cur;
@@ -12637,6 +12659,24 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             fps={fps}
             impactLocal={impactLocal}
             phase={(slot.beat.params?.phase as RollingShutterPhase | undefined) ?? "scan"}
+          />
+        );
+      case "microwave-dielectric":
+        return (
+          <MicrowaveDielectricVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as MicrowaveDielectricPhase | undefined) ?? "contrast"}
+          />
+        );
+      case "magnetron-cavity":
+        return (
+          <MagnetronCavityVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as MagnetronCavityPhase | undefined) ?? "electrons"}
           />
         );
       default:
