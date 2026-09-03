@@ -101,7 +101,7 @@ const NodeBox: React.FC<{
   width?: number;
   height?: number;
   label: string;
-  detail: string;
+  detail: React.ReactNode;
   color: string;
   icon: string;
   enter: number;
@@ -128,13 +128,13 @@ export const RewardCheckVisual: React.FC<{
     return (
       <div style={{ position: "absolute", inset: 0, width: W, height: H, overflow: "hidden", fontFamily: theme.font }}>
         <Header phase={phase} enter={enter} />
-        <NodeBox left={62} top={455} width={320} height={360} label="МАЙНЕР" detail="новый блок\ncoinbase" color={theme.warning} icon="pickaxe" enter={enter} />
+        <NodeBox left={62} top={455} width={320} height={360} label="МАЙНЕР" detail={<>новый блок<br />coinbase</>} color={theme.warning} icon="pickaxe" enter={enter} />
         <div style={{ position: "absolute", left: 414, top: 568, width: 260, textAlign: "center", opacity: enter }}>
           <div style={{ ...mono, fontSize: 26, color: reveal > 0.5 ? theme.danger : theme.accent }}>coinbase</div>
           <div style={{ color: theme.accent, fontSize: 58, marginTop: 12 }}>→</div>
           <div style={{ ...mono, fontSize: 28, color: theme.danger, opacity: 0.7 + reveal * 0.3, whiteSpace: "nowrap" }}>51 BTC</div>
         </div>
-        <NodeBox left={698} top={455} width={320} height={360} label="УЗЕЛ" detail="лимит: 50 BTC\nпроверяет блок" color={theme.accent2} icon="server" enter={enter} />
+        <NodeBox left={698} top={455} width={320} height={360} label="УЗЕЛ" detail={<>лимит: 50 BTC<br />проверяет блок</>} color={theme.accent2} icon="server" enter={enter} />
         <StatusPill label="+1 BTC · СЛИШКОМ МНОГО" color={theme.danger} enter={enter * (0.45 + reveal * 0.55)} />
         <PulseRing x={W / 2} y={650} triggerFrame={impactLocal} tone="danger" size={220} />
       </div>
@@ -172,7 +172,7 @@ export const RewardCheckVisual: React.FC<{
           </div>
           <div style={{ margin: "18px 24px", opacity: 0.5, ...mono, fontSize: 22, color: theme.subtext, lineHeight: 1.8 }}>tx 001 · перевод<br />tx 002 · перевод<br />tx 003 · перевод</div>
         </Panel>
-        <NodeBox left={720} top={480} width={298} height={370} label="УЗЕЛ" detail="читает первую\nи сверяет лимит" color={theme.accent2} icon="search-check" enter={enter * firstP} />
+        <NodeBox left={720} top={480} width={298} height={370} label="УЗЕЛ" detail={<>читает первую<br />и сверяет лимит</>} color={theme.accent2} icon="search-check" enter={enter * firstP} />
         <div style={{ position: "absolute", left: 654, top: 635, color: theme.accent, fontSize: 52, opacity: enter * firstP }}>→</div>
         <StatusPill label="COINBASE = НАГРАДА БЛОКА" color={theme.accent} enter={enter * (0.55 + reveal * 0.45)} />
         <PulseRing x={W / 2 - 170} y={650} triggerFrame={impactLocal} tone="accent" size={220} />
@@ -194,7 +194,7 @@ export const RewardCheckVisual: React.FC<{
           </div>
         </Panel>
         <div style={{ position: "absolute", left: 490, top: 585, color: theme.danger, fontSize: 60, opacity: enter * (0.55 + errorP * 0.45) }}>≠</div>
-        <NodeBox left={600} top={455} width={418} height={360} label="УЗЕЛ ОТКАЗАЛ" detail="bad-cb-amount\ncoinbase pays too much" color={theme.danger} icon="ban" enter={enter * (0.5 + errorP * 0.5)} />
+        <NodeBox left={600} top={455} width={418} height={360} label="УЗЕЛ ОТКАЗАЛ" detail={<>bad-cb-amount<br />coinbase pays too much</>} color={theme.danger} icon="ban" enter={enter * (0.5 + errorP * 0.5)} />
         <StatusPill label="ВЕСЬ БЛОК ОТВЕРГНУТ" color={theme.danger} enter={enter * (0.45 + errorP * 0.55)} />
         <PulseRing x={W / 2 + 205} y={650} triggerFrame={impactLocal} tone="danger" size={240} />
       </div>
