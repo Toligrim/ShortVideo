@@ -313,6 +313,24 @@ class PromptTests(unittest.TestCase):
         self.assertIn("kill", text)
         self.assertIn("git-reset-clean-incident", text)
 
+    def test_prompt_documents_animation_director_library_growth_allowlist(self):
+        """Two real, back-to-back incidents (auto-20260903-092204,
+        auto-20260903-114303): animation-director legitimately extending the
+        visual language touched schema/scenes.schema.json,
+        video/src/lib/types.ts, .claude/skills/animator/catalog.md, and new
+        video/src/scenes/*.tsx files as part of its documented role - but
+        the prompt only ever told the orchestrator to `--allow
+        episodes/{slug}.json` on close, so both attempts were rejected as
+        worktree_path_violation and had to be recovered by hand. The prompt
+        must name these paths explicitly so the orchestrator's --allow list
+        actually covers the role's real, expected output.
+        """
+        text = sched.build_prompt(ROOT, "auto-x", sched.PROMPT_TOPIC_LABEL)
+        self.assertIn("schema/scenes.schema.json", text)
+        self.assertIn("video/src/lib/types.ts", text)
+        self.assertIn(".claude/skills/animator/catalog.md", text)
+        self.assertIn("worktree_path_violation", text)
+
     def test_prompt_instructs_autonomy_and_approval_gate(self):
         text = sched.build_prompt(ROOT, "auto-x", sched.PROMPT_TOPIC_LABEL)
         self.assertIn("ВЫБЕРИ ТЕМУ САМ", text)
