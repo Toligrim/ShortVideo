@@ -449,6 +449,46 @@ class ProgressCardTests(unittest.TestCase):
         self.assertLessEqual(len(sent_text), 4096)
         self.assertTrue(sent_text.endswith("…"))
 
+    def test_terminal_card_shows_total_time_and_per_role_breakdown(self):
+        # Operator feedback: the terminal ("Production завершён") card
+        # should end with total wall time and a per-role time breakdown.
+        events = [
+            self.event(
+                "run_start", 1, slug="progress-topic", topic="Алгоритмы",
+                ts="2099-01-01T00:00:00.000Z",
+            ),
+            self.event(
+                "delegate_requested", 2,
+                actor="scriptwriter-abc", task_id="scriptwriter:x",
+                role="scriptwriter", ts="2099-01-01T00:05:00.000Z",
+            ),
+            self.event(
+                "delegate_result_classified", 3,
+                actor="scriptwriter-abc", task_id="scriptwriter:x",
+                role="scriptwriter", result_class="success",
+                ts="2099-01-01T00:10:00.000Z",  # 5 min
+            ),
+            self.event(
+                "delegate_requested", 4,
+                actor="animation-director-def", task_id="director:x",
+                role="animation-director", ts="2099-01-01T00:12:00.000Z",
+            ),
+            self.event(
+                "delegate_result_classified", 5,
+                actor="animation-director-def", task_id="director:x",
+                role="animation-director", result_class="success",
+                ts="2099-01-01T01:02:00.000Z",  # 50 min
+            ),
+            self.event(
+                "publication_created", 6,
+                publication_id="pub-1", slug="progress-topic",
+                ts="2099-01-01T01:10:00.000Z",  # total: 70 min from run_start
+            ),
+        ]
+        text = render(reduce_events(self.run_id, events))
+        self.assertIn("⏱ По этапам: Сценарист: 5 мин, Режиссёр: 50 мин", text)
+        self.assertIn("⏱ Общее время: 1ч 10мин", text)
+
     def test_timeline_marks_a_live_retry_after_a_pre_dispatch_failure(self):
         # Real scenario from a live run: a pre-dispatch failure
         # (mcp_invocation_invalid, termination_unconfirmed=False) doesn't

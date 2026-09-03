@@ -135,6 +135,10 @@ class ProgressState:
     last_event_ts: str | None = None
     started_at: str | None = None
     timeline: list[dict[str, str]] = field(default_factory=list)
+    # One entry per completed (success or failure) delegate attempt, timed
+    # from its delegate_requested to its delegate_result_classified - used
+    # only for the terminal card's "⏱ По этапам" breakdown.
+    stage_timings: list[dict[str, Any]] = field(default_factory=list)
 
 
 def _ordered_events(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -209,6 +213,13 @@ def reduce_events(run_id: str, events: list[dict[str, Any]]) -> ProgressState:
     # before mcp_request_started is ever emitted) means the FIRST
     # mcp_request_started for a task_id can itself be the retry.
     task_ids_with_unretried_failure: set[str] = set()
+    # task_id -> (role, delegate_requested's ts) - local to this pass, used
+    # to time each attempt from request to its own result_classified for
+    # the terminal card's "⏱ По этапам" breakdown (see stage_timings above).
+    # Keyed on delegate_requested specifically (not delegate_started, which
+    # also re-fires on an in-claim retry) so a retried attempt's duration
+    # still counts from the original request, matching held_sec semantics.
+    task_started_at: dict[str, tuple[str, str]] = {}
 
     for event in ordered:
         kind = event.get("kind")
@@ -246,6 +257,12 @@ def reduce_events(run_id: str, events: list[dict[str, Any]]) -> ProgressState:
 
         elif kind in {"delegate_requested", "delegate_started"}:
             state.current_delegate = _delegate_fields(event)
+            if kind == "delegate_requested":
+                task_id = event.get("task_id")
+                role = event.get("role")
+                ts = event.get("ts")
+                if isinstance(task_id, str) and isinstance(role, str) and isinstance(ts, str):
+                    task_started_at[task_id] = (role, ts)
 
         elif kind == "mcp_request_started":
             # A dispatch for a task_id that previously recorded a failure
@@ -266,6 +283,20 @@ def reduce_events(run_id: str, events: list[dict[str, Any]]) -> ProgressState:
 
         elif kind == "delegate_result_classified":
             result_class = event.get("result_class")
+            task_id = event.get("task_id")
+            if isinstance(task_id, str):
+                started = task_started_at.pop(task_id, None)
+                end_ts = event.get("ts")
+                if started is not None and isinstance(end_ts, str):
+                    role, start_ts = started
+                    start_dt = _to_display_dt(start_ts)
+                    end_dt = _to_display_dt(end_ts)
+                    if start_dt is not None and end_dt is not None:
+                        state.stage_timings.append({
+                            "role": role,
+                            "seconds": (end_dt - start_dt).total_seconds(),
+                            "outcome": "success" if result_class == "success" else "failure",
+                        })
             if result_class != "success":
                 state.last_delegate_failure = {
                     "role": event.get("role"),
@@ -273,7 +304,6 @@ def reduce_events(run_id: str, events: list[dict[str, Any]]) -> ProgressState:
                     "result_class": result_class,
                     "error_code": event.get("error_code"),
                 }
-                task_id = event.get("task_id")
                 if isinstance(task_id, str):
                     task_ids_with_unretried_failure.add(task_id)
             if event.get("termination_unconfirmed") is True:
@@ -484,6 +514,37 @@ def _fit_to_telegram_limit(lines: list[str]) -> str:
 TIMELINE_VISIBLE_ENTRIES = 12
 
 
+def _format_duration(seconds: float) -> str:
+    total_minutes = max(0, round(seconds / 60))
+    if total_minutes < 60:
+        return f"{total_minutes} мин"
+    hours, minutes = divmod(total_minutes, 60)
+    return f"{hours}ч {minutes}мин" if minutes else f"{hours}ч"
+
+
+def _summary_lines(state: ProgressState) -> list[str]:
+    """Terminal-only wrap-up: total wall time and a per-role breakdown,
+    built from stage_timings (see reduce_events) - only ever called once
+    the run has actually reached a terminal state."""
+    out: list[str] = []
+    if state.stage_timings:
+        totals: dict[str, float] = {}
+        for entry in state.stage_timings:
+            role = entry.get("role")
+            key = role if isinstance(role, str) else "?"
+            totals[key] = totals.get(key, 0.0) + float(entry.get("seconds") or 0.0)
+        breakdown = ", ".join(
+            f"{_role_label(role)}: {_format_duration(seconds)}" for role, seconds in totals.items()
+        )
+        out.append(f"⏱ По этапам: {breakdown}")
+
+    start_dt = _to_display_dt(state.started_at)
+    end_dt = _to_display_dt(state.last_event_ts)
+    if start_dt is not None and end_dt is not None:
+        out.append(f"⏱ Общее время: {_format_duration((end_dt - start_dt).total_seconds())}")
+    return out
+
+
 def _timeline_lines(state: ProgressState) -> list[str]:
     """Chronological trace of significant events, oldest first, capped to
     the most recent TIMELINE_VISIBLE_ENTRIES so the card stays readable
@@ -532,6 +593,10 @@ def render(state: ProgressState) -> str:
         lines.extend(_timeline_lines(state))
         if state.last_event_ts is not None:
             lines.append(f"Последнее событие: {_format_timestamp(state.last_event_ts)}")
+        summary = _summary_lines(state)
+        if summary:
+            lines.append("")
+            lines.extend(summary)
         return _fit_to_telegram_limit(lines)
 
     # The pipeline's stage_start/stage_end telemetry is emitted inconsistently
