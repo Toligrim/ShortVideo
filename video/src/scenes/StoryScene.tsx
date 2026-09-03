@@ -65,6 +65,7 @@ import { MultiFrameStackVisual, type MultiFrameStackPhase } from "./MultiFrameSt
 import { TotpWindowVisual, type TotpWindowPhase } from "./TotpWindowVisual";
 import { SpellDistanceVisual, type SpellDistancePhase } from "./SpellDistanceVisual";
 import { OperationalTransformVisual, type OperationalTransformPhase } from "./OperationalTransformVisual";
+import { RollingShutterVisual, type RollingShutterPhase } from "./RollingShutterVisual";
 
 /* ──────────────────────────── расписание битов ──────────────────────────── */
 
@@ -375,6 +376,10 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
     if (beat.visual === "operational-transform") {
       const phase = beat.params?.phase as OperationalTransformPhase | undefined;
       impact = start + Math.round(dur * (phase === "shift" ? 0.72 : phase === "result" ? 0.7 : phase === "commands" ? 0.62 : 0.58));
+    }
+    if (beat.visual === "rolling-shutter") {
+      const phase = beat.params?.phase as RollingShutterPhase | undefined;
+      impact = start + Math.round(dur * (phase === "scan" ? 0.62 : phase === "split" ? 0.65 : phase === "distort" ? 0.68 : 0.64));
     }
     return { beat, start, end, impact };
   });
@@ -727,6 +732,11 @@ export const storySfx = (
     if (s.beat.visual === "operational-transform") {
       const ph = s.beat.params?.phase as OperationalTransformPhase | undefined;
       const sound = ph === "shift" ? "slam" : ph === "result" ? "ding" : ph === "insert" || ph === "commands" ? "pop" : "click";
+      events.push({ frame: s.impact, sound });
+    }
+    if (s.beat.visual === "rolling-shutter") {
+      const ph = s.beat.params?.phase as RollingShutterPhase | undefined;
+      const sound = ph === "distort" ? "slam" : ph === "compare" ? "ding" : ph === "scan" ? "click" : "pop";
       events.push({ frame: s.impact, sound });
     }
   }
@@ -11651,6 +11661,7 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     "mail-queue": { scale: 0.9, y: -20 },
     "mail-server-handoff": { scale: 0.9, y: -20 },
     "totp-window": { scale: 0.9, y: -20 },
+    "rolling-shutter": { scale: 0.9, y: -20 },
     "operational-transform": { scale: 0.9, y: -20 },
   };
   const cur = cams[slot.beat.visual] ?? { scale: 1, y: 0 };
@@ -12617,6 +12628,15 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             fps={fps}
             impactLocal={impactLocal}
             phase={(slot.beat.params?.phase as OperationalTransformPhase | undefined) ?? "document"}
+          />
+        );
+      case "rolling-shutter":
+        return (
+          <RollingShutterVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as RollingShutterPhase | undefined) ?? "scan"}
           />
         );
       default:

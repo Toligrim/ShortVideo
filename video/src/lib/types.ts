@@ -171,6 +171,7 @@ export interface StoryBeat {
   | "mail-queue"
   | "mail-server-handoff"
   | "totp-window"
+  | "rolling-shutter"
   | "operational-transform";
   onWord?: string; // бит начинается на этом слове реплики
   params?: Record<string, unknown>;
