@@ -1,0 +1,112 @@
+{
+  "id": "auto-20260903-063922",
+  "title": "Почему прямые предметы гнутся на видео с телефона?",
+  "scenes": [
+    {
+      "type": "story",
+      "beats": [
+        {
+          "visual": "rolling-shutter",
+          "onWord": "ТЫСЯЧИ",
+          "params": { "phase": "scan" }
+        },
+        {
+          "visual": "rolling-shutter",
+          "onWord": "сверху",
+          "params": { "phase": "split" }
+        },
+        {
+          "visual": "rolling-shutter",
+          "onWord": "гнутой",
+          "params": { "phase": "distort" }
+        }
+      ],
+      "narration": "{ТЫСЯЧИ СТРОК|Тысячи строк} кадра записываются не разом: вентилятор ещё в одном положении сверху, но уже повернулся снизу. Почему прямая лопасть выглядит гнутой?"
+    },
+    {
+      "type": "story",
+      "beats": [
+        {
+          "visual": "rolling-shutter",
+          "onWord": "сканер",
+          "params": { "phase": "scan" }
+        },
+        {
+          "visual": "rolling-shutter",
+          "onWord": "rolling",
+          "params": { "phase": "split" }
+        }
+      ],
+      "narration": "Внутри камеры матрица — как сканер: проводит строку за строкой. Это {rolling shutter|роллинг шаттер}: верх и низ кадра фиксируются не одновременно."
+    },
+    {
+      "type": "story",
+      "beats": [
+        {
+          "visual": "rolling-shutter",
+          "onWord": "считывает",
+          "params": { "phase": "scan" }
+        },
+        {
+          "visual": "rolling-shutter",
+          "onWord": "старое",
+          "params": { "phase": "split" }
+        },
+        {
+          "visual": "rolling-shutter",
+          "onWord": "отрезок",
+          "params": { "phase": "distort" }
+        }
+      ],
+      "narration": "Камера считывает строки одну за другой, и лопасть успевает повернуться. Верхняя строка записывает старое положение, нижняя — более новое: между ними прошёл отрезок времени."
+    },
+    {
+      "type": "story",
+      "beats": [
+        {
+          "visual": "rolling-shutter",
+          "onWord": "складывает",
+          "params": { "phase": "split" }
+        },
+        {
+          "visual": "rolling-shutter",
+          "onWord": "превращают",
+          "params": { "phase": "distort" }
+        }
+      ],
+      "narration": "Телефон складывает все строки в один прямоугольный кадр. Разные углы в соседних строках превращают жёсткую прямую лопасть в наклонённую, изломанную или словно загнутую."
+    },
+    {
+      "type": "story",
+      "beats": [
+        {
+          "visual": "rolling-shutter",
+          "onWord": "быстрее",
+          "params": { "phase": "compare" }
+        },
+        {
+          "visual": "rolling-shutter",
+          "onWord": "овалом",
+          "params": { "phase": "compare" }
+        },
+        {
+          "visual": "rolling-shutter",
+          "onWord": "кривыми",
+          "params": { "phase": "distort" }
+        }
+      ],
+      "narration": "Чем быстрее вращение и чем дольше считывание кадра, тем заметнее искажение. Круг вентилятора иногда становится овалом, а прямые лопасти — кривыми, хотя металл не деформировался."
+    },
+    {
+      "type": "outro",
+      "title": "Время → кривая геометрия",
+      "bullets": [
+        "матрица читает построчно",
+        "верх и низ — разные моменты",
+        "металл прямой, кадр кривой"
+      ],
+      "cta": "Подпишись: дальше — трюк камеры",
+      "narration": "Итак, виновата не гнущаяся лопасть: {rolling shutter|роллинг шаттер} фиксирует верх и низ в разные моменты, а движение превращает время в кривую геометрию. Дальше — скрытый трюк камеры, подпишись."
+    }
+  ]
+}
