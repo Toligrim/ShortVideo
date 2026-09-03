@@ -174,7 +174,8 @@ export interface StoryBeat {
   | "rolling-shutter"
   | "operational-transform"
   | "microwave-dielectric"
-  | "magnetron-cavity";
+  | "magnetron-cavity"
+  | "hotword-spotting";
   onWord?: string; // бит начинается на этом слове реплики
   params?: Record<string, unknown>;
 }

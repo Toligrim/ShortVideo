@@ -346,9 +346,20 @@ def build_prompt(root: Path, slug: str, topic_label: str) -> str:
    ПОСЛЕ делегата слей результат САМ (делегат этого не делает и не должен):
        python3 tools/delegate_worktree.py close --agent-id <id> \
            --allow episodes/drafts/{slug}.draft.json
-   (для режиссёра — `--allow episodes/{slug}.json`). Код 6 значит: делегат
-   тронул путь вне `--allow` — результат НЕ влит автоматически и остаётся в
-   его worktree; посмотри сам (`git -C <worktree> diff`/`status`), потом
+   (для режиссёра — `--allow episodes/{slug}.json`, а если в ЭТОМ заходе он
+   расширял язык визуалов — добавь туда же реально изменённые пути из
+   этого списка: `schema/scenes.schema.json`, `video/src/lib/types.ts`,
+   `.claude/skills/animator/catalog.md`, новые файлы под
+   `video/src/scenes/`. Это НЕ превышение полномочий и не повод для
+   `abandon` — штатная часть роли режиссёра «расшир[ить] язык визуалов,
+   когда его не хватает» (см. animation-director в .claude/agents/). Дважды
+   подряд (auto-20260903-092204, auto-20260903-114303) именно это ошибочно
+   закрывалось как `worktree_path_violation`, и работу пришлось спасать
+   вручную после отказа — проверь ДО `close`, что именно он тронул
+   (`git -C <worktree> diff --stat`), и включи это в `--allow` заранее,
+   а не только `episodes/{slug}.json`). Код 6 значит: делегат тронул путь
+   вне `--allow` — результат НЕ влит автоматически и остаётся в его
+   worktree; посмотри сам (`git -C <worktree> diff`/`status`), потом
    `abandon` или перенеси нужное вручную. Код 2 при `close` — конфликт: тот
    же файл параллельно изменился в основном дереве, пока делегат работал;
    это тоже повод остановиться и разобраться, а не бороться за файл.

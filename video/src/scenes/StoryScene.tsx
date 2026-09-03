@@ -68,6 +68,7 @@ import { OperationalTransformVisual, type OperationalTransformPhase } from "./Op
 import { RollingShutterVisual, type RollingShutterPhase } from "./RollingShutterVisual";
 import { MicrowaveDielectricVisual, type MicrowaveDielectricPhase } from "./MicrowaveDielectricVisual";
 import { MagnetronCavityVisual, type MagnetronCavityPhase } from "./MagnetronCavityVisual";
+import { HotwordSpottingVisual, type HotwordSpottingPhase } from "./HotwordSpottingVisual";
 
 /* ──────────────────────────── расписание битов ──────────────────────────── */
 
@@ -390,6 +391,10 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
     if (beat.visual === "magnetron-cavity") {
       const phase = beat.params?.phase as MagnetronCavityPhase | undefined;
       impact = start + Math.round(dur * (phase === "waveguide" ? 0.68 : phase === "resonance" ? 0.64 : 0.58));
+    }
+    if (beat.visual === "hotword-spotting") {
+      const phase = beat.params?.phase as HotwordSpottingPhase | undefined;
+      impact = start + Math.round(dur * (phase === "trigger" ? 0.72 : phase === "offline" ? 0.62 : phase === "features" ? 0.6 : 0.55));
     }
     return { beat, start, end, impact };
   });
@@ -757,6 +762,11 @@ export const storySfx = (
     if (s.beat.visual === "magnetron-cavity") {
       const ph = s.beat.params?.phase as MagnetronCavityPhase | undefined;
       const sound = ph === "waveguide" ? "whoosh" : ph === "resonance" ? "ding" : "pop";
+      events.push({ frame: s.impact, sound });
+    }
+    if (s.beat.visual === "hotword-spotting") {
+      const ph = s.beat.params?.phase as HotwordSpottingPhase | undefined;
+      const sound = ph === "trigger" ? "slam" : ph === "offline" ? "ding" : ph === "features" ? "pop" : "click";
       events.push({ frame: s.impact, sound });
     }
   }
@@ -11685,6 +11695,7 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     "operational-transform": { scale: 0.9, y: -20 },
     "microwave-dielectric": { scale: 0.9, y: -20 },
     "magnetron-cavity": { scale: 0.88, y: -20 },
+    "hotword-spotting": { scale: 0.9, y: -20 },
   };
   const cur = cams[slot.beat.visual] ?? { scale: 1, y: 0 };
   const prev = idx > 0 ? cams[slots[idx - 1].beat.visual] ?? cur : cur;
@@ -12677,6 +12688,15 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             fps={fps}
             impactLocal={impactLocal}
             phase={(slot.beat.params?.phase as MagnetronCavityPhase | undefined) ?? "electrons"}
+          />
+        );
+      case "hotword-spotting":
+        return (
+          <HotwordSpottingVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as HotwordSpottingPhase | undefined) ?? "listen"}
           />
         );
       default:
