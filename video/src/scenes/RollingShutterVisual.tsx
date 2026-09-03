@@ -255,10 +255,10 @@ const ScanPhase: React.FC<{ local: number; enter: number; impactLocal: number }>
     <>
       <Panel left={55} top={365} width={465} height={675} color={theme.accent2}>
         <PanelTitle left={0} top={32} text="СЦЕНА · ВЕНТИЛЯТОР" color={theme.accent2} />
-        <div style={{ position: "absolute", left: 0, right: 0, top: 545, textAlign: "center", color: theme.text, fontSize: 21, ...mono }}>
+        <div style={{ position: "absolute", left: 0, right: 0, top: 565, textAlign: "center", color: theme.text, fontSize: 21, ...mono }}>
           ЛОПАСТЬ · ПРЯМАЯ
         </div>
-        <div style={{ position: "absolute", left: 0, right: 0, top: 588, textAlign: "center", color: theme.subtext, fontSize: 18, ...mono }}>
+        <div style={{ position: "absolute", left: 0, right: 0, top: 610, textAlign: "center", color: theme.subtext, fontSize: 18, ...mono }}>
           движется целиком
         </div>
       </Panel>
@@ -275,7 +275,7 @@ const ScanPhase: React.FC<{ local: number; enter: number; impactLocal: number }>
           <text x={285} y={462} textAnchor="middle" fill={theme.subtext} fontFamily={theme.mono} fontSize={18} fontWeight={800}>
             ДВИЖЕНИЕ
           </text>
-          <text x={285} y={965} textAnchor="middle" fill={theme.accent2} fontFamily={theme.mono} fontSize={20} fontWeight={800}>
+          <text x={285} y={1025} textAnchor="middle" fill={theme.accent2} fontFamily={theme.mono} fontSize={20} fontWeight={800}>
             t = {Math.round(local / 3)}
           </text>
         </g>
