@@ -1,0 +1,218 @@
+{
+  "id": "auto-20260904-124303",
+  "title": "Почему Шазам узнаёт песню даже в шумном кафе?",
+  "scenes": [
+    {
+      "type": "story",
+      "narration": "Кофемолка орёт, люди разговаривают, а Шазам через несколько секунд называет песню. Подозреваемый не волшебный слух: что именно нашёл телефон в этом хаосе?",
+      "beats": [
+        {
+          "visual": "title-slam",
+          "onWord": "Кофемолка",
+          "params": {
+            "text": "ШУМНОЕ КАФЕ",
+            "sub": "КОФЕ + РАЗГОВОРЫ + ПЕСНЯ"
+          }
+        },
+        {
+          "visual": "audio-fingerprint",
+          "onWord": "люди",
+          "params": {
+            "phase": "noise"
+          }
+        },
+        {
+          "visual": "audio-fingerprint",
+          "onWord": "Шазам",
+          "params": {
+            "phase": "noise"
+          }
+        },
+        {
+          "visual": "title-slam",
+          "onWord": "что",
+          "params": {
+            "text": "ЧТО НАШЁЛ ТЕЛЕФОН?",
+            "sub": "РАССЛЕДОВАНИЕ НАЧИНАЕТСЯ"
+          }
+        }
+      ]
+    },
+    {
+      "type": "story",
+      "narration": "Следствие начинается с аудиофингерпринта — карты маршрута: он хранит не всю улицу, а редкие ориентиры, по которым песню узнают.",
+      "beats": [
+        {
+          "visual": "audio-fingerprint",
+          "onWord": "аудиофингерпринта",
+          "params": {
+            "phase": "map"
+          }
+        },
+        {
+          "visual": "audio-fingerprint",
+          "onWord": "карты",
+          "params": {
+            "phase": "map"
+          }
+        },
+        {
+          "visual": "audio-fingerprint",
+          "onWord": "хранит",
+          "params": {
+            "phase": "map"
+          }
+        },
+        {
+          "visual": "audio-fingerprint",
+          "onWord": "ориентиры",
+          "params": {
+            "phase": "map"
+          }
+        }
+      ]
+    },
+    {
+      "type": "story",
+      "narration": "Запись превращают в спектрограмму — карту: по горизонтали время, по вертикали высота звука. Оставляют локальные максимумы — яркие пики песни; шум маскирует часть, но устойчивые остаются.",
+      "beats": [
+        {
+          "visual": "audio-fingerprint",
+          "onWord": "спектрограмму",
+          "params": {
+            "phase": "peaks"
+          }
+        },
+        {
+          "visual": "audio-fingerprint",
+          "onWord": "горизонтали",
+          "params": {
+            "phase": "peaks"
+          }
+        },
+        {
+          "visual": "audio-fingerprint",
+          "onWord": "вертикали",
+          "params": {
+            "phase": "peaks"
+          }
+        },
+        {
+          "visual": "audio-fingerprint",
+          "onWord": "Оставляют",
+          "params": {
+            "phase": "peaks"
+          }
+        },
+        {
+          "visual": "audio-fingerprint",
+          "onWord": "шум",
+          "params": {
+            "phase": "peaks"
+          }
+        },
+        {
+          "visual": "audio-fingerprint",
+          "onWord": "устойчивые",
+          "params": {
+            "phase": "peaks"
+          }
+        }
+      ]
+    },
+    {
+      "type": "story",
+      "narration": "Для каждого якоря он берёт ближайший подходящий пик и соединяет их в пару. В короткий код упакованы две частоты и промежуток времени — как расстояние между фонарями.",
+      "beats": [
+        {
+          "visual": "audio-fingerprint",
+          "onWord": "берёт",
+          "params": {
+            "phase": "pair"
+          }
+        },
+        {
+          "visual": "audio-fingerprint",
+          "onWord": "соединяет",
+          "params": {
+            "phase": "pair"
+          }
+        },
+        {
+          "visual": "audio-fingerprint",
+          "onWord": "две",
+          "params": {
+            "phase": "pair"
+          }
+        },
+        {
+          "visual": "audio-fingerprint",
+          "onWord": "промежуток",
+          "params": {
+            "phase": "pair"
+          }
+        },
+        {
+          "visual": "audio-fingerprint",
+          "onWord": "фонарями",
+          "params": {
+            "phase": "map"
+          }
+        }
+      ]
+    },
+    {
+      "type": "story",
+      "narration": "Одна совпавшая пара — случайность. Но тысячи совпадений с одним и тем же смещением времени голосуют за одну песню: подозреваемый найден.",
+      "beats": [
+        {
+          "visual": "audio-fingerprint",
+          "onWord": "Одна",
+          "params": {
+            "phase": "pair"
+          }
+        },
+        {
+          "visual": "audio-fingerprint",
+          "onWord": "тысячи",
+          "params": {
+            "phase": "vote"
+          }
+        },
+        {
+          "visual": "audio-fingerprint",
+          "onWord": "смещением",
+          "params": {
+            "phase": "vote"
+          }
+        },
+        {
+          "visual": "audio-fingerprint",
+          "onWord": "голосуют",
+          "params": {
+            "phase": "vote"
+          }
+        },
+        {
+          "visual": "audio-fingerprint",
+          "onWord": "найден",
+          "params": {
+            "phase": "vote"
+          }
+        }
+      ]
+    },
+    {
+      "type": "outro",
+      "narration": "Запомни: шумная запись даёт пики, пики соединяются в пары, тысячи совпадений сходятся на одном смещении времени, и алгоритм называет песню. Подпишись — дальше разберём следующий скрытый механизм.",
+      "title": "ОТ ШУМА К ПЕСНЕ",
+      "bullets": [
+        "Шумная запись → пики",
+        "Пики → пары",
+        "Совпадения → общий сдвиг",
+        "Шазам → песня"
+      ],
+      "cta": "Подпишись — дальше новый механизм"
+    }
+  ]
+}
