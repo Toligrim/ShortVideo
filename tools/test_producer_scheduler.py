@@ -2,8 +2,9 @@
 """Focused tests for the unattended producer scheduler.
 
 Упражняют инварианты БЕЗ запуска кодека/LLM: константы model/effort (не
-переопределяются окружением/аргументами), интервал 12060s, блокировка flock,
-slug, содержимое промпта и state-переходы. Запуск: pytest или unittest.
+переопределяются окружением/аргументами), интервал 300s (floor — реальный
+гейт это SchedulerLock), блокировка flock, slug, содержимое промпта и
+state-переходы. Запуск: pytest или unittest.
 
     venv/bin/python -m pytest tools/test_producer_scheduler.py -v
 """
@@ -77,9 +78,15 @@ def run_cron_wrapper(argv, *, publish_state_dir_env=None):
 
 
 class ConstantInvariantTests(unittest.TestCase):
-    def test_interval_is_3h21m(self):
-        self.assertEqual(sched.INTERVAL_SECONDS, 12060)
-        self.assertEqual(sched.INTERVAL_SECONDS, 3 * 3600 + 21 * 60)
+    def test_interval_is_a_5_minute_floor_below_any_real_run_duration(self):
+        # 2026-09-04: lowered from 12060s (3h21m) to a 300s floor so
+        # SchedulerLock (held for run_episode.sh's whole lifetime), not this
+        # constant, is what actually gates back-to-back production — see
+        # producer_scheduler.py's module docstring for the full reasoning.
+        # Real observed full-pipeline runs take 90-150 min (runs/index.jsonl)
+        # — orders of magnitude above this floor, by design.
+        self.assertEqual(sched.INTERVAL_SECONDS, 300)
+        self.assertLess(sched.INTERVAL_SECONDS, 60 * 60)
 
     def test_pipeline_constants(self):
         self.assertEqual(sched.MODEL, "gpt-5.6-luna")
@@ -129,7 +136,7 @@ class ConstantInvariantTests(unittest.TestCase):
         self.assertEqual(data["constants"]["model"], "gpt-5.6-luna")
         self.assertEqual(data["constants"]["effort"], "max")
         self.assertEqual(data["constants"]["runner"], "codex")
-        self.assertEqual(data["constants"]["interval_seconds"], 12060)
+        self.assertEqual(data["constants"]["interval_seconds"], 300)
         self.assertIn("publish_state_dir_env", data)
 
 

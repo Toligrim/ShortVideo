@@ -12,7 +12,23 @@ unattended cron launch can never drift from the required stack:
     runner = codex
     model  = gpt-5.6-luna          -> run_episode.sh --model gpt-5.6-luna
     effort = max                   -> run_episode.sh --effort max
-    every  = 12060s (3h21m)        -> documented in deploy/cron/README.md
+    every  = 300s (5 min) floor    -> documented in deploy/cron/README.md
+
+INTERVAL_SECONDS is deliberately far below any real run's wall-clock time
+(observed 90-150 min for a full pipeline, see runs/index.jsonl). It exists
+only as a floor against a fast-failing run retrying in a tight loop (e.g. an
+external API outage that fails in seconds) - it is NOT the real pacing
+mechanism. The real "start the next run only once the previous one's
+completion is confirmed" guarantee comes from SchedulerLock: last_run is
+stamped at LAUNCH time (not completion), so due_status() is already true
+long before a normal run finishes; the actual gate is the non-blocking
+flock in SchedulerLock.acquire(), held for run_episode.sh's entire
+subprocess lifetime (through its trailing telemetry/story/repo_guard
+steps, not just the render). One cron tick fires per minute, so back-to-
+back production is bounded only by real run duration plus up to ~60s of
+scheduling latency, giving roughly 6-8 runs/day inside the 8-22 cron
+window at observed durations - not a fixed daily count by design, since
+that would require guessing run duration in advance.
 
 State is persisted under ~/.local/share/shortvideo/scheduler/ (next-run clock,
 last slug, lock file, logs). A non-blocking flock on tick.lock guarantees a
@@ -54,7 +70,7 @@ from typing import Any
 MODEL = "gpt-5.6-luna"
 EFFORT = "max"
 RUNNER = "codex"
-INTERVAL_SECONDS = 12060  # 3 h 21 min
+INTERVAL_SECONDS = 300  # 5 min floor - see module docstring; SchedulerLock is the real gate
 TIMEOUT_MIN = 180
 PROMPT_TOPIC_LABEL = "тему выбирает агент (инструкции в промпте)"
 
@@ -209,8 +225,9 @@ def make_slug(now: int, episodes_dir: Path) -> str:
     """Timestamp-based unique slug, e.g. auto-20260820-182500.
 
     Collides with an existing episodes/<slug>.json only in pathological clock
-    cases (flock + 3h21m cadence make same-second launches impossible), but the
-    bump keeps run_episode.sh's pre-flight check happy regardless.
+    cases (SchedulerLock makes two concurrent launches impossible, and real
+    run duration keeps consecutive launches minutes apart in practice), but
+    the bump keeps run_episode.sh's pre-flight check happy regardless.
     """
     base = "auto-" + datetime.fromtimestamp(now, tz=timezone.utc).strftime("%Y%m%d-%H%M%S")
     slug = base
