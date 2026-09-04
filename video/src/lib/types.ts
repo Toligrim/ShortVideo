@@ -90,6 +90,7 @@ export interface StoryBeat {
     | "paradox-box"
     | "proof-sequence"
     | "fft-wave"
+    | "audio-fingerprint"
     | "orbit-fft-groups"
     | "qr-repair"
     | "qr-phone-scan"

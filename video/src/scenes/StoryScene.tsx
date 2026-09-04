@@ -76,6 +76,7 @@ import { NfcCardCoilVisual, type NfcCardCoilPhase } from "./NfcCardCoilVisual";
 import { NfcFieldResponseVisual, type NfcFieldResponsePhase } from "./NfcFieldResponseVisual";
 import { PowerResetSequenceVisual, type PowerResetPhase } from "./PowerResetSequenceVisual";
 import { ResetVectorVisual, type ResetVectorPhase } from "./ResetVectorVisual";
+import { AudioFingerprintVisual, type AudioFingerprintPhase } from "./AudioFingerprintVisual";
 
 /* ──────────────────────────── расписание битов ──────────────────────────── */
 
@@ -143,6 +144,10 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
     if (beat.visual === "proof-sequence") impact = start + Math.round(dur * 0.92);
     if (beat.visual === "fft-wave")
       impact = start + Math.round(dur * (beat.params?.phase === "square" ? 0.85 : 0.5));
+    if (beat.visual === "audio-fingerprint") {
+      const phase = beat.params?.phase as AudioFingerprintPhase | undefined;
+      impact = start + Math.round(dur * (phase === "vote" ? 0.72 : phase === "pair" ? 0.68 : phase === "map" ? 0.62 : phase === "peaks" ? 0.64 : 0.56));
+    }
     if (beat.visual === "qr-repair") impact = start + Math.round(dur * 0.6);
     if (beat.visual === "qr-phone-scan") impact = start + Math.round(dur * 0.68);
     if (beat.visual === "redundancy-note") {
@@ -490,6 +495,11 @@ export const storySfx = (
     if (s.beat.visual === "proof-sequence") events.push({ frame: s.impact, sound: "ding" });
     if (s.beat.visual === "fft-wave")
       events.push({ frame: s.impact, sound: s.beat.params?.phase === "fft" ? "whoosh" : "pop" });
+    if (s.beat.visual === "audio-fingerprint") {
+      const phase = s.beat.params?.phase as AudioFingerprintPhase | undefined;
+      const sound = phase === "vote" ? "slam" : phase === "pair" ? "ding" : phase === "map" ? "whoosh" : phase === "peaks" ? "click" : "pop";
+      events.push({ frame: s.impact, sound });
+    }
     if (s.beat.visual === "qr-repair") {
       const ph = s.beat.params?.phase;
       const sound = ph === "restore" ? "ding" : ph === "encode" ? "click" : "pop";
@@ -11698,6 +11708,7 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     "paradox-box": { scale: 0.9, y: -30 },
     "proof-sequence": { scale: 0.92, y: -20 },
     "fft-wave": { scale: 0.94, y: -30 },
+    "audio-fingerprint": { scale: 0.9, y: -20 },
     "orbit-fft-groups": { scale: 0.88, y: -30 },
     "qr-repair": { scale: 0.9, y: -30 },
     "qr-phone-scan": { scale: 0.9, y: -25 },
@@ -11973,6 +11984,15 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             fps={fps}
             impactLocal={impactLocal}
             phase={(slot.beat.params?.phase as "square" | "fft" | undefined) ?? "square"}
+          />
+        );
+      case "audio-fingerprint":
+        return (
+          <AudioFingerprintVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as AudioFingerprintPhase | undefined) ?? "noise"}
           />
         );
       case "qr-repair":
