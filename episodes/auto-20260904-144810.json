@@ -1,0 +1,62 @@
+{
+  "id": "auto-20260904-144810",
+  "title": "Почему видеозвонок не превращается в бесконечное эхо?",
+  "scenes": [
+    {
+      "type": "story",
+      "heading": "Голос из динамика",
+      "narration": "Ты говоришь в видеозвонке, собеседник отвечает из динамика — почему его голос не возвращается снова и снова? Ведь микрофон слышит динамик.",
+      "beats": [
+        { "visual": "echo-cancellation", "onWord": "говоришь", "params": { "phase": "mixture" } },
+        { "visual": "echo-cancellation", "onWord": "отвечает", "params": { "phase": "loop" } },
+        { "visual": "echo-cancellation", "onWord": "возвращается", "params": { "phase": "loop" } },
+        { "visual": "echo-cancellation", "onWord": "слышит", "params": { "phase": "mixture" } }
+      ]
+    },
+    {
+      "type": "story",
+      "heading": "Смесь в микрофоне",
+      "narration": "Микрофон: «Внутри смесь: твой голос и звук собеседника из динамика». {Акустическое эхоподавление|акустическое эхоподавле́ние} — как две дорожки домашней записи: одна хранит звук телевизора, другая слышит всё, и из второй вычитают искажённую копию первой.",
+      "beats": [
+        { "visual": "echo-cancellation", "onWord": "Внутри", "params": { "phase": "mixture" } },
+        { "visual": "echo-cancellation", "onWord": "Акустическое", "params": { "phase": "mixture" } },
+        { "visual": "echo-cancellation", "onWord": "две", "params": { "phase": "mixture" } },
+        { "visual": "echo-cancellation", "onWord": "вычитают", "params": { "phase": "subtract" } }
+      ]
+    },
+    {
+      "type": "story",
+      "heading": "Путь от динамика к микрофону",
+      "narration": "Фильтр отвечает: «Копия искажена: до микрофона она доходит позже, тише и с отражениями». По известному сигналу, отправленному в динамик, я оцениваю акустический путь от динамика до микрофона.",
+      "beats": [
+        { "visual": "echo-cancellation", "onWord": "Фильтр", "params": { "phase": "path" } },
+        { "visual": "echo-cancellation", "onWord": "позже", "params": { "phase": "path" } },
+        { "visual": "echo-cancellation", "onWord": "известному", "params": { "phase": "path" } },
+        { "visual": "echo-cancellation", "onWord": "оцениваю", "params": { "phase": "path" } }
+      ]
+    },
+    {
+      "type": "story",
+      "heading": "Вычитание прогноза",
+      "narration": "Вау-факт, продолжает фильтр: я не распознаю слово «эхо» и не вырезаю всё похожее. Я строю ожидаемую копию звука динамика и вычитаю её из смеси — собственная речь остаётся в сигнале.",
+      "beats": [
+        { "visual": "echo-cancellation", "onWord": "распознаю", "params": { "phase": "subtract" } },
+        { "visual": "echo-cancellation", "onWord": "строю", "params": { "phase": "subtract" } },
+        { "visual": "echo-cancellation", "onWord": "вычитаю", "params": { "phase": "subtract" } },
+        { "visual": "echo-cancellation", "onWord": "остаётся", "params": { "phase": "subtract" } }
+      ]
+    },
+    {
+      "type": "outro",
+      "title": "Эхо не запускает петлю",
+      "bullets": [
+        "Микрофон слышит смесь",
+        "Фильтр оценивает путь",
+        "Прогноз эха вычитается",
+        "Дальше — скрытый механизм звонка"
+      ],
+      "cta": "Подпишись: дальше — механизм звонка",
+      "narration": "Итог: микрофон слышит смесь, фильтр оценивает путь звука из динамика и вычитает его ожидаемую копию — поэтому эхо не запускает петлю. Подпишись: дальше разберём ещё один скрытый механизм звонка."
+    }
+  ]
+}
