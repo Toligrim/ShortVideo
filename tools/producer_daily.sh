@@ -17,7 +17,17 @@
 # to the next attempt, matching the operational reality observed in
 # practice: individual production failures (infra hiccups, transient
 # upstream outages) are common enough that "stop the whole day on the
-# first one" would routinely leave well under 6 videos.
+# first one" would routinely leave well under the target count.
+#
+# Default lowered 6 -> 5 on 2026-09-04, same day it was introduced: a real
+# batch of 6 hit the Gemini TTS free-tier daily quota
+# (GenerateRequestsPerDayPerProjectPerModel-FreeTier, 10 requests/day/model
+# x 3 fallback models = ~30/day, ~5 TTS calls per episode) on videos 4 and
+# 5, both of which stopped at TTS with no video/no review created. 5 is
+# the actually-sustainable daily count on the current free-tier quota, not
+# an arbitrary preference - see corrections/ (or ask the operator) for the
+# option to raise this again once Gemini API billing moves off the free
+# tier.
 set -uo pipefail
 # Deliberately no -e: see the note above about not aborting the loop.
 
@@ -35,7 +45,7 @@ LAUNCH_CMD="${PRODUCER_DAILY_LAUNCH_CMD:-$ROOT/tools/producer_cron.sh}"
 STATE_DIR="${SV_SCHEDULER_STATE_DIR:-$HOME/.local/share/shortvideo/scheduler}"
 mkdir -p "$STATE_DIR"
 
-DAILY_VIDEO_COUNT="${DAILY_VIDEO_COUNT:-6}"
+DAILY_VIDEO_COUNT="${DAILY_VIDEO_COUNT:-5}"
 TODAY="$(date -u +%F)"
 MARKER="$STATE_DIR/daily-${TODAY}.started"
 

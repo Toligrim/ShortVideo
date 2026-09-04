@@ -59,8 +59,11 @@ class ProducerDailyTests(unittest.TestCase):
             home = Path(td)
             proc = run_daily(home=home)
             self.assertEqual(proc.returncode, 0, proc.stderr)
-            self.assertEqual(proc.stderr.count("launching video"), 6)
-            self.assertEqual(proc.stderr.count("exit_code=0"), 6)
+            # 2026-09-04: default lowered 6 -> 5 the same day, after a real
+            # batch of 6 hit the Gemini TTS free-tier daily quota on videos
+            # 4 and 5 (see producer_daily.sh's header comment).
+            self.assertEqual(proc.stderr.count("launching video"), 5)
+            self.assertEqual(proc.stderr.count("exit_code=0"), 5)
             self.assertIn("daily batch complete", proc.stderr)
 
     def test_daily_video_count_env_override(self):

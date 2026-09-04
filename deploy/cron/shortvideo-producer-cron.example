@@ -12,7 +12,9 @@
 # artifact.
 #
 # One tick a day, at 8:00: producer_daily.sh runs DAILY_VIDEO_COUNT (default
-# 6) productions back to back, each one only after the previous one's
+# 5 - lowered from 6 on 2026-09-04 after a real batch hit the Gemini TTS
+# free-tier daily quota) productions back to back, each one only after the
+# previous one's
 # completion is confirmed (see deploy/cron/README.md — "Семантика дневного
 # цикла"). No per-minute tick is needed any more; producer_cron.sh (called
 # internally, once per video) still exists unchanged for manual single-run
