@@ -2698,12 +2698,14 @@ const TitleSlam: React.FC<{ local: number; fps: number; impactLocal: number; tex
   sub,
 }) => {
   const s = spring({ frame: local, fps, config: { damping: 12, mass: 1.1 } });
-  const scale = interpolate(s, [0, 1], [2.6, 1]);
+  // Keep the fitted title inside the 1080px frame even at the slam's largest scale.
+  const scale = interpolate(s, [0, 1], [1.2, 1]);
   const landed = local >= impactLocal;
   const breathe = 1 + 0.025 * Math.sin(local / 12);
+  const titleFrameWidth = 860;
   const titleSize = Math.min(
     120,
-    fitText({ text: (text || "").split("\n")[0], withinWidth: 940, fontFamily: theme.font, fontWeight: 800 }).fontSize
+    fitText({ text: (text || "").split("\n")[0], withinWidth: titleFrameWidth, fontFamily: theme.font, fontWeight: 800 }).fontSize
   );
   return (
     <>
