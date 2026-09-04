@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "slug": "auto-20260904-084730",
+  "targets": {
+    "youtube": {
+      "title": "Почему бесконтактная банковская карта работает без батарейки?",
+      "description": "Как поле терминала наводит ток в плоской катушке карты и как load modulation возвращает терминалу ответ.",
+      "tags": ["бесконтактная оплата", "банковская карта", "NFC", "терминал", "технологии", "как это работает"],
+      "category_id": "28",
+      "privacy_status": "public",
+      "made_for_kids": false,
+      "contains_synthetic_media": true,
+      "notify_subscribers": false
+    },
+    "instagram": {
+      "caption": "Почему бесконтактная банковская карта работает без батарейки? Разбираем поле терминала, плоскую катушку и load modulation. #бесконтактнаяоплата #банковскаякарта #NFC #технологии",
+      "share_to_feed": true
+    }
+  }
+}
