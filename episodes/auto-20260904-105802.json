@@ -1,0 +1,118 @@
+{
+  "id": "auto-20260904-105802",
+  "title": "Что компьютер делает в первую секунду после кнопки питания, пока экран ещё чёрный?",
+  "scenes": [
+    {
+      "type": "hook",
+      "title": "Вентилятор шумит. Экран чёрный.",
+      "subtitle": "А процессор уже стартовал",
+      "narration": "Вентилятор уже шумит, экран ещё чёрный, и кажется: компьютер не загрузился. Но процессор уже получил первую точку назначения. Что там?"
+    },
+    {
+      "type": "story",
+      "narration": "Три: питание стабилизируется, плата снимает сигнал сброса. Процессор пока не запускает систему — сначала должен получить первую инструкцию из {прошивки|проши́вки}.",
+      "beats": [
+        {
+          "visual": "power-reset-sequence",
+          "onWord": "питание",
+          "params": { "phase": "stabilize" }
+        },
+        {
+          "visual": "power-reset-sequence",
+          "onWord": "снимает",
+          "params": { "phase": "release" }
+        },
+        {
+          "visual": "power-reset-sequence",
+          "onWord": "систему",
+          "params": { "phase": "black-screen" }
+        },
+        {
+          "visual": "power-reset-sequence",
+          "onWord": "прошивки",
+          "params": { "phase": "firmware" }
+        }
+      ]
+    },
+    {
+      "type": "story",
+      "narration": "Два: механизм называется {вектор сброса|ве́ктор сбро́са} — фиксированный адрес, с которого процессор начинает выполнение после сброса. Это как почтальон с обязательным первым адресом: всегда идёт туда.",
+      "beats": [
+        {
+          "visual": "reset-vector-launch",
+          "onWord": "механизм",
+          "params": { "phase": "vector" }
+        },
+        {
+          "visual": "reset-vector-launch",
+          "onWord": "фиксированный",
+          "params": { "phase": "address" }
+        },
+        {
+          "visual": "reset-vector-launch",
+          "onWord": "почтальон",
+          "params": { "phase": "postman" }
+        }
+      ]
+    },
+    {
+      "type": "story",
+      "narration": "Один: в настольном компьютере с архитектурой икс восемьдесят шесть физический адрес этой точки — всего шестнадцать байт до границы четырёх гигабайт. Почти верх адресного пространства.",
+      "beats": [
+        {
+          "visual": "reset-vector-launch",
+          "onWord": "физический",
+          "params": { "phase": "address" }
+        },
+        {
+          "visual": "reset-vector-launch",
+          "onWord": "шестнадцать",
+          "params": { "phase": "wow" }
+        },
+        {
+          "visual": "reset-vector-launch",
+          "onWord": "верх",
+          "params": { "phase": "wow" }
+        }
+      ]
+    },
+    {
+      "type": "story",
+      "narration": "Дальше первая команда обычно передаёт управление остальному коду {прошивки|проши́вки}. Тот подготавливает память и вывод изображения: вентилятор уже слышно, а экран ещё остаётся чёрным.",
+      "beats": [
+        {
+          "visual": "reset-vector-launch",
+          "onWord": "первая",
+          "params": { "phase": "handoff" }
+        },
+        {
+          "visual": "reset-vector-launch",
+          "onWord": "прошивки",
+          "params": { "phase": "handoff" }
+        },
+        {
+          "visual": "power-reset-sequence",
+          "onWord": "память",
+          "params": { "phase": "black-screen" }
+        },
+        {
+          "visual": "power-reset-sequence",
+          "onWord": "вентилятор",
+          "params": { "phase": "black-screen" }
+        }
+      ]
+    },
+    {
+      "type": "outro",
+      "title": "Чёрный экран — не тишина",
+      "bullets": [
+        "RESET уже снят",
+        "Старт: FFFFFFF0H",
+        "Первая команда → firmware",
+        "Изображение — позже"
+      ],
+      "cta": "Подпишись: следующий скрытый шаг",
+      "narration": "Запомни: чёрный экран не значит, что процессор молчит. Он уже стартовал с {вектор сброса|ве́ктор сбро́са}, а видимая загрузка начнётся позже. Подпишись — разберём следующий скрытый шаг."
+    }
+  ]
+}

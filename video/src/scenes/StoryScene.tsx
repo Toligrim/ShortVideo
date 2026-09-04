@@ -74,6 +74,8 @@ import { TrafficSegmentVisual, type TrafficSegmentPhase } from "./TrafficSegment
 import { RewardCheckVisual, type RewardCheckPhase } from "./RewardCheckVisual";
 import { NfcCardCoilVisual, type NfcCardCoilPhase } from "./NfcCardCoilVisual";
 import { NfcFieldResponseVisual, type NfcFieldResponsePhase } from "./NfcFieldResponseVisual";
+import { PowerResetSequenceVisual, type PowerResetPhase } from "./PowerResetSequenceVisual";
+import { ResetVectorVisual, type ResetVectorPhase } from "./ResetVectorVisual";
 
 /* ──────────────────────────── расписание битов ──────────────────────────── */
 
@@ -105,6 +107,14 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
     if (beat.visual === "browser-click") impact = start + Math.round(dur * 0.55);
     if (beat.visual === "handshake") impact = start + 10;
     if (beat.visual === "title-slam") impact = start + 8;
+    if (beat.visual === "power-reset-sequence") {
+      const phase = beat.params?.phase as PowerResetPhase | undefined;
+      impact = start + Math.round(dur * (phase === "release" ? 0.62 : phase === "firmware" ? 0.68 : phase === "black-screen" ? 0.58 : 0.6));
+    }
+    if (beat.visual === "reset-vector-launch") {
+      const phase = beat.params?.phase as ResetVectorPhase | undefined;
+      impact = start + Math.round(dur * (phase === "postman" ? 0.62 : phase === "wow" ? 0.62 : phase === "address" ? 0.58 : phase === "handoff" ? 0.68 : 0.6));
+    }
     if (beat.visual === "nfc-card-coil") {
       const phase = beat.params?.phase as NfcCardCoilPhase | undefined;
       impact = start + Math.round(dur * (phase === "tap" ? 0.62 : phase === "no-battery" ? 0.55 : 0.58));
@@ -440,6 +450,16 @@ export const storySfx = (
     if (s.beat.visual === "handshake")
       events.push({ frame: s.impact, sound: "slam" }, { frame: s.impact + 2, sound: "ding" });
     if (s.beat.visual === "title-slam") events.push({ frame: s.impact, sound: "slam" });
+    if (s.beat.visual === "power-reset-sequence") {
+      const phase = s.beat.params?.phase as PowerResetPhase | undefined;
+      const sound = phase === "release" ? "slam" : phase === "firmware" ? "ding" : phase === "black-screen" ? "pop" : "click";
+      events.push({ frame: s.impact, sound });
+    }
+    if (s.beat.visual === "reset-vector-launch") {
+      const phase = s.beat.params?.phase as ResetVectorPhase | undefined;
+      const sound = phase === "wow" || phase === "handoff" ? "ding" : phase === "postman" ? "pop" : "click";
+      events.push({ frame: s.impact, sound });
+    }
     if (s.beat.visual === "nfc-card-coil") {
       const phase = s.beat.params?.phase as NfcCardCoilPhase | undefined;
       events.push({ frame: s.impact, sound: phase === "tap" ? "pop" : phase === "no-battery" ? "ding" : "click" });
@@ -11661,6 +11681,8 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     "devices-meet": { scale: 1.12, y: -60 },
     handshake: { scale: 1.22, y: -110 },
     "title-slam": { scale: 1.0, y: 0 },
+    "power-reset-sequence": { scale: 0.88, y: -20 },
+    "reset-vector-launch": { scale: 0.88, y: -20 },
     "nfc-card-coil": { scale: 0.9, y: -20 },
     "nfc-field-response": { scale: 0.9, y: -20 },
     "spell-distance": { scale: 0.9, y: -20 },
@@ -11782,6 +11804,24 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             impactLocal={impactLocal}
             text={slot.beat.params?.text as string}
             sub={slot.beat.params?.sub as string | undefined}
+          />
+        );
+      case "power-reset-sequence":
+        return (
+          <PowerResetSequenceVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as PowerResetPhase | undefined) ?? "stabilize"}
+          />
+        );
+      case "reset-vector-launch":
+        return (
+          <ResetVectorVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as ResetVectorPhase | undefined) ?? "vector"}
           />
         );
       case "nfc-card-coil":
