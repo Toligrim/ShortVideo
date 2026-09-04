@@ -1,0 +1,72 @@
+{
+  "id": "auto-20260904-055101",
+  "title": "Почему Google Карты знают, где пробка, ещё до того, как ты в неё попал?",
+  "scenes": [
+    {
+      "type": "story",
+      "narration": "Ты ещё едешь по свободной улице, а впереди на карте уже краснеет линия. Откуда Гугл Карты узнали о пробке заранее?",
+      "beats": [
+        { "visual": "traffic-segment", "onWord": "едешь", "params": { "phase": "ahead" } },
+        { "visual": "title-slam", "onWord": "заранее", "params": { "text": "КАК ОНИ ЗНАЮТ?", "sub": "КРАСНЫЙ УЧАСТОК ВПЕРЕДИ" } }
+      ]
+    },
+    {
+      "type": "story",
+      "narration": "Миф: кто-то смотрит на эту улицу сверху. На самом деле Карты используют агрегацию анонимных сигналов местоположения: множество телефонов движется по одному участку, и каждый оставляет измерение.",
+      "beats": [
+        { "visual": "title-slam", "onWord": "Миф", "params": { "text": "НЕ СМОТРИТ СВЕРХУ", "sub": "АГРЕГАЦИЯ СИГНАЛОВ" } },
+        { "visual": "traffic-segment", "onWord": "агрегацию", "params": { "phase": "phones" } },
+        { "visual": "traffic-segment", "onWord": "множество", "params": { "phase": "points" } },
+        { "visual": "traffic-segment", "onWord": "оставляет", "params": { "phase": "points" } }
+      ]
+    },
+    {
+      "type": "story",
+      "narration": "Назовём это коллективным спидометром: толпа бегунов бежит одинаковым маршрутом, а общий секундомер сравнивает время на одном и том же отрезке.",
+      "beats": [
+        { "visual": "traffic-segment", "onWord": "коллективным", "params": { "phase": "aggregate" } },
+        { "visual": "traffic-segment", "onWord": "сравнивает", "params": { "phase": "aggregate" } }
+      ]
+    },
+    {
+      "type": "story",
+      "narration": "Сервис сопоставляет последовательные точки каждого телефона, оценивает скорость, а затем сводит наблюдения в одно агрегированное состояние дорожного участка: свободно или медленно.",
+      "beats": [
+        { "visual": "traffic-segment", "onWord": "сопоставляет", "params": { "phase": "points" } },
+        { "visual": "traffic-segment", "onWord": "оценивает", "params": { "phase": "aggregate" } },
+        { "visual": "traffic-segment", "onWord": "сводит", "params": { "phase": "status" } }
+      ]
+    },
+    {
+      "type": "story",
+      "narration": "Когда сводная скорость падает, участок получает задержку: Карты окрашивают его в красный, а при серьёзной задержке показывают предупреждение.",
+      "beats": [
+        { "visual": "traffic-segment", "onWord": "падает", "params": { "phase": "delay" } },
+        { "visual": "traffic-segment", "onWord": "получает", "params": { "phase": "delay" } },
+        { "visual": "traffic-segment", "onWord": "предупреждение", "params": { "phase": "delay" } }
+      ]
+    },
+    {
+      "type": "story",
+      "narration": "Значит, красная линия — не предсказание из воздуха, а коллективный замер скорости прямо сейчас. Дальше разберём другой скрытый механизм. Подпишись.",
+      "beats": [
+        { "visual": "traffic-segment", "onWord": "красная", "params": { "phase": "delay" } },
+        { "visual": "traffic-segment", "onWord": "коллективный", "params": { "phase": "aggregate" } },
+        { "visual": "title-slam", "onWord": "Дальше", "params": { "text": "ДРУГОЙ СКРЫТЫЙ МЕХАНИЗМ", "sub": "ПРОДОЛЖЕНИЕ ВПЕРЕДИ" } },
+        { "visual": "title-slam", "onWord": "Подпишись", "params": { "text": "ПОДПИШИСЬ", "sub": "ДАЛЬШЕ — ЕЩЁ ОДИН МЕХАНИЗМ" } }
+      ]
+    },
+    {
+      "type": "outro",
+      "title": "Красный — это замер",
+      "bullets": [
+        "Телефоны → точки на участке",
+        "Точки → локальная скорость",
+        "Скорость → цвет участка",
+        "Красный = задержка"
+      ],
+      "cta": "Подпишись: дальше — новый механизм",
+      "narration": "Запомни: Карты видят не пробку сверху, а сводят анонимные сигналы телефонов в скорость участка. Дальше — другой скрытый механизм. Подпишись."
+    }
+  ]
+}
