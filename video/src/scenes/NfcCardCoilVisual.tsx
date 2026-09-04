@@ -218,7 +218,7 @@ const Header: React.FC<{ text: string; opacity: number }> = ({ text, opacity }) 
     style={{
       position: "absolute",
       left: W / 2,
-      top: 245,
+      top: 340,
       transform: "translateX(-50%)",
       display: "flex",
       alignItems: "center",
