@@ -151,6 +151,7 @@ export interface StoryBeat {
     | "ariane-overflow"
     | "ai-hallucination"
     | "password-hash"
+    | "polarizer-stack"
     | "capacitive-touch"
     | "proximity-sensor"
     | "digital-signature"

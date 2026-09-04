@@ -1,0 +1,80 @@
+{
+  "id": "auto-20260904-160200",
+  "title": "Почему экран телефона темнеет в солнцезащитных очках?",
+  "scenes": [
+    {
+      "type": "story",
+      "heading": "Эффект в очках",
+      "narration": "Надеваешь поляризо́ванные очки — и у некоторых телефонов экран темнеет, почти до чёрного. Телефон не сломался: два фильтра разошлись по ориентации. Как именно?",
+      "beats": [
+        { "visual": "polarizer-stack", "onWord": "темнеет", "params": { "phase": "crossed" } },
+        { "visual": "polarizer-stack", "onWord": "два", "params": { "phase": "pair" } },
+        { "visual": "polarizer-stack", "onWord": "ориентации", "params": { "phase": "rotate" } }
+      ]
+    },
+    {
+      "type": "story",
+      "heading": "Слой задаёт ось",
+      "narration": "Из некоторых дисплеев выходит свет, прошедший через поляризу́ющий слой. Он оставляет свет одной ориентации — такой фильтр называется {поляризатором|поляриза́тором}.",
+      "beats": [
+        { "visual": "polarizer-stack", "onWord": "свет", "params": { "phase": "screen" } },
+        { "visual": "polarizer-stack", "onWord": "слой", "params": { "phase": "screen" } },
+        { "visual": "polarizer-stack", "onWord": "поляризатором", "params": { "phase": "screen" } }
+      ]
+    },
+    {
+      "type": "story",
+      "heading": "Очки — второй фильтр",
+      "narration": "Поляризо́ванные очки делают то же: их фильтр пропускает свет с ориентацией вдоль своей оси. Представь две повёрнутые жалюзи: поперёк общий проход закрывается.",
+      "beats": [
+        { "visual": "polarizer-stack", "onWord": "очки", "params": { "phase": "glasses" } },
+        { "visual": "polarizer-stack", "onWord": "фильтр", "params": { "phase": "glasses" } },
+        { "visual": "polarizer-stack", "onWord": "оси", "params": { "phase": "glasses" } },
+        { "visual": "polarizer-stack", "onWord": "жалюзи", "params": { "phase": "analogy" } },
+        { "visual": "polarizer-stack", "onWord": "поперёк", "params": { "phase": "analogy" } }
+      ]
+    },
+    {
+      "type": "story",
+      "heading": "Угол между осями",
+      "narration": "Экранный слой и очки — два поляризатора. {Закон Малюса|зако́н Малю́са} — правило поворота: угол между осями определяет, сколько света пройдёт.",
+      "beats": [
+        { "visual": "polarizer-stack", "onWord": "два", "params": { "phase": "pair" } },
+        { "visual": "polarizer-stack", "onWord": "Закон", "params": { "phase": "rotate" } },
+        { "visual": "polarizer-stack", "onWord": "угол", "params": { "phase": "rotate" } },
+        { "visual": "polarizer-stack", "onWord": "пройдёт", "params": { "phase": "rotate" } }
+      ]
+    },
+    {
+      "type": "story",
+      "heading": "Поперёк — экран темнеет",
+      "narration": "При совпавших осях свет проходит, а при поперечных осях в идеальном случае фильтры взаимно гасят проходящий свет: экран может стать почти чёрным.",
+      "beats": [
+        { "visual": "polarizer-stack", "onWord": "совпавших", "params": { "phase": "parallel" } },
+        { "visual": "polarizer-stack", "onWord": "поперечных", "params": { "phase": "crossed" } },
+        { "visual": "polarizer-stack", "onWord": "гасят", "params": { "phase": "crossed" } },
+        { "visual": "polarizer-stack", "onWord": "чёрным", "params": { "phase": "crossed" } }
+      ]
+    },
+    {
+      "type": "story",
+      "heading": "Эффект зависит от поворота",
+      "narration": "Это зависит от типа дисплея, очков и их поворота.",
+      "beats": [
+        { "visual": "polarizer-stack", "onWord": "зависит", "params": { "phase": "pair" } },
+        { "visual": "polarizer-stack", "onWord": "поворота", "params": { "phase": "rotate" } }
+      ]
+    },
+    {
+      "type": "outro",
+      "title": "Поверни очки",
+      "bullets": [
+        "Два фильтра",
+        "Оси решают всё",
+        "Поперёк — почти темно"
+      ],
+      "cta": "Подпишись: дальше — механизм",
+      "narration": "Итак, фильтры экрана и очков пропускают свет по своим осям, а поперечный поворот почти гасит проходящий свет. Поверни очки — проверь. Подпишись — дальше разберём механизм."
+    }
+  ]
+}

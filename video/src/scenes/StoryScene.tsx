@@ -41,6 +41,7 @@ import { SkipListVisual, type SkipListPhase } from "./SkipListVisual";
 import { EliasFanoVisual, type EliasFanoPhase } from "./EliasFanoVisual";
 import { RaftQuorumVisual, type RaftQuorumPhase } from "./RaftQuorumVisual";
 import { ArianeOverflowVisual, type ArianeOverflowPhase } from "./ArianeOverflowVisual";
+import { PolarizerStackVisual, type PolarizerPhase } from "./PolarizerStackVisual";
 import { CapacitiveTouchVisual, type CapacitiveTouchPhase } from "./CapacitiveTouch";
 import { ProximitySensorVisual, type ProximitySensorPhase } from "./ProximitySensorVisual";
 import { FaceIdDepthVisual, type FaceIdDepthPhase } from "./FaceIdDepthVisual";
@@ -287,6 +288,10 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
       impact = start + Math.round(dur * (phase === "predict" ? 0.62 : phase === "bluff-score" ? 0.58 : phase === "fake-citation" ? 0.64 : phase === "verify" ? 0.62 : 0.6));
     }
     if (beat.visual === "password-hash") impact = start + Math.round(dur * 0.58);
+    if (beat.visual === "polarizer-stack") {
+      const phase = beat.params?.phase as PolarizerPhase | undefined;
+      impact = start + Math.round(dur * (phase === "crossed" || phase === "analogy" ? 0.68 : phase === "rotate" ? 0.72 : phase === "parallel" ? 0.65 : 0.58));
+    }
     if (beat.visual === "digital-signature") impact = start + Math.round(dur * 0.58);
     if (beat.visual === "capacitive-touch") impact = start + Math.round(dur * 0.58);
     if (beat.visual === "proximity-sensor") {
@@ -691,6 +696,11 @@ export const storySfx = (
     if (s.beat.visual === "password-hash") {
       const phase = s.beat.params?.phase;
       events.push({ frame: s.impact, sound: phase === "verify" ? "ding" : "pop" });
+    }
+    if (s.beat.visual === "polarizer-stack") {
+      const phase = s.beat.params?.phase as PolarizerPhase | undefined;
+      const sound = phase === "crossed" || phase === "analogy" ? "slam" : phase === "parallel" ? "ding" : phase === "rotate" ? "whoosh" : "pop";
+      events.push({ frame: s.impact, sound });
     }
     if (s.beat.visual === "digital-signature") {
       const phase = s.beat.params?.phase;
@@ -11768,6 +11778,7 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     "elias-fano": { scale: 0.9, y: -20 },
     "ariane-overflow": { scale: 0.88, y: -20 },
     "password-hash": { scale: 0.92, y: -20 },
+    "polarizer-stack": { scale: 0.9, y: -20 },
     "capacitive-touch": { scale: 0.94, y: -20 },
     "proximity-sensor": { scale: 0.9, y: -20 },
     "face-id-depth": { scale: 0.94, y: -20 },
@@ -12568,6 +12579,15 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             fps={fps}
             impactLocal={impactLocal}
             phase={(slot.beat.params?.phase as PasswordHashPhase | undefined) ?? "store"}
+          />
+        );
+      case "polarizer-stack":
+        return (
+          <PolarizerStackVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as PolarizerPhase | undefined) ?? "pair"}
           />
         );
       case "digital-signature":
