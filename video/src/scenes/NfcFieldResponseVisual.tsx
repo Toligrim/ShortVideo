@@ -223,7 +223,7 @@ export const NfcFieldResponseVisual: React.FC<{
       {isNear ? (
         <>
           <div style={{ position: "absolute", left: 393, top: 770, width: 110, borderTop: `3px dashed ${theme.success}`, opacity: enter }} />
-          <div style={{ position: "absolute", left: 448, top: 800, transform: "translateX(-50%)", color: theme.success, fontSize: 20, whiteSpace: "nowrap", ...mono }}>
+          <div style={{ position: "absolute", left: 448, top: 950, transform: "translateX(-50%)", color: theme.success, fontSize: 20, whiteSpace: "nowrap", ...mono }}>
             БЛИЗКАЯ ЗОНА
           </div>
         </>
