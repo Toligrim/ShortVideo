@@ -177,6 +177,7 @@ export interface StoryBeat {
   | "magnetron-cavity"
   | "hotword-spotting"
   | "halving-schedule"
+  | "traffic-segment"
   | "reward-check";
   onWord?: string; // бит начинается на этом слове реплики
   params?: Record<string, unknown>;
