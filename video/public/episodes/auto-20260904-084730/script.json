@@ -1,0 +1,77 @@
+{
+  "id": "auto-20260904-084730",
+  "title": "Почему бесконтактная банковская карта работает без батарейки?",
+  "scenes": [
+    {
+      "type": "story",
+      "heading": "Карта без батарейки",
+      "narration": "Ка́рту прикла́дываешь к термина́лу — платёж проходи́т. Но в пла́стике нет батаре́йки. Отку́да чип берёт эне́ргию в э́тот моме́нт, что́бы отве́тить?",
+      "beats": [
+        { "visual": "nfc-card-coil", "onWord": "прикла́дываешь", "params": { "phase": "tap" } },
+        { "visual": "nfc-card-coil", "onWord": "пла́стике", "params": { "phase": "inside" } },
+        { "visual": "nfc-card-coil", "onWord": "батаре́йки", "params": { "phase": "no-battery" } },
+        { "visual": "nfc-field-response", "onWord": "Отку́да", "params": { "phase": "question" } }
+      ]
+    },
+    {
+      "type": "story",
+      "heading": "Поле появляется рядом",
+      "narration": "А тепе́рь убери́ термина́л: ка́рта не отвеча́ет. Верни́ его́ — счи́тыватель создаёт переменное магни́тное по́ле ря́дом с ка́ртой.",
+      "beats": [
+        { "visual": "nfc-field-response", "onWord": "убери́", "params": { "phase": "off" } },
+        { "visual": "nfc-field-response", "onWord": "отвеча́ет", "params": { "phase": "off" } },
+        { "visual": "nfc-field-response", "onWord": "Верни́", "params": { "phase": "field" } },
+        { "visual": "nfc-field-response", "onWord": "создаёт", "params": { "phase": "field" } }
+      ]
+    },
+    {
+      "type": "story",
+      "heading": "Катушка — скрытый источник",
+      "narration": "Вау-фа́кт: вну́три ка́рты анте́нна — пло́ская кату́шка, соединённая с чипом. По́ле счи́тывателя индукти́вно наводи́т в ней ток: чип получа́ет пита́ние и начина́ет обме́н.",
+      "beats": [
+        { "visual": "nfc-card-coil", "onWord": "анте́нна", "params": { "phase": "inside" } },
+        { "visual": "nfc-card-coil", "onWord": "соединённая", "params": { "phase": "inside" } },
+        { "visual": "nfc-field-response", "onWord": "индукти́вно", "params": { "phase": "power" } },
+        { "visual": "nfc-field-response", "onWord": "пита́ние", "params": { "phase": "power" } },
+        { "visual": "nfc-field-response", "onWord": "обме́н", "params": { "phase": "reply" } }
+      ]
+    },
+    {
+      "type": "story",
+      "heading": "Ответ через нагрузку",
+      "narration": "Отве́т называ́ется {load modulation|лоуд модуле́йшн}, и́ли модуля́ция на́грузки. Это как включа́ть и выключа́ть втору́ю ла́мпочку в уже́ горя́щей гирля́нде: ка́рта переключа́ет на́грузку свое́й кату́шки, и термина́л за́мечает кро́шечные изме́нения то́ка в свое́й анте́нне.",
+      "beats": [
+        { "visual": "nfc-field-response", "onWord": "load", "params": { "phase": "load" } },
+        { "visual": "nfc-field-response", "onWord": "модуля́ция", "params": { "phase": "load" } },
+        { "visual": "nfc-field-response", "onWord": "включа́ть", "params": { "phase": "load" } },
+        { "visual": "nfc-field-response", "onWord": "переключа́ет", "params": { "phase": "load" } },
+        { "visual": "nfc-field-response", "onWord": "за́мечает", "params": { "phase": "reply" } }
+      ]
+    },
+    {
+      "type": "story",
+      "heading": "Работает только близко",
+      "narration": "Поэтому́ ка́рта рабо́тает то́лько ря́дом с термина́лом: пока́ кату́шка в его́ по́ле, чип пи́тается и отвеча́ет. Отодви́нешь её — обме́н оборвётся.",
+      "beats": [
+        { "visual": "nfc-field-response", "onWord": "рабо́тает", "params": { "phase": "near" } },
+        { "visual": "nfc-field-response", "onWord": "ря́дом", "params": { "phase": "near" } },
+        { "visual": "nfc-field-response", "onWord": "пи́тается", "params": { "phase": "power" } },
+        { "visual": "nfc-field-response", "onWord": "отвеча́ет", "params": { "phase": "reply" } },
+        { "visual": "nfc-field-response", "onWord": "Отодви́нешь", "params": { "phase": "off" } },
+        { "visual": "nfc-field-response", "onWord": "оборвётся", "params": { "phase": "off" } }
+      ]
+    },
+    {
+      "type": "outro",
+      "title": "Поле питает карту",
+      "bullets": [
+        "Терминал создаёт поле",
+        "Катушка даёт питание",
+        "Нагрузка передаёт ответ",
+        "Близость нужна всегда"
+      ],
+      "cta": "Подпишись: дальше — проверка терминала",
+      "narration": "Запомни́: термина́л пи́тает ка́рту индукти́вно, а ка́рта отвеча́ет модуля́цией на́грузки. Батаре́йка не ну́жна, но ну́жна бли́зость. Да́льше — что проверя́ет термина́л. Подпиши́сь."
+    }
+  ]
+}
