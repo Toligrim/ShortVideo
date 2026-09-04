@@ -28,6 +28,7 @@ def _run_completion_gate(
     code: int,
     episode_exists: bool,
     validate_code: int,
+    publication_created: bool = True,
 ) -> tuple[str, str, str]:
     (tmp_path / "episodes").mkdir()
     (tmp_path / "tools").mkdir()
@@ -40,11 +41,19 @@ def _run_completion_gate(
         encoding="utf-8",
     )
 
+    run_dir = tmp_path / "run-dir"
+    run_dir.mkdir()
+    events = ['{"kind": "run_start"}']
+    if publication_created:
+        events.append('{"kind": "publication_created", "publication_id": "p1"}')
+    (run_dir / "events.jsonl").write_text("\n".join(events) + "\n", encoding="utf-8")
+
     gate = _completion_gate(_source())
     shell = (
         "set -euo pipefail\n"
         f"CODE={code}\n"
         "SLUG=test-slug\n"
+        f'RUN_DIR="{run_dir}"\n'
         'STATUS="ok"\n'
         'RESULT_CLASS="success"\n'
         'ERROR_CODE=""\n'
@@ -107,6 +116,26 @@ def test_success_with_valid_episode_keeps_success_classification(tmp_path: Path)
     )
 
     assert result == ("ok", "success", "")
+    assert (tmp_path / "validate-called").exists()
+
+
+def test_success_with_valid_episode_but_no_publication_is_pipeline_incomplete(tmp_path: Path):
+    """Real incident (auto-20260904-144810, 2026-09-04): Gemini TTS returned
+    429 on every available model, and the pipeline honestly stopped there -
+    no MP4 rendered, no review sent (the orchestrator's own final summary
+    said so explicitly). But episodes/<slug>.json is written by
+    animation-director, long before tts/critic/render/publish even start,
+    so it already existed and validated - this gate used to mark the run
+    status=ok/success anyway, with no video and no publication_created."""
+    result = _run_completion_gate(
+        tmp_path,
+        code=0,
+        episode_exists=True,
+        validate_code=0,
+        publication_created=False,
+    )
+
+    assert result == ("failed", "semantic_failure", "pipeline_incomplete")
     assert (tmp_path / "validate-called").exists()
 
 

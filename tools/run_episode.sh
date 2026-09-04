@@ -244,6 +244,19 @@ if [[ $CODE -eq 0 ]]; then
     STATUS="failed"
     RESULT_CLASS="semantic_failure"
     ERROR_CODE="pipeline_incomplete"
+  elif ! grep -q '"kind": "publication_created"' "$RUN_DIR/events.jsonl" 2>/dev/null; then
+    # episodes/<slug>.json exists as soon as animation-director finishes -
+    # long before tts/critic/render/publish. A real incident
+    # (auto-20260904-144810, 2026-09-04): Gemini TTS returned 429 on every
+    # available model, the pipeline honestly stopped there (no MP4, no
+    # review sent - orchestrator's own summary said so explicitly), yet
+    # this gate still marked the run status=ok/success because the episode
+    # JSON alone was already valid. publication_created only appears once
+    # publish.py review has actually created a Publication - the real
+    # deliverable for an automated run - so require it too.
+    STATUS="failed"
+    RESULT_CLASS="semantic_failure"
+    ERROR_CODE="pipeline_incomplete"
   fi
 fi
 if [[ $CODE -ne 0 ]]; then
