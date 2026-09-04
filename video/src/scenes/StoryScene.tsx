@@ -72,6 +72,8 @@ import { HotwordSpottingVisual, type HotwordSpottingPhase } from "./HotwordSpott
 import { HalvingScheduleVisual, type HalvingSchedulePhase } from "./HalvingScheduleVisual";
 import { TrafficSegmentVisual, type TrafficSegmentPhase } from "./TrafficSegmentVisual";
 import { RewardCheckVisual, type RewardCheckPhase } from "./RewardCheckVisual";
+import { NfcCardCoilVisual, type NfcCardCoilPhase } from "./NfcCardCoilVisual";
+import { NfcFieldResponseVisual, type NfcFieldResponsePhase } from "./NfcFieldResponseVisual";
 
 /* ──────────────────────────── расписание битов ──────────────────────────── */
 
@@ -103,6 +105,14 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
     if (beat.visual === "browser-click") impact = start + Math.round(dur * 0.55);
     if (beat.visual === "handshake") impact = start + 10;
     if (beat.visual === "title-slam") impact = start + 8;
+    if (beat.visual === "nfc-card-coil") {
+      const phase = beat.params?.phase as NfcCardCoilPhase | undefined;
+      impact = start + Math.round(dur * (phase === "tap" ? 0.62 : phase === "no-battery" ? 0.55 : 0.58));
+    }
+    if (beat.visual === "nfc-field-response") {
+      const phase = beat.params?.phase as NfcFieldResponsePhase | undefined;
+      impact = start + Math.round(dur * (phase === "off" ? 0.55 : phase === "power" ? 0.68 : phase === "load" ? 0.62 : phase === "reply" ? 0.7 : phase === "near" ? 0.6 : 0.58));
+    }
     if (beat.visual === "spell-distance") {
       const phase = beat.params?.phase as SpellDistancePhase | undefined;
       impact = start + Math.round(dur * (phase === "typo" ? 0.62 : phase === "repair" ? 0.68 : phase === "rank" ? 0.72 : 0.64));
@@ -430,6 +440,15 @@ export const storySfx = (
     if (s.beat.visual === "handshake")
       events.push({ frame: s.impact, sound: "slam" }, { frame: s.impact + 2, sound: "ding" });
     if (s.beat.visual === "title-slam") events.push({ frame: s.impact, sound: "slam" });
+    if (s.beat.visual === "nfc-card-coil") {
+      const phase = s.beat.params?.phase as NfcCardCoilPhase | undefined;
+      events.push({ frame: s.impact, sound: phase === "tap" ? "pop" : phase === "no-battery" ? "ding" : "click" });
+    }
+    if (s.beat.visual === "nfc-field-response") {
+      const phase = s.beat.params?.phase as NfcFieldResponsePhase | undefined;
+      const sound = phase === "off" ? "pop" : phase === "field" ? "whoosh" : phase === "power" || phase === "reply" ? "ding" : phase === "load" ? "click" : "pop";
+      events.push({ frame: s.impact, sound });
+    }
     if (s.beat.visual === "spell-distance") {
       const phase = s.beat.params?.phase as SpellDistancePhase | undefined;
       events.push({ frame: s.impact, sound: phase === "repair" || phase === "rank" ? "ding" : phase === "typo" ? "click" : "pop" });
@@ -11642,6 +11661,8 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     "devices-meet": { scale: 1.12, y: -60 },
     handshake: { scale: 1.22, y: -110 },
     "title-slam": { scale: 1.0, y: 0 },
+    "nfc-card-coil": { scale: 0.9, y: -20 },
+    "nfc-field-response": { scale: 0.9, y: -20 },
     "spell-distance": { scale: 0.9, y: -20 },
     "password-leak": { scale: 1.05, y: -30 },
     "hash-table": { scale: 0.98, y: -20 },
@@ -11761,6 +11782,24 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             impactLocal={impactLocal}
             text={slot.beat.params?.text as string}
             sub={slot.beat.params?.sub as string | undefined}
+          />
+        );
+      case "nfc-card-coil":
+        return (
+          <NfcCardCoilVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as NfcCardCoilPhase | undefined) ?? "tap"}
+          />
+        );
+      case "nfc-field-response":
+        return (
+          <NfcFieldResponseVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as NfcFieldResponsePhase | undefined) ?? "field"}
           />
         );
       case "spell-distance":

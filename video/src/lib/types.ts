@@ -70,6 +70,8 @@ export interface StoryBeat {
     | "devices-meet"
     | "handshake"
     | "title-slam"
+    | "nfc-card-coil"
+    | "nfc-field-response"
     | "spell-distance"
     | "password-leak"
     | "hash-table"
