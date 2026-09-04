@@ -1,25 +1,41 @@
 # Unattended ShortVideo producer scheduler
 
 Автоматический планировщик производства роликов: сам выбирает тему (математика /
-информатика), гоняет полный approval-gated конвейер и делает это каждые
-3 часа 21 минуту (12 060 секунд) через существующую точку входа
-`tools/run_episode.sh` (которая не изменялась).
+информатика), гоняет полный approval-gated конвейер через существующую точку
+входа `tools/run_episode.sh` (которая не изменялась).
+
+С 2026-09-04 модель запуска — **один тик в день**, не по часам: в 8:00
+crontab запускает `tools/producer_daily.sh`, который сам делает
+`DAILY_VIDEO_COUNT` (по умолчанию 6) прогонов подряд, каждый следующий —
+сразу после того, как предыдущий подтверждённо завершился (не по таймеру).
+Раньше был противоположный дизайн (тик каждую минуту в окне 8–22, запуск —
+когда истёк фиксированный интервал 3ч21м/12060с) — он всё ещё физически
+существует в `tools/producer_scheduler.py` (интервал 300с, см. ниже), но
+больше не является точкой входа по расписанию.
 
 ## Архитектура
 
 ```
-crontab (каждую минуту)
-  └─ tools/producer_cron.sh            тонкая cron-обёртка:
+crontab (один раз в день, 8:00)
+  └─ tools/producer_daily.sh           дневной драйвер (новое, 2026-09-04):
+        · маркер "сегодня уже стартовали" — вторая попытка в тот же день
+          сама себя отклоняет (--force-daily снимает защиту)
+        · цикл DAILY_VIDEO_COUNT раз (по умолчанию 6):
+              tools/producer_cron.sh --force   (блокирующий вызов)
+          отказ одного прогона НЕ прерывает цикл — идём дальше
+  └─ tools/producer_cron.sh             тонкая cron-обёртка (не изменилась):
         · set -euo pipefail
         · абсолютный путь проекта (не $PWD)
         · явный PATH: $HOME/.local/bin + стандартные каталоги
           (там лежат codex, npx, node)
         · export SHORTVIDEO_PUBLISH_STATE_DIR → общий state публикации
           (тот же, что у live bot/worker; override сохраняется)
-        · exec → python3 tools/producer_scheduler.py
-  └─ tools/producer_scheduler.py       решает, планирует, блокирует:
-        · читает/пишет часы следующего запуска (state.json)
+        · exec → python3 tools/producer_scheduler.py --force
+  └─ tools/producer_scheduler.py       владеет блокировкой и запуском:
         · flock на tick.lock — только один прогон одновременно
+          (это и есть реальный «запускай следующий только когда предыдущий
+          подтверждённо завершился» — держится всё время работы
+          run_episode.sh, включая хвостовые шаги)
         · генерирует timestamp-slug и временный промпт-файл
         · вызывает bash tools/run_episode.sh с фиксированными
           --runner codex --model gpt-5.6-luna --effort max
@@ -67,42 +83,48 @@ bot/worker-сервисы. Чтобы review из крона попало ров
 
 ## Cron-строка
 
-см. `deploy/cron/shortvideo-producer-cron.example` — одна строка из пяти звёзд
-(`* * * * *`). В crontab можно добавить `PATH=...` и `SHELL=/bin/bash`, но обёртка
-уже сама выставляет PATH, поэтому достаточно собственно команды:
+см. `deploy/cron/shortvideo-producer-cron.example` — один тик в сутки, в 8:00:
 
 ```
-* * * * * /home/toligrim/projects/ShortVideo/tools/producer_cron.sh >> /home/toligrim/.local/share/shortvideo/scheduler/cron.log 2>&1
+0 8 * * * /home/toligrim/projects/ShortVideo/tools/producer_daily.sh >> /home/toligrim/.local/share/shortvideo/scheduler/cron.log 2>&1
 ```
 
-## Семантика интервала
+Никакого `PATH=...`/`SHELL=...` в crontab не нужно — `producer_daily.sh` сам
+вызывает `producer_cron.sh`, которая уже выставляет PATH.
 
-- Тик каждую минуту — это только «будильник». Решение принимает планировщик.
-- Состояние `state.json` хранит `next_run` (epoch), `last_run`, `last_slug`.
-- **Первый запуск**: файла состояния нет ⇒ первый тик запускает прогон сразу же.
-- **Дальше**: следующий запуск планируется от момента запуска текущего →
-  `next_run = now + 300`. Если `now < next_run` — тик ничего не делает
-  (в cron.log одна строка `skip`) — но 300с намного меньше реальной
-  длительности прогона (90–150 мин по `runs/index.jsonl`), так что на
-  практике эта проверка почти никогда не блокирует следующий запуск сама
-  по себе.
-- Пока прогон идёт, `flock` на `tick.lock` удерживается — каждый минутный тик
-  получает `busy` и завершается кодом 3, дубликатов нет. **Именно этот
-  `flock`, а не интервал, — реальный механизм «следующий прогон стартует
-  только когда предыдущий подтверждённо завершился»**: лок держится всё
-  время работы `run_episode.sh`, включая хвостовые шаги (телеметрия,
-  STORY.md, `repo_guard`), не только рендер.
-- Так как интервал (300с) намного меньше реального прогона, следующий тик
-  запускается практически сразу после освобождения лока (задержка ≤ 1 мин —
-  периодичность самого cron). На окне 8–22 это даёт ~6–8 прогонов в день при
-  наблюдаемой длительности — не фиксированное число по дизайну, а столько,
-  сколько реально помещается.
+## Семантика дневного цикла
+
+- Один тик в сутки — 8:00. Всё остальное решает сам `producer_daily.sh`.
+- **Маркер дня**: `~/.local/share/shortvideo/scheduler/daily-<YYYY-MM-DD>.started`.
+  Если он уже существует — повторный запуск в тот же день сам себя отклоняет
+  (exit 0, ничего не запускает), пока не передан `--force-daily`. Защита от
+  случайного второго срабатывания (ручной перезапуск, дублирующийся cron) —
+  без неё день мог бы выпустить 12 видео вместо 6.
+- Внутри маркера — цикл на `DAILY_VIDEO_COUNT` (переменная окружения,
+  по умолчанию `6`) итераций. Каждая — блокирующий вызов
+  `tools/producer_cron.sh --force`, то есть реальный прогон одного эпизода
+  от начала до конца, включая хвостовые шаги (`STORY.md`, `repo_guard`).
+- **Отказ одного прогона не прерывает день.** Скрипт запущен без `set -e`
+  специально для этого: код выхода каждой итерации логируется, но цикл идёт
+  дальше — на практике отдельные прогоны иногда падают (сбой стороннего
+  API, allowlist-нарушение и т.п.), и «остановить весь день на первом же
+  отказе» систематически не давал бы дойти до 6.
+- **Реальный гейт «следующий стартует только когда предыдущий
+  подтверждённо завершился»** — не таймер, а `flock` внутри
+  `producer_scheduler.py` (см. `tools/producer_scheduler.py`'s
+  `SchedulerLock`, интервал 300с там — уже не точка входа по расписанию,
+  просто внутренний floor на случай прямого вызова планировщика без
+  дневного драйвера, см. его модульный docstring).
+- Итог за день — до `DAILY_VIDEO_COUNT` попыток, каждая по факту занимает
+  90–150 минут (`runs/index.jsonl`), так что весь дневной цикл из 6 обычно
+  укладывается в 10–15 часов от 8:00.
 
 ## Пути
 
 | Что                          | Путь                                                                     |
 |------------------------------|--------------------------------------------------------------------------|
 | Часы/замок/логи планировщика | `~/.local/share/shortvideo/scheduler/`                                   |
+| маркер дневного батча        | `~/.local/share/shortvideo/scheduler/daily-<YYYY-MM-DD>.started`         |
 | state (next_run)             | `~/.local/share/shortvideo/scheduler/state.json`                         |
 | lock                         | `~/.local/share/shortvideo/scheduler/tick.lock`                          |
 | вывод тиков / прогонов       | `~/.local/share/shortvideo/scheduler/cron.log` (redirect в cron-строке)  |
@@ -124,8 +146,17 @@ tools/producer_cron.sh --validate
 # Что бы произошло сейчас (сухой прогон: ничего не запускает, не пишет state)
 tools/producer_cron.sh --dry-run
 
-# Запустить вне графика (разово, игнорируя часы next_run)
+# Один прогон вне графика (разово, тот же путь, что и одна итерация дневного цикла)
 tools/producer_cron.sh --force
+
+# Весь дневной батч вручную, вне расписания (проверяет маркер дня как обычно)
+tools/producer_daily.sh
+
+# То же, но игнорируя маркер (если день уже стартовал и нужно ещё раз)
+tools/producer_daily.sh --force-daily
+
+# Другое число видео за прогон дневного драйвера
+DAILY_VIDEO_COUNT=2 tools/producer_daily.sh --force-daily
 
 # Посмотреть часы следующего запуска
 jq . ~/.local/share/shortvideo/scheduler/state.json
@@ -150,12 +181,15 @@ tail -n 20 ~/.local/share/shortvideo/scheduler/cron.log
 
 ## Тесты и валидация
 
-`tools/test_producer_scheduler.py` — фокус на инвариантах (интервал, константы
-model/effort, блокировка, slug, содержимое промпта) без запуска LLM. Отдельно
-`CronWrapperPublicationStateTests` гоняет сам `tools/producer_cron.sh` на
-герметичном `$HOME` и проверяет, что обёртка передаёт планировщику
-`SHORTVIDEO_PUBLISH_STATE_DIR` (и default, и явный override):
+`tools/test_producer_scheduler.py` — фокус на инвариантах (интервал-floor,
+константы model/effort, блокировка, slug, содержимое промпта) без запуска
+LLM. Отдельно `CronWrapperPublicationStateTests` гоняет сам
+`tools/producer_cron.sh` на герметичном `$HOME` и проверяет, что обёртка
+передаёт планировщику `SHORTVIDEO_PUBLISH_STATE_DIR` (и default, и явный
+override). `tools/test_producer_daily.py` — то же для дневного драйвера:
+маркер дня, `--force-daily`, `DAILY_VIDEO_COUNT`, продолжение цикла после
+отказа одной итерации (тоже без запуска LLM — `SV_SCHEDULER_FAKE_LAUNCH=1`):
 
 ```bash
-venv/bin/python -m pytest tools/test_producer_scheduler.py -v
+venv/bin/python -m pytest tools/test_producer_scheduler.py tools/test_producer_daily.py -v
 ```

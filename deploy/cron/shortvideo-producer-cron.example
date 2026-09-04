@@ -2,14 +2,19 @@
 # =============================================================
 # Install with:  crontab -e   (add the line below)
 # Or non-interactively:
-#   ( crontab -l 2>/dev/null | grep -v 'shortvideo/producer_cron' ; \
+#   ( crontab -l 2>/dev/null | grep -v 'shortvideo/producer_daily' ; \
 #     echo 'PATH=/home/toligrim/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin' ; \
 #     echo 'SHELL=/bin/bash' ; \
-#     echo '* * * * * /home/toligrim/projects/ShortVideo/tools/producer_cron.sh >> /home/toligrim/.local/share/shortvideo/scheduler/cron.log 2>&1' \
+#     echo '0 8 * * * /home/toligrim/projects/ShortVideo/tools/producer_daily.sh >> /home/toligrim/.local/share/shortvideo/scheduler/cron.log 2>&1' \
 #   ) | crontab -
 #
 # NOTE: we never edit your crontab automatically — this file is the documented
-# artifact. The wrapper itself is what makes a per-minute tick safe to run.
+# artifact.
 #
-# The line (one crontab line, five star fields = every minute):
-* * * * * /home/toligrim/projects/ShortVideo/tools/producer_cron.sh >> /home/toligrim/.local/share/shortvideo/scheduler/cron.log 2>&1
+# One tick a day, at 8:00: producer_daily.sh runs DAILY_VIDEO_COUNT (default
+# 6) productions back to back, each one only after the previous one's
+# completion is confirmed (see deploy/cron/README.md — "Семантика дневного
+# цикла"). No per-minute tick is needed any more; producer_cron.sh (called
+# internally, once per video) still exists unchanged for manual single-run
+# testing (`tools/producer_cron.sh --force`).
+0 8 * * * /home/toligrim/projects/ShortVideo/tools/producer_daily.sh >> /home/toligrim/.local/share/shortvideo/scheduler/cron.log 2>&1
