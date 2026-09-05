@@ -156,6 +156,7 @@ export interface StoryBeat {
     | "capacitive-touch"
     | "proximity-sensor"
     | "digital-signature"
+    | "apk-update-signature"
     | "bgp-reroute"
     | "usb-pd-negotiation"
     | "convolution-stencil"

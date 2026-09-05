@@ -81,6 +81,7 @@ import { ResetVectorVisual, type ResetVectorPhase } from "./ResetVectorVisual";
 import { AudioFingerprintVisual, type AudioFingerprintPhase } from "./AudioFingerprintVisual";
 import { EchoCancellationVisual, type EchoCancellationPhase } from "./EchoCancellationVisual";
 import { InvertedIndexVisual, type InvertedIndexPhase } from "./InvertedIndexMergeVisual";
+import { ApkUpdateSignatureVisual, type ApkUpdateSignaturePhase } from "./ApkUpdateSignatureVisual";
 
 /* ──────────────────────────── расписание битов ──────────────────────────── */
 
@@ -299,6 +300,22 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
       impact = start + Math.round(dur * (phase === "crossed" || phase === "analogy" ? 0.68 : phase === "rotate" ? 0.72 : phase === "parallel" ? 0.65 : 0.58));
     }
     if (beat.visual === "digital-signature") impact = start + Math.round(dur * 0.58);
+    if (beat.visual === "apk-update-signature") {
+      const phase = beat.params?.phase as ApkUpdateSignaturePhase | undefined;
+      impact = start + Math.round(dur * (
+        phase === "store" ? 0.62
+          : phase === "clone" ? 0.66
+          : phase === "certificate" ? 0.62
+          : phase === "compare" ? 0.64
+          : phase === "reject" ? 0.7
+          : phase === "sign" ? 0.68
+          : phase === "verify" ? 0.68
+          : phase === "tamper" ? 0.62
+          : phase === "no-key" ? 0.66
+          : phase === "solarwinds" ? 0.7
+          : 0.66
+      ));
+    }
     if (beat.visual === "capacitive-touch") impact = start + Math.round(dur * 0.58);
     if (beat.visual === "proximity-sensor") {
       const phase = beat.params?.phase as ProximitySensorPhase | undefined;
@@ -719,6 +736,17 @@ export const storySfx = (
     if (s.beat.visual === "digital-signature") {
       const phase = s.beat.params?.phase;
       events.push({ frame: s.impact, sound: phase === "tamper" ? "slam" : phase === "verify" ? "ding" : "pop" });
+    }
+    if (s.beat.visual === "apk-update-signature") {
+      const phase = s.beat.params?.phase as ApkUpdateSignaturePhase | undefined;
+      const sound = phase === "tamper" || phase === "no-key" || phase === "reject" || phase === "boundary"
+        ? "slam"
+        : phase === "verify" || phase === "compare" || phase === "solarwinds"
+        ? "ding"
+        : phase === "store" || phase === "certificate"
+        ? "click"
+        : "pop";
+      events.push({ frame: s.impact, sound });
     }
     if (s.beat.visual === "capacitive-touch") {
       const phase = s.beat.params?.phase;
@@ -11801,6 +11829,7 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     "polarizer-stack": { scale: 0.9, y: -20 },
     "capacitive-touch": { scale: 0.94, y: -20 },
     "proximity-sensor": { scale: 0.9, y: -20 },
+    "apk-update-signature": { scale: 0.9, y: -20 },
     "face-id-depth": { scale: 0.94, y: -20 },
     "bgp-reroute": { scale: 0.92, y: -20 },
     "usb-pd-negotiation": { scale: 0.92, y: -20 },
@@ -12633,6 +12662,24 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             signature={slot.beat.params?.signature as string | undefined}
             privKey={slot.beat.params?.privKey as string | undefined}
             pubKey={slot.beat.params?.pubKey as string | undefined}
+          />
+        );
+      case "apk-update-signature":
+        return (
+          <ApkUpdateSignatureVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as ApkUpdateSignaturePhase | undefined) ?? "store"}
+            app={slot.beat.params?.app as string | undefined}
+            version={slot.beat.params?.version as string | undefined}
+            installedVersion={slot.beat.params?.installedVersion as string | undefined}
+            certificate={slot.beat.params?.certificate as string | undefined}
+            installedCertificate={slot.beat.params?.installedCertificate as string | undefined}
+            incomingCertificate={slot.beat.params?.incomingCertificate as string | undefined}
+            signature={slot.beat.params?.signature as string | undefined}
+            company={slot.beat.params?.company as string | undefined}
+            payload={slot.beat.params?.payload as string | undefined}
           />
         );
       case "face-id-depth":
