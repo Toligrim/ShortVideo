@@ -1,7 +1,8 @@
 # ShortVideo — конвейер вертикальных роликов по информатике
 
-Автономный пайплайн: сценарий (JSON сцен) → озвучка (Gemini TTS + forced
-alignment через faster-whisper) → анимация и монтаж (Remotion, детерминированно)
+Автономный пайплайн: сценарий (JSON сцен) → озвучка (Gemini TTS, фолбэк на
+Yandex SpeechKit при исчерпанной дневной квоте, + forced alignment через
+faster-whisper) → анимация и монтаж (Remotion, детерминированно)
 → MP4 1080×1920.
 
 ## Структура

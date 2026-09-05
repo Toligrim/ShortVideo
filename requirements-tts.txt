@@ -1,0 +1,9 @@
+# System-python3 deps for tools/tts_scenes.py's Yandex SpeechKit fallback
+# (JWT signing to mint IAM tokens from the service-account authorized key -
+# see yandex_iam_token()). Already present on shuvalova as of 2026-09-05;
+# recorded here for reproducibility, not because anyone had to install them
+# for this feature to work today.
+#
+#   python3 -m pip install -r requirements-tts.txt
+PyJWT>=2.7,<3
+cryptography>=41,<43
