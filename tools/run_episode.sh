@@ -162,6 +162,33 @@ if [[ "$RUNNER" == codex ]]; then
   fi
 fi
 
+# Gemini TTS free-tier daily quota preflight (2026-09-05). Real incidents
+# 2026-09-04/05: multiple full scriptwriter+director passes (tens of
+# minutes of real delegate work) completed only to fail at TTS with
+# nothing to show for it, because
+# generativelanguage.googleapis.com/generate_content_free_tier_requests
+# was already exhausted on every fallback model before the run even
+# started. tools/tts_scenes.py remembers a 429 per model until the next
+# Pacific-Time day (Google's documented reset boundary; no live quota-
+# check API exists for a plain API key, only a browser-auth'd dashboard) -
+# if every model is already known exhausted, fail here, before any Codex
+# delegate time is spent, rather than discover it after the fact.
+TTS_QUOTA_JSON="$RUN_DIR/tts-quota-preflight.json"
+set +e
+python3 tools/tts_scenes.py --check-quota > "$TTS_QUOTA_JSON"
+TTS_QUOTA_RC=$?
+set -e
+python3 tools/pipeline_log.py event tts_quota_preflight --stage tts \
+  --severity "$([[ "$TTS_QUOTA_RC" -eq 0 ]] && echo info || echo error)" \
+  --detail "$([[ "$TTS_QUOTA_RC" -eq 0 ]] && echo has_quota || echo exhausted)" || true
+if [[ "$TTS_QUOTA_RC" -ne 0 ]]; then
+  python3 tools/pipeline_log.py finish --status failed --exit-code 77 \
+    --result-class infrastructure_failure --error-code tts_quota_exhausted \
+    > "$RUN_DIR/manifest.json"
+  echo "Gemini TTS free-tier daily quota already exhausted on every model (see $TTS_QUOTA_JSON) — refusing to spend delegate time on a run that would fail at TTS anyway" >&2
+  exit 77
+fi
+
 # The producer prompt remains a normal file value.  The protocol is appended
 # only after the host preflight and is read from disk by codex exec; nested
 # delegation itself is further constrained by delegate_invoke.py.

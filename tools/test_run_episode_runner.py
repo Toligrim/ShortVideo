@@ -71,6 +71,57 @@ def _run_completion_gate(
     return status, result_class, error_code
 
 
+def _tts_quota_gate(source: str) -> str:
+    start = source.index("# Gemini TTS free-tier daily quota preflight")
+    end = source.index("# The producer prompt remains a normal file value.", start)
+    return source[start:end]
+
+
+def _run_tts_quota_gate(tmp_path: Path, *, quota_ok: bool) -> subprocess.CompletedProcess:
+    (tmp_path / "tools").mkdir()
+    run_dir = tmp_path / "runs" / "run-dir"
+    run_dir.mkdir(parents=True)
+    (tmp_path / "tools" / "tts_scenes.py").write_text(
+        f"import sys\nsys.exit({0 if quota_ok else 1})\n", encoding="utf-8"
+    )
+    (tmp_path / "tools" / "pipeline_log.py").write_text(
+        "import sys\n"
+        "print('CALLED:', sys.argv[1:], file=sys.stderr)\n"
+        "print('{}')\n",
+        encoding="utf-8",
+    )
+
+    gate = _tts_quota_gate(_source())
+    shell = f'RUN_DIR="{run_dir}"\n' f"{gate}" 'echo "GATE_PASSED"\n'
+    return subprocess.run(
+        ["bash", "-c", shell],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+    )
+
+
+def test_tts_quota_gate_passes_through_when_quota_available(tmp_path: Path):
+    result = _run_tts_quota_gate(tmp_path, quota_ok=True)
+
+    assert result.returncode == 0, result.stderr
+    assert "GATE_PASSED" in result.stdout
+    assert "'finish'" not in result.stderr
+
+
+def test_tts_quota_gate_fails_fast_when_every_model_exhausted(tmp_path: Path):
+    """Real incidents 2026-09-04/05: multiple full scriptwriter+director
+    passes only failed at TTS afterward, wasting real delegate time. This
+    gate must refuse before any of that time is spent."""
+    result = _run_tts_quota_gate(tmp_path, quota_ok=False)
+
+    assert result.returncode == 77
+    assert "GATE_PASSED" not in result.stdout
+    assert "'finish'" in result.stderr
+    assert "tts_quota_exhausted" in result.stderr
+    assert "infrastructure_failure" in result.stderr
+
+
 def test_codex_doctor_is_inside_codex_runner_gate_only():
     source = _source()
     start = source.index("# Host-side Codex sandbox preflight.")

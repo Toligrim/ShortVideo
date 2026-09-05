@@ -19,6 +19,7 @@ Narration — устная форма с разметкой {SHOW|скажи}: �
 import argparse
 import asyncio
 import base64
+import datetime
 import difflib
 import json
 import os
@@ -29,6 +30,11 @@ import time
 import urllib.error
 import urllib.request
 from pathlib import Path
+
+try:
+    from zoneinfo import ZoneInfo
+except ImportError:  # pragma: no cover - stdlib since 3.9, always present here
+    ZoneInfo = None
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -95,6 +101,77 @@ def gemini_key() -> str:
     return key
 
 
+# Google's documented reset boundary for Gemini API free-tier daily quotas
+# is midnight Pacific Time, not a rolling 24h-from-first-use window -
+# confirmed empirically 2026-09-05 (a run at ~00:50 PT got partial quota
+# back that had been fully exhausted since the previous afternoon).
+QUOTA_RESET_TZ = "America/Los_Angeles"
+
+
+def _quota_state_path() -> Path:
+    override = os.environ.get("SV_TTS_QUOTA_STATE")
+    if override:
+        return Path(override)
+    return Path.home() / ".local" / "share" / "shortvideo" / "tts-quota.json"
+
+
+def _today_key() -> str:
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
+    if ZoneInfo is not None:
+        try:
+            return now_utc.astimezone(ZoneInfo(QUOTA_RESET_TZ)).strftime("%Y-%m-%d")
+        except Exception:
+            pass
+    # Defensive fallback if tzdata is somehow unavailable: a fixed UTC-8
+    # offset is off by an hour during PDT, but still resets once a day.
+    return (now_utc - datetime.timedelta(hours=8)).strftime("%Y-%m-%d")
+
+
+def _load_quota_state() -> dict:
+    """A model in exhausted_models means: Gemini already answered 429 for it
+    today (QUOTA_RESET_TZ-local). We deliberately never try to guess or
+    count toward the actual per-day request limit (10 at last check, but
+    Google owns that number and could change it) - only "has this model
+    already told us no today", which self-clears on the next local day."""
+    path = _quota_state_path()
+    today = _today_key()
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError, ValueError):
+        raw = None
+    if not isinstance(raw, dict) or raw.get("day") != today:
+        return {"day": today, "exhausted_models": []}
+    exhausted = raw.get("exhausted_models")
+    if not isinstance(exhausted, list) or not all(isinstance(m, str) for m in exhausted):
+        exhausted = []
+    return {"day": today, "exhausted_models": exhausted}
+
+
+def _save_quota_state(state: dict) -> None:
+    path = _quota_state_path()
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(state, ensure_ascii=False), encoding="utf-8")
+    except OSError:
+        pass  # best-effort bookkeeping - must never break a real synth call
+
+
+def mark_model_exhausted(model: str) -> None:
+    state = _load_quota_state()
+    if model not in state["exhausted_models"]:
+        state["exhausted_models"].append(model)
+    _save_quota_state(state)
+
+
+def model_is_known_exhausted(model: str) -> bool:
+    return model in _load_quota_state()["exhausted_models"]
+
+
+def has_quota_for_any_model() -> bool:
+    exhausted = set(_load_quota_state()["exhausted_models"])
+    return any(m not in exhausted for m in GEMINI_MODELS)
+
+
 def synth_gemini(spoken: str, mp3_path: Path, key: str):
     body = json.dumps({
         "contents": [{"parts": [{"text": STYLE_PROMPT + spoken}]}],
@@ -104,7 +181,13 @@ def synth_gemini(spoken: str, mp3_path: Path, key: str):
         },
     }).encode()
     last_err = None
+    attempted_any = False
     for model in GEMINI_MODELS:
+        if model_is_known_exhausted(model):
+            print(f"  {model}: уже помечена исчерпанной сегодня, пропускаю без запроса",
+                  file=sys.stderr)
+            continue
+        attempted_any = True
         url = (f"https://generativelanguage.googleapis.com/v1beta/models/"
                f"{model}:generateContent")
         req = urllib.request.Request(url, data=body, headers={
@@ -127,11 +210,17 @@ def synth_gemini(spoken: str, mp3_path: Path, key: str):
                 last_err = e
                 if e.code == 429:
                     print(f"  {model}: 429, пробую следующую модель", file=sys.stderr)
+                    mark_model_exhausted(model)
                     break  # квота этой модели кончилась — к следующей
                 time.sleep(5 * (attempt + 1))
             except Exception as e:  # 5xx/сеть — бэкофф
                 last_err = e
                 time.sleep(5 * (attempt + 1))
+    if not attempted_any:
+        sys.exit(
+            "gemini synth failed: every model already known exhausted today "
+            f"({_quota_state_path()}) — no request was even sent"
+        )
     sys.exit(f"gemini synth failed: {last_err}")
 
 
@@ -284,5 +373,28 @@ async def main():
     print(f"OK: {len(meta)} сцен, {total:.1f}s аудио (gemini) → {out}/meta.json")
 
 
+def cmd_check_quota() -> int:
+    """Cheap local pre-flight: does at least one Gemini TTS model still have
+    quota today, per our own bookkeeping (see has_quota_for_any_model)? No
+    network call - Google exposes no free API-key-authenticated endpoint to
+    ask this directly (only a browser-auth'd dashboard, see
+    https://ai.dev/rate-limit), so this can only ever be a local memory of
+    "which models already said no today", not a live guarantee. Exit 0 if
+    some model might still work, 1 if every model already said no today.
+    Used by run_episode.sh to fail fast before spending real delegate time
+    on a run that would only fail at TTS anyway.
+    """
+    state = _load_quota_state()
+    available = [m for m in GEMINI_MODELS if m not in state["exhausted_models"]]
+    print(json.dumps({
+        "day": state["day"],
+        "exhausted_models": state["exhausted_models"],
+        "available_models": available,
+    }, ensure_ascii=False))
+    return 0 if available else 1
+
+
 if __name__ == "__main__":
+    if "--check-quota" in sys.argv[1:]:
+        sys.exit(cmd_check_quota())
     asyncio.run(main())
