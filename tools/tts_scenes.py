@@ -3,9 +3,12 @@
 
 Единственный провайдер — Gemini TTS (gemini-3.1-flash-tts-preview, голос
 Fenrir): живой стиль промптом; таймингов не отдаёт → forced alignment через
-faster-whisper. Нет фолбэка на другой TTS: если Gemini недоступен (квота,
-сеть), скрипт останавливается с ошибкой — озвучка либо идёт через Gemini,
-либо не идёт совсем.
+faster-whisper. Нет фолбэка на ДРУГОЙ TTS (пробовали Yandex SpeechKit
+2026-09-05 — голос заметно унылее промпт-управляемого Gemini, отказались):
+если Gemini недоступен (квота, сеть), скрипт останавливается с ошибкой —
+озвучка либо идёт через Gemini, либо не идёт совсем. Единственный способ
+раздвинуть бесплатный потолок — несколько ключей GEMINI_API_KEY(_N) с разных
+Google-аккаунтов (у каждого своя независимая квота), см. gemini_keys().
 
 Narration — устная форма с разметкой {SHOW|скажи}: на экране SHOW, голос
 произносит «скажи» (транслитерацию) — так forced alignment надёжен для любых
@@ -21,6 +24,7 @@ import asyncio
 import base64
 import datetime
 import difflib
+import hashlib
 import json
 import os
 import re
@@ -90,15 +94,49 @@ def norm(w: str) -> str:
 
 # ---------- Gemini TTS ----------
 
-def gemini_key() -> str:
-    key = os.environ.get("GEMINI_API_KEY", "")
-    if not key:
-        for line in (ROOT / ".env").read_text().splitlines():
-            if line.startswith("GEMINI_API_KEY="):
-                key = line.split("=", 1)[1].strip()
-    if not key:
+def gemini_keys() -> list:
+    """All configured Gemini API keys, in priority order: GEMINI_API_KEY,
+    then GEMINI_API_KEY_2, GEMINI_API_KEY_3, ... (env first, falling back to
+    .env), stopping at the first gap. Each key is a separate Google
+    account/project with its own independent free-tier quota pool (see
+    QUOTA_RESET_TZ) - a second key roughly doubles the (key, model)
+    combinations synth_gemini can try before every door is shut for the
+    day, without touching the paid tier. Returns [] rather than exiting -
+    callers that require at least one key (main()) use require_gemini_keys();
+    callers that just want to know what's available (cmd_check_quota) don't
+    need to hard-fail on a config gap that isn't their job to report."""
+    env_lines = None
+    keys = []
+    i = 0
+    while True:
+        name = "GEMINI_API_KEY" if i == 0 else f"GEMINI_API_KEY_{i + 1}"
+        val = os.environ.get(name, "")
+        if not val:
+            if env_lines is None:
+                env_path = ROOT / ".env"
+                env_lines = env_path.read_text().splitlines() if env_path.exists() else []
+            for line in env_lines:
+                if line.startswith(f"{name}="):
+                    val = line.split("=", 1)[1].strip()
+                    break
+        if not val:
+            break
+        keys.append(val)
+        i += 1
+    return keys
+
+
+def require_gemini_keys() -> list:
+    keys = gemini_keys()
+    if not keys:
         sys.exit("нет GEMINI_API_KEY (ни в env, ни в .env)")
-    return key
+    return keys
+
+
+def _key_fingerprint(key: str) -> str:
+    """Never write raw key material to the quota state file - identify a
+    key in the exhausted_combos bookkeeping by a short hash instead."""
+    return hashlib.sha256(key.encode()).hexdigest()[:10]
 
 
 # Google's documented reset boundary for Gemini API free-tier daily quotas
@@ -128,11 +166,12 @@ def _today_key() -> str:
 
 
 def _load_quota_state() -> dict:
-    """A model in exhausted_models means: Gemini already answered 429 for it
-    today (QUOTA_RESET_TZ-local). We deliberately never try to guess or
-    count toward the actual per-day request limit (10 at last check, but
-    Google owns that number and could change it) - only "has this model
-    already told us no today", which self-clears on the next local day."""
+    """An entry in exhausted_combos ("<key fingerprint>:<model>") means:
+    that key already got a 429 from that model today (QUOTA_RESET_TZ-local).
+    We deliberately never try to guess or count toward the actual per-day
+    request limit (10 at last check per key per model, but Google owns that
+    number and could change it) - only "has this combo already told us no
+    today", which self-clears on the next local day."""
     path = _quota_state_path()
     today = _today_key()
     try:
@@ -140,11 +179,11 @@ def _load_quota_state() -> dict:
     except (OSError, json.JSONDecodeError, ValueError):
         raw = None
     if not isinstance(raw, dict) or raw.get("day") != today:
-        return {"day": today, "exhausted_models": []}
-    exhausted = raw.get("exhausted_models")
+        return {"day": today, "exhausted_combos": []}
+    exhausted = raw.get("exhausted_combos")
     if not isinstance(exhausted, list) or not all(isinstance(m, str) for m in exhausted):
         exhausted = []
-    return {"day": today, "exhausted_models": exhausted}
+    return {"day": today, "exhausted_combos": exhausted}
 
 
 def _save_quota_state(state: dict) -> None:
@@ -156,23 +195,30 @@ def _save_quota_state(state: dict) -> None:
         pass  # best-effort bookkeeping - must never break a real synth call
 
 
-def mark_model_exhausted(model: str) -> None:
+def mark_combo_exhausted(key: str, model: str) -> None:
+    combo = f"{_key_fingerprint(key)}:{model}"
     state = _load_quota_state()
-    if model not in state["exhausted_models"]:
-        state["exhausted_models"].append(model)
+    if combo not in state["exhausted_combos"]:
+        state["exhausted_combos"].append(combo)
     _save_quota_state(state)
 
 
-def model_is_known_exhausted(model: str) -> bool:
-    return model in _load_quota_state()["exhausted_models"]
+def combo_is_known_exhausted(key: str, model: str) -> bool:
+    return f"{_key_fingerprint(key)}:{model}" in _load_quota_state()["exhausted_combos"]
 
 
-def has_quota_for_any_model() -> bool:
-    exhausted = set(_load_quota_state()["exhausted_models"])
-    return any(m not in exhausted for m in GEMINI_MODELS)
+def has_quota_for_any_model(keys=None) -> bool:
+    """Any (key, model) combination not yet known-exhausted today, across
+    every configured key? keys=None reads gemini_keys() itself; callers that
+    already have the list (synth_gemini) pass it through to avoid a
+    redundant .env re-read."""
+    if keys is None:
+        keys = gemini_keys()
+    exhausted = set(_load_quota_state()["exhausted_combos"])
+    return any(f"{_key_fingerprint(k)}:{m}" not in exhausted for k in keys for m in GEMINI_MODELS)
 
 
-def synth_gemini(spoken: str, mp3_path: Path, key: str):
+def synth_gemini(spoken: str, mp3_path: Path, keys):
     body = json.dumps({
         "contents": [{"parts": [{"text": STYLE_PROMPT + spoken}]}],
         "generationConfig": {
@@ -182,44 +228,47 @@ def synth_gemini(spoken: str, mp3_path: Path, key: str):
     }).encode()
     last_err = None
     attempted_any = False
-    for model in GEMINI_MODELS:
-        if model_is_known_exhausted(model):
-            print(f"  {model}: уже помечена исчерпанной сегодня, пропускаю без запроса",
-                  file=sys.stderr)
-            continue
-        attempted_any = True
-        url = (f"https://generativelanguage.googleapis.com/v1beta/models/"
-               f"{model}:generateContent")
-        req = urllib.request.Request(url, data=body, headers={
-            "Content-Type": "application/json", "x-goog-api-key": key})
-        for attempt in range(3):
-            try:
-                with urllib.request.urlopen(req, timeout=120) as resp:
-                    data = json.load(resp)
-                pcm = base64.b64decode(
-                    data["candidates"][0]["content"]["parts"][0]["inlineData"]["data"])
-                p = subprocess.run(
-                    ["ffmpeg", "-v", "quiet", "-y", "-f", "s16le", "-ar", "24000", "-ac", "1",
-                     "-i", "pipe:0", "-b:a", "128k", str(mp3_path)], input=pcm)
-                if p.returncode != 0:
-                    raise RuntimeError("ffmpeg encode failed")
-                if model != GEMINI_MODELS[0]:
-                    print(f"  (модель: {model})", file=sys.stderr)
-                return
-            except urllib.error.HTTPError as e:
-                last_err = e
-                if e.code == 429:
-                    print(f"  {model}: 429, пробую следующую модель", file=sys.stderr)
-                    mark_model_exhausted(model)
-                    break  # квота этой модели кончилась — к следующей
-                time.sleep(5 * (attempt + 1))
-            except Exception as e:  # 5xx/сеть — бэкофф
-                last_err = e
-                time.sleep(5 * (attempt + 1))
+    for key in keys:
+        tag = f"…{key[-4:]}"
+        for model in GEMINI_MODELS:
+            if combo_is_known_exhausted(key, model):
+                print(f"  {model} (ключ {tag}): уже помечена исчерпанной сегодня, "
+                      f"пропускаю без запроса", file=sys.stderr)
+                continue
+            attempted_any = True
+            url = (f"https://generativelanguage.googleapis.com/v1beta/models/"
+                   f"{model}:generateContent")
+            req = urllib.request.Request(url, data=body, headers={
+                "Content-Type": "application/json", "x-goog-api-key": key})
+            for attempt in range(3):
+                try:
+                    with urllib.request.urlopen(req, timeout=120) as resp:
+                        data = json.load(resp)
+                    pcm = base64.b64decode(
+                        data["candidates"][0]["content"]["parts"][0]["inlineData"]["data"])
+                    p = subprocess.run(
+                        ["ffmpeg", "-v", "quiet", "-y", "-f", "s16le", "-ar", "24000", "-ac", "1",
+                         "-i", "pipe:0", "-b:a", "128k", str(mp3_path)], input=pcm)
+                    if p.returncode != 0:
+                        raise RuntimeError("ffmpeg encode failed")
+                    if key != keys[0] or model != GEMINI_MODELS[0]:
+                        print(f"  (ключ {tag}, модель: {model})", file=sys.stderr)
+                    return
+                except urllib.error.HTTPError as e:
+                    last_err = e
+                    if e.code == 429:
+                        print(f"  {model} (ключ {tag}): 429, пробую следующую комбинацию",
+                              file=sys.stderr)
+                        mark_combo_exhausted(key, model)
+                        break  # квота этой пары кончилась — к следующей
+                    time.sleep(5 * (attempt + 1))
+                except Exception as e:  # 5xx/сеть — бэкофф
+                    last_err = e
+                    time.sleep(5 * (attempt + 1))
     if not attempted_any:
         sys.exit(
-            "gemini synth failed: every model already known exhausted today "
-            f"({_quota_state_path()}) — no request was even sent"
+            "gemini synth failed: every (key, model) combination already known "
+            f"exhausted today ({_quota_state_path()}) — no request was even sent"
         )
     sys.exit(f"gemini synth failed: {last_err}")
 
@@ -323,7 +372,7 @@ async def main():
             sys.exit(f"--scenes задан, но нет {meta_path} для слияния")
         old_meta = {m["index"]: m for m in json.loads(meta_path.read_text())}
 
-    key = gemini_key() if target else None
+    keys = require_gemini_keys() if target else None
 
     meta = []
     for i, scene in enumerate(episode["scenes"]):
@@ -335,7 +384,7 @@ async def main():
         mp3 = out / "audio" / f"scene-{i}.mp3"
 
         if i in target:
-            synth_gemini(spoken, mp3, key)
+            synth_gemini(spoken, mp3, keys)
             time.sleep(2)  # не долбить preview-квоту
             heard = whisper_words(mp3)
             timings = align(say_words, heard, mp3_duration(mp3))
@@ -374,24 +423,34 @@ async def main():
 
 
 def cmd_check_quota() -> int:
-    """Cheap local pre-flight: does at least one Gemini TTS model still have
-    quota today, per our own bookkeeping (see has_quota_for_any_model)? No
-    network call - Google exposes no free API-key-authenticated endpoint to
-    ask this directly (only a browser-auth'd dashboard, see
-    https://ai.dev/rate-limit), so this can only ever be a local memory of
-    "which models already said no today", not a live guarantee. Exit 0 if
-    some model might still work, 1 if every model already said no today.
-    Used by run_episode.sh to fail fast before spending real delegate time
-    on a run that would only fail at TTS anyway.
+    """Cheap local pre-flight: does at least one (key, model) combination
+    still have quota today, per our own bookkeeping (see
+    has_quota_for_any_model)? No network call - Google exposes no free
+    API-key-authenticated endpoint to ask this directly (only a
+    browser-auth'd dashboard, see https://ai.dev/rate-limit), so this can
+    only ever be a local memory of "which combos already said no today",
+    not a live guarantee. Exit 0 if some combo might still work, 1 if every
+    configured key's every model already said no today (or no key is
+    configured at all). Used by run_episode.sh to fail fast before spending
+    real delegate time on a run that would only fail at TTS anyway.
     """
+    keys = gemini_keys()
+    if not keys:
+        print(json.dumps({"day": _today_key(), "keys_configured": 0,
+                           "exhausted_combos": [], "available_combos": 0}, ensure_ascii=False))
+        return 1
     state = _load_quota_state()
-    available = [m for m in GEMINI_MODELS if m not in state["exhausted_models"]]
+    exhausted = set(state["exhausted_combos"])
+    available_count = sum(
+        1 for k in keys for m in GEMINI_MODELS if f"{_key_fingerprint(k)}:{m}" not in exhausted
+    )
     print(json.dumps({
         "day": state["day"],
-        "exhausted_models": state["exhausted_models"],
-        "available_models": available,
+        "keys_configured": len(keys),
+        "exhausted_combos": state["exhausted_combos"],
+        "available_combos": available_count,
     }, ensure_ascii=False))
-    return 0 if available else 1
+    return 0 if available_count else 1
 
 
 if __name__ == "__main__":
