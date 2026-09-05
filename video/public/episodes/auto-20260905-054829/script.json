@@ -1,0 +1,80 @@
+{
+  "id": "auto-20260905-054829",
+  "title": "Почему видео в мессенджере становится мыльным, хотя исходник был чётким?",
+  "scenes": [
+    {
+      "type": "story",
+      "heading": "Резкий исходник → мыльная копия",
+      "narration": "Ты отправил в мессенджере чёткий ролик: волосы, надпись, листочки — всё резкое. У друга открывается мыльная копия. Что исчезло?",
+      "beats": [
+        { "visual": "quantization-loss", "onWord": "отправил", "params": { "phase": "sharp" } },
+        { "visual": "quantization-loss", "onWord": "резкое", "params": { "phase": "sharp" } },
+        { "visual": "quantization-loss", "onWord": "открывается", "params": { "phase": "copy" } },
+        { "visual": "quantization-loss", "onWord": "мыльная", "params": { "phase": "copy" } },
+        { "visual": "quantization-loss", "onWord": "исчезло", "params": { "phase": "tail" } }
+      ]
+    },
+    {
+      "type": "story",
+      "heading": "Участок кадра становится числами",
+      "narration": "Сервис действительно уменьшает файл — но не одним движением. Видеокодек берёт каждый участок кадра и раскладывает его на крупные и мелкие перепады яркости.",
+      "beats": [
+        { "visual": "quantization-loss", "onWord": "уменьшает", "params": { "phase": "copy" } },
+        { "visual": "quantization-loss", "onWord": "движением", "params": { "phase": "block" } },
+        { "visual": "quantization-loss", "onWord": "берёт", "params": { "phase": "block" } },
+        { "visual": "quantization-loss", "onWord": "раскладывает", "params": { "phase": "coefficients" } },
+        { "visual": "quantization-loss", "onWord": "крупные", "params": { "phase": "coefficients" } },
+        { "visual": "quantization-loss", "onWord": "мелкие", "params": { "phase": "coefficients" } }
+      ]
+    },
+    {
+      "type": "story",
+      "heading": "Ластик для слабых перепадов",
+      "narration": "А затем включается квантиза́ция — как ластик в черновике: он стирает тонкие штрихи, но оставляет крупный контур, чтобы записи стало меньше.",
+      "beats": [
+        { "visual": "quantization-loss", "onWord": "включается", "params": { "phase": "quantize" } },
+        { "visual": "quantization-loss", "onWord": "квантиза́ция", "params": { "phase": "quantize" } },
+        { "visual": "quantization-loss", "onWord": "ластик", "params": { "phase": "quantize" } },
+        { "visual": "quantization-loss", "onWord": "стирает", "params": { "phase": "quantize" } },
+        { "visual": "quantization-loss", "onWord": "оставляет", "params": { "phase": "quantize" } }
+      ]
+    },
+    {
+      "type": "story",
+      "heading": "Слабые коэффициенты становятся нулями",
+      "narration": "При сильной квантизации мелкие перепады округляются до нуля: граница волоса, текст вдали, зерно ткани — это уже не спрятано, а не записано.",
+      "beats": [
+        { "visual": "quantization-loss", "onWord": "сильной", "params": { "phase": "zero" } },
+        { "visual": "quantization-loss", "onWord": "округляются", "params": { "phase": "zero" } },
+        { "visual": "quantization-loss", "onWord": "граница", "params": { "phase": "zero" } },
+        { "visual": "quantization-loss", "onWord": "текст", "params": { "phase": "zero" } },
+        { "visual": "quantization-loss", "onWord": "зерно", "params": { "phase": "zero" } },
+        { "visual": "quantization-loss", "onWord": "записано", "params": { "phase": "tail" } }
+      ]
+    },
+    {
+      "type": "story",
+      "heading": "Сборка уже не вернёт детали",
+      "narration": "При просмотре картинка собирается только из того, что осталось. Поэтому контуры сглаживаются, мелкий текст плывёт, а восстановить детали нельзя.",
+      "beats": [
+        { "visual": "quantization-loss", "onWord": "собирается", "params": { "phase": "rebuild" } },
+        { "visual": "quantization-loss", "onWord": "осталось", "params": { "phase": "rebuild" } },
+        { "visual": "quantization-loss", "onWord": "сглаживаются", "params": { "phase": "rebuild" } },
+        { "visual": "quantization-loss", "onWord": "плывёт", "params": { "phase": "rebuild" } },
+        { "visual": "quantization-loss", "onWord": "восстановить", "params": { "phase": "rebuild" } }
+      ]
+    },
+    {
+      "type": "outro",
+      "title": "Резкость ушла в нули",
+      "bullets": [
+        "Исходник — резкий",
+        "Слабые перепады → нули",
+        "Копия из оставшихся данных",
+        "Мелкий текст не вернуть"
+      ],
+      "cta": "Подпишись: дальше — качество отправок",
+      "narration": "Запомни: мессенджер может перекодировать ролик в компактную копию, а квантизация выбрасывает слабые мелкие перепады, которые держат резкость. Дальше — почему отправки дают разное качество. Подпишись."
+    }
+  ]
+}
