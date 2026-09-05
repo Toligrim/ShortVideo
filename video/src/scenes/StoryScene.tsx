@@ -48,6 +48,7 @@ import { FaceIdDepthVisual, type FaceIdDepthPhase } from "./FaceIdDepthVisual";
 import { BgpRerouteVisual, type BgpReroutePhase } from "./BgpRerouteVisual";
 import { UsbPdNegotiationVisual, type UsbPdNegotiationPhase } from "./UsbPdNegotiationVisual";
 import { ConvolutionStencilVisual, type ConvolutionStencilPhase } from "./ConvolutionStencilVisual";
+import { QuantizationLossVisual, type QuantizationLossPhase } from "./QuantizationLossVisual";
 import { WifiAirtimeVisual, type WifiAirtimePhase } from "./WifiAirtimeVisual";
 import { WifiSignalVsAirtimeVisual } from "./WifiSignalVsAirtimeVisual";
 import { BluetoothHoppingVisual, type BluetoothHoppingPhase } from "./BluetoothHoppingVisual";
@@ -314,6 +315,10 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
     if (beat.visual === "convolution-stencil") {
       const phase = beat.params?.phase;
       impact = start + Math.round(dur * (phase === "input" ? 0.62 : phase === "scan" ? 0.58 : phase === "features" ? 0.6 : 0.64));
+    }
+    if (beat.visual === "quantization-loss") {
+      const phase = beat.params?.phase as QuantizationLossPhase | undefined;
+      impact = start + Math.round(dur * (phase === "zero" ? 0.68 : phase === "tail" ? 0.72 : phase === "rebuild" ? 0.66 : phase === "quantize" ? 0.64 : phase === "copy" ? 0.62 : 0.58));
     }
     if (beat.visual === "wifi-airtime") {
       const phase = beat.params?.phase;
@@ -737,6 +742,11 @@ export const storySfx = (
     if (s.beat.visual === "convolution-stencil") {
       const phase = s.beat.params?.phase;
       const sound = phase === "input" ? "pop" : phase === "scan" ? "click" : phase === "features" ? "ding" : "whoosh";
+      events.push({ frame: s.impact, sound });
+    }
+    if (s.beat.visual === "quantization-loss") {
+      const phase = s.beat.params?.phase as QuantizationLossPhase | undefined;
+      const sound = phase === "zero" || phase === "tail" ? "slam" : phase === "rebuild" ? "ding" : phase === "quantize" ? "pop" : phase === "coefficients" ? "click" : "whoosh";
       events.push({ frame: s.impact, sound });
     }
     if (s.beat.visual === "wifi-airtime") {
@@ -11795,6 +11805,7 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     "bgp-reroute": { scale: 0.92, y: -20 },
     "usb-pd-negotiation": { scale: 0.92, y: -20 },
     "convolution-stencil": { scale: 0.92, y: -20 },
+    "quantization-loss": { scale: 0.9, y: -20 },
     "wifi-airtime": { scale: 0.92, y: -20 },
     "wifi-signal-vs-airtime": { scale: 0.9, y: -20 },
     "bluetooth-hopping": { scale: 0.9, y: -20 },
@@ -12676,6 +12687,15 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             fps={fps}
             impactLocal={impactLocal}
             phase={(slot.beat.params?.phase as ConvolutionStencilPhase | undefined) ?? "input"}
+          />
+        );
+      case "quantization-loss":
+        return (
+          <QuantizationLossVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as QuantizationLossPhase | undefined) ?? "sharp"}
           />
         );
       case "wifi-airtime":

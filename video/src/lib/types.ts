@@ -159,6 +159,7 @@ export interface StoryBeat {
     | "bgp-reroute"
     | "usb-pd-negotiation"
     | "convolution-stencil"
+    | "quantization-loss"
   | "wifi-airtime"
   | "wifi-signal-vs-airtime"
   | "bluetooth-hopping"
