@@ -357,7 +357,7 @@ def build_prompt(root: Path, slug: str, topic_label: str) -> str:
    corrections/git-reset-clean-incident/REPORT.md.
    Команда `open` печатает `worktree` — передай ЭТОТ путь делегату как
    `cwd` в вызове `mcp__codex__codex`. Делегат работает ТОЛЬКО там, не в
-   /home/toligrim/projects/ShortVideo — рабочие деревья физически разделены,
+   /home/toligrim/projects/ShortVideo-Suite/ShortVideo — рабочие деревья физически разделены,
    гонка за файл между параллельными делегатами теперь структурно
    невозможна, а не только запрещена текстом.
    ПОСЛЕ делегата слей результат САМ (делегат этого не делает и не должен):

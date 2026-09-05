@@ -5,7 +5,7 @@
 #   ( crontab -l 2>/dev/null | grep -v 'shortvideo/producer_daily' ; \
 #     echo 'PATH=/home/toligrim/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin' ; \
 #     echo 'SHELL=/bin/bash' ; \
-#     echo '0 8 * * * /home/toligrim/projects/ShortVideo/tools/producer_daily.sh >> /home/toligrim/.local/share/shortvideo/scheduler/cron.log 2>&1' \
+#     echo '0 8 * * * /home/toligrim/projects/ShortVideo-Suite/ShortVideo/tools/producer_daily.sh >> /home/toligrim/.local/share/shortvideo/scheduler/cron.log 2>&1' \
 #   ) | crontab -
 #
 # NOTE: we never edit your crontab automatically — this file is the documented
@@ -19,4 +19,4 @@
 # цикла"). No per-minute tick is needed any more; producer_cron.sh (called
 # internally, once per video) still exists unchanged for manual single-run
 # testing (`tools/producer_cron.sh --force`).
-0 8 * * * /home/toligrim/projects/ShortVideo/tools/producer_daily.sh >> /home/toligrim/.local/share/shortvideo/scheduler/cron.log 2>&1
+0 8 * * * /home/toligrim/projects/ShortVideo-Suite/ShortVideo/tools/producer_daily.sh >> /home/toligrim/.local/share/shortvideo/scheduler/cron.log 2>&1

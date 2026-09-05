@@ -86,7 +86,7 @@ bot/worker-сервисы. Чтобы review из крона попало ров
 см. `deploy/cron/shortvideo-producer-cron.example` — один тик в сутки, в 8:00:
 
 ```
-0 8 * * * /home/toligrim/projects/ShortVideo/tools/producer_daily.sh >> /home/toligrim/.local/share/shortvideo/scheduler/cron.log 2>&1
+0 8 * * * /home/toligrim/projects/ShortVideo-Suite/ShortVideo/tools/producer_daily.sh >> /home/toligrim/.local/share/shortvideo/scheduler/cron.log 2>&1
 ```
 
 Никакого `PATH=...`/`SHELL=...` в crontab не нужно — `producer_daily.sh` сам
