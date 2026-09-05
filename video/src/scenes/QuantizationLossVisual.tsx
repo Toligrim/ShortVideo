@@ -458,13 +458,13 @@ const CoefficientsPhase: React.FC<{ local: number; enter: number; impactLocal: n
       <Panel left={45} top={415} width={420} height={535} color={theme.accent} opacity={enter}>
         <SmallLabel left={28} top={30} text="ПЕРЕПАДЫ ЯРКОСТИ" color={theme.accent} size={20} />
         <CoefficientGrid left={30} top={125} size={350} values={spatialBrightness} kind="spatial" color={theme.accent} reveal={1} />
-        <SmallLabel left={28} top={465} text="КРУПНЫЕ + МЕЛКИЕ" color={theme.subtext} size={17} />
+        <SmallLabel left={28} top={480} text="КРУПНЫЕ + МЕЛКИЕ" color={theme.subtext} size={17} />
       </Panel>
       <Arrow left={475} top={625} color={theme.warning} opacity={enter * (0.35 + reveal * 0.65)} label="РАСКЛАДЫВАЕТ" />
       <Panel left={615} top={415} width={420} height={535} color={theme.accent2} opacity={enter}>
         <SmallLabel left={28} top={30} text="КОЭФФИЦИЕНТЫ" color={theme.accent2} size={20} />
         <CoefficientGrid left={30} top={125} size={350} values={rawCoefficients} kind="coeff" color={theme.accent2} reveal={reveal} />
-        <SmallLabel left={28} top={465} text="СИЛЬНЫЕ ↑ · СЛАБЫЕ ↓" color={theme.subtext} size={17} />
+        <SmallLabel left={28} top={480} text="СИЛЬНЫЕ ↑ · СЛАБЫЕ ↓" color={theme.subtext} size={17} />
       </Panel>
       <Badge text="КРУПНЫЕ И МЕЛКИЕ ПЕРЕПАДЫ" color={theme.accent} opacity={enter} />
       <PulseRing x={825} y={680} triggerFrame={impactLocal} tone="accent" size={230} />
@@ -492,7 +492,7 @@ const QuantizePhase: React.FC<{ local: number; enter: number; impactLocal: numbe
         style={{
           position: "absolute",
           left: eraserX,
-          top: 655,
+          top: 980,
           width: 132,
           height: 86,
           borderRadius: 16,
