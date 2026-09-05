@@ -1,21 +1,17 @@
 #!/usr/bin/env python3
 """Озвучка сценария посценно + тайминги слов для караоке.
 
-Основной провайдер — Gemini TTS (gemini-3.1-flash-tts-preview, голос
+Единственный провайдер — Gemini TTS (gemini-3.1-flash-tts-preview, голос
 Fenrir): живой стиль промптом; таймингов не отдаёт → forced alignment через
-faster-whisper. Второй провайдер — Yandex SpeechKit (голос ermil): включается
-автоматически, только когда у Gemini исчерпана дневная бесплатная квота на
-всех моделях (has_quota_for_any_model()) — не «на глаз получше», а строго как
-запасной вариант, чтобы не простаивать день из-за чужого лимита. Какой
-провайдер реально озвучил сцену — видно и в логе (не тихая деградация), и в
-meta.json (поле provider у каждой сцены). Если Yandex тоже недоступен
-(нет ключа, сетевая ошибка) — как и раньше, скрипт останавливается с ошибкой.
+faster-whisper. Нет фолбэка на другой TTS: если Gemini недоступен (квота,
+сеть), скрипт останавливается с ошибкой — озвучка либо идёт через Gemini,
+либо не идёт совсем.
 
 Narration — устная форма с разметкой {SHOW|скажи}: на экране SHOW, голос
 произносит «скажи» (транслитерацию) — так forced alignment надёжен для любых
 терминов.
 
-Выход в --out: audio/scene-<i>.mp3, meta.json [{index, duration, words[], provider}].
+Выход в --out: audio/scene-<i>.mp3, meta.json [{index, duration, words[]}].
 
 Запуск: venv/bin/python tools/tts_scenes.py episodes/<slug>.json \
         --out video/public/episodes/<slug>
@@ -32,7 +28,6 @@ import subprocess
 import sys
 import time
 import urllib.error
-import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -229,162 +224,6 @@ def synth_gemini(spoken: str, mp3_path: Path, key: str):
     sys.exit(f"gemini synth failed: {last_err}")
 
 
-# ---------- Yandex SpeechKit TTS (fallback, engages when Gemini has none) ----------
-
-YANDEX_VOICE = "ermil"
-# ermil only supports the "neutral" emotion (jane/omazh support good/evil) -
-# see https://yandex.cloud/en/docs/speechkit/tts/voices
-YANDEX_EMOTION = "neutral"
-
-
-class YandexUnavailable(Exception):
-    """Yandex SpeechKit itself couldn't produce audio (network, bad key,
-    quota) - distinct from "not configured at all" (yandex_iam_token()
-    returning None), which the caller treats as expected, not an error."""
-
-
-def _yandex_sa_key_path() -> Path:
-    override = os.environ.get("SV_YANDEX_SA_KEY_FILE")
-    if override:
-        return Path(override)
-    return Path.home() / ".config" / "yandex-cloud" / "shortvideo-sa-key.json"
-
-
-def _yandex_sa_key() -> dict:
-    try:
-        raw = json.loads(_yandex_sa_key_path().read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return {}
-    return raw if isinstance(raw, dict) else {}
-
-
-def yandex_folder_id() -> str:
-    folder = os.environ.get("YANDEX_FOLDER_ID", "")
-    if not folder:
-        env_path = ROOT / ".env"
-        if env_path.exists():
-            for line in env_path.read_text().splitlines():
-                if line.startswith("YANDEX_FOLDER_ID="):
-                    folder = line.split("=", 1)[1].strip()
-    return folder
-
-
-def yandex_is_configured() -> bool:
-    """Purely local check, no network - mirrors the Gemini quota check's own
-    philosophy of cheap bookkeeping over live probes. Confirms a usable-
-    looking key + folder id exist, not that the key is still unrevoked
-    (that's only ever known for certain at actual synth time)."""
-    key = _yandex_sa_key()
-    return bool(
-        key.get("private_key") and key.get("service_account_id") and key.get("id")
-        and yandex_folder_id()
-    )
-
-
-_yandex_iam_cache = {"token": None, "expires_at": 0.0}
-
-
-def yandex_iam_token():
-    """Mint an IAM token from the service account's authorized key via the
-    documented JWT exchange (PS256, exp-iat<=3600,
-    https://iam.api.cloud.yandex.net/iam/v1/tokens) - no `yc` binary
-    dependency, no browser. Cached in-memory for this process (a token is
-    valid 12h; one tts_scenes.py run never runs anywhere near that long).
-    Returns None - not an error - when no key is configured at all, so
-    callers can treat Yandex as simply "not set up" rather than crash."""
-    now = time.time()
-    if _yandex_iam_cache["token"] and now < _yandex_iam_cache["expires_at"] - 60:
-        return _yandex_iam_cache["token"]
-    key = _yandex_sa_key()
-    if not key.get("private_key") or not key.get("service_account_id") or not key.get("id"):
-        return None
-    import jwt  # only needed once the fallback actually engages
-    payload = {
-        "aud": "https://iam.api.cloud.yandex.net/iam/v1/tokens",
-        "iss": key["service_account_id"],
-        "iat": int(now),
-        "exp": int(now) + 3600,
-    }
-    signed = jwt.encode(payload, key["private_key"], algorithm="PS256",
-                         headers={"kid": key["id"]})
-    req = urllib.request.Request(
-        "https://iam.api.cloud.yandex.net/iam/v1/tokens",
-        data=json.dumps({"jwt": signed}).encode(),
-        headers={"Content-Type": "application/json"},
-    )
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        data = json.load(resp)
-    token = data["iamToken"]
-    _yandex_iam_cache.update(token=token, expires_at=now + 12 * 3600)
-    return token
-
-
-def synth_yandex(spoken: str, mp3_path: Path, iam_token: str, folder_id: str):
-    """REST v1 (not the gRPC-only v3 with native word timings) - chosen to
-    match Gemini's own urllib-only style and to reuse the existing whisper
-    forced-alignment pipeline unchanged for both providers, rather than
-    pulling in grpcio+generated stubs just for this fallback path."""
-    if not folder_id:
-        raise YandexUnavailable("YANDEX_FOLDER_ID не задан")
-    body = urllib.parse.urlencode({
-        "text": spoken,
-        "lang": "ru-RU",
-        "voice": YANDEX_VOICE,
-        "emotion": YANDEX_EMOTION,
-        "speed": "1.1",
-        "format": "mp3",
-        "folderId": folder_id,
-    }).encode()
-    req = urllib.request.Request(
-        "https://tts.api.cloud.yandex.net/speech/v1/tts:synthesize",
-        data=body,
-        headers={"Authorization": f"Bearer {iam_token}"},
-    )
-    last_err = None
-    for attempt in range(3):
-        try:
-            with urllib.request.urlopen(req, timeout=60) as resp:
-                mp3_path.write_bytes(resp.read())
-            return
-        except Exception as e:
-            last_err = e
-            time.sleep(5 * (attempt + 1))
-    raise YandexUnavailable(str(last_err))
-
-
-def synth_scene(spoken: str, mp3_path: Path, gemini_api_key: str) -> str:
-    """Gemini first, unless we already know today's quota is gone on every
-    model; Yandex SpeechKit only as the fallback. synth_gemini() still
-    sys.exit()s on total failure when called directly (unchanged, existing
-    callers/tests rely on that) - SystemExit is a BaseException, so it's
-    caught here deliberately, same as any other exception, to attempt the
-    fallback instead of letting it kill the process. Returns which provider
-    actually produced the audio - recorded in meta.json and printed, so a
-    fallback is always visible, never a silent quality change."""
-    if has_quota_for_any_model():
-        try:
-            synth_gemini(spoken, mp3_path, gemini_api_key)
-            return "gemini"
-        except SystemExit as e:
-            print(f"  Gemini не смог озвучить сцену ({e}), пробую Yandex SpeechKit",
-                  file=sys.stderr)
-    else:
-        print("  Gemini: вся квота на сегодня уже исчерпана, сразу пробую Yandex SpeechKit",
-              file=sys.stderr)
-    token = yandex_iam_token()
-    if token is None:
-        sys.exit(
-            "оба провайдера недоступны: Gemini исчерпан/упал, а Yandex SpeechKit не "
-            f"настроен (нет валидного ключа в {_yandex_sa_key_path()} или не задан "
-            "YANDEX_FOLDER_ID)"
-        )
-    try:
-        synth_yandex(spoken, mp3_path, token, yandex_folder_id())
-    except YandexUnavailable as e:
-        sys.exit(f"оба провайдера недоступны: Gemini исчерпан/упал, Yandex SpeechKit тоже: {e}")
-    return "yandex"
-
-
 # ---------- Forced alignment (faster-whisper) ----------
 
 _model = None
@@ -496,16 +335,15 @@ async def main():
         mp3 = out / "audio" / f"scene-{i}.mp3"
 
         if i in target:
-            provider = synth_scene(spoken, mp3, key)
-            time.sleep(2)  # не долбить preview-квоту Gemini (безвредно и для Yandex)
+            synth_gemini(spoken, mp3, key)
+            time.sleep(2)  # не долбить preview-квоту
             heard = whisper_words(mp3)
             timings = align(say_words, heard, mp3_duration(mp3))
             print(f"scene {i}: whisper услышал {len(heard)} слов, ожидалось {len(say_words)}",
                   file=sys.stderr)
             meta.append({"index": i, "duration": round(mp3_duration(mp3), 3),
-                         "words": tokens_to_words(tokens, timings), "provider": provider})
-            print(f"scene {i}: пере-озвучена ({provider}), "
-                  f"{meta[-1]['duration']}s, {len(meta[-1]['words'])} слов")
+                         "words": tokens_to_words(tokens, timings)})
+            print(f"scene {i}: пере-озвучена, {meta[-1]['duration']}s, {len(meta[-1]['words'])} слов")
         else:
             prev = old_meta.get(i)
             if prev is None:
@@ -516,8 +354,7 @@ async def main():
                 words = [{"text": t["show"], "start": w["start"], "end": w["end"]}
                          for t, w in zip(tokens, prev["words"])]
                 changed = [n for n, o in zip(words, prev["words"]) if n["text"] != o["text"]]
-                meta.append({"index": i, "duration": prev["duration"], "words": words,
-                             "provider": prev.get("provider", "gemini")})
+                meta.append({"index": i, "duration": prev["duration"], "words": words})
                 if changed:
                     print(f"scene {i}: не пере-озвучена, обновлена подпись "
                           f"({len(changed)} слов) на старых таймингах")
@@ -533,35 +370,28 @@ async def main():
     meta.sort(key=lambda m: m["index"])
     (out / "meta.json").write_text(json.dumps(meta, ensure_ascii=False, indent=1))
     total = sum(m["duration"] for m in meta)
-    providers = sorted({m.get("provider", "gemini") for m in meta})
-    print(f"OK: {len(meta)} сцен, {total:.1f}s аудио ({'/'.join(providers)}) → {out}/meta.json")
+    print(f"OK: {len(meta)} сцен, {total:.1f}s аудио (gemini) → {out}/meta.json")
 
 
 def cmd_check_quota() -> int:
-    """Cheap local pre-flight: can *some* provider still synthesize today?
-    Gemini: does at least one model still have quota, per our own
-    bookkeeping (see has_quota_for_any_model) - no network call, Google
-    exposes no free API-key-authenticated endpoint to ask this directly
-    (only a browser-auth'd dashboard, see https://ai.dev/rate-limit), so
-    this can only ever be a local memory of "which models already said no
-    today", not a live guarantee. Yandex: purely local too (yandex_is_
-    configured, see its docstring) - a revoked-but-present key would still
-    report ready here and only fail for real at synth time.
-    Exit 0 if Gemini has quota OR Yandex is configured as a fallback,
-    1 only if truly nothing can synthesize this run. Used by run_episode.sh
-    to fail fast before spending real delegate time on a run that would
-    only fail at TTS anyway.
+    """Cheap local pre-flight: does at least one Gemini TTS model still have
+    quota today, per our own bookkeeping (see has_quota_for_any_model)? No
+    network call - Google exposes no free API-key-authenticated endpoint to
+    ask this directly (only a browser-auth'd dashboard, see
+    https://ai.dev/rate-limit), so this can only ever be a local memory of
+    "which models already said no today", not a live guarantee. Exit 0 if
+    some model might still work, 1 if every model already said no today.
+    Used by run_episode.sh to fail fast before spending real delegate time
+    on a run that would only fail at TTS anyway.
     """
     state = _load_quota_state()
     available = [m for m in GEMINI_MODELS if m not in state["exhausted_models"]]
-    yandex_ready = yandex_is_configured()
     print(json.dumps({
         "day": state["day"],
         "exhausted_models": state["exhausted_models"],
         "available_models": available,
-        "yandex_fallback_ready": yandex_ready,
     }, ensure_ascii=False))
-    return 0 if (available or yandex_ready) else 1
+    return 0 if available else 1
 
 
 if __name__ == "__main__":
