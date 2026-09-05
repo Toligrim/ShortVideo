@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "slug": "auto-20260905-112604",
+  "targets": {
+    "youtube": {
+      "title": "Почему камера телефона не дрожит, хотя руки трясутся?",
+      "description": "Что происходит внутри камеры: гироскоп замечает дрожание, а миниатюрный привод сдвигает линзу ему навстречу.",
+      "tags": ["камера телефона", "стабилизация", "OIS", "технологии", "shortvideo"],
+      "category_id": "28",
+      "privacy_status": "public",
+      "made_for_kids": false,
+      "contains_synthetic_media": true,
+      "notify_subscribers": false
+    },
+    "instagram": {
+      "caption": "Почему камера телефона не дрожит, хотя руки трясутся? Разбираем оптическую стабилизацию изображения. #технологии #shortvideo",
+      "share_to_feed": true
+    }
+  }
+}
