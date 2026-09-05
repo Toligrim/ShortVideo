@@ -1,0 +1,141 @@
+{
+  "id": "auto-20260905-091413",
+  "title": "Почему картинка на сайте сначала мутная, а потом становится чёткой?",
+  "scenes": [
+    {
+      "type": "story",
+      "heading": "Картинка проявляется",
+      "narration": "Два состояния одной картинки подряд: открываешь фото на сайте — сначала оно мутное целиком, а потом проступают глаза, текст и детали. Как файл это делает?",
+      "beats": [
+        {
+          "visual": "progressive-image-scans",
+          "onWord": "Два",
+          "params": { "phase": "compare" }
+        },
+        {
+          "visual": "progressive-image-scans",
+          "onWord": "сначала",
+          "params": { "phase": "blur" }
+        },
+        {
+          "visual": "progressive-image-scans",
+          "onWord": "глаза",
+          "params": { "phase": "details" }
+        },
+        {
+          "visual": "progressive-image-scans",
+          "onWord": "Как",
+          "params": { "phase": "scans" }
+        }
+      ]
+    },
+    {
+      "type": "story",
+      "heading": "Один файл — много проходов",
+      "narration": "Удивительно: один файл может показать сначала грубый кадр, а потом его же уточнить. Браузер не получает две фотографии — он читает сведения слоями.",
+      "beats": [
+        {
+          "visual": "progressive-image-scans",
+          "onWord": "один",
+          "params": { "phase": "scans" }
+        },
+        {
+          "visual": "progressive-image-scans",
+          "onWord": "грубый",
+          "params": { "phase": "shapes" }
+        },
+        {
+          "visual": "progressive-image-scans",
+          "onWord": "уточнить",
+          "params": { "phase": "details" }
+        },
+        {
+          "visual": "progressive-image-scans",
+          "onWord": "две",
+          "params": { "phase": "scans" }
+        },
+        {
+          "visual": "progressive-image-scans",
+          "onWord": "слоями",
+          "params": { "phase": "tracing" }
+        }
+      ]
+    },
+    {
+      "type": "story",
+      "heading": "Проходы накладываются",
+      "narration": "Если файл сохранён как {progressive JPEG|прогрессивный джейпег}, браузер получает несколько проходов. Это как художник с листами кальки: первый намечает формы на всём рисунке, следующие добавляют тени, контуры и штрихи.",
+      "beats": [
+        {
+          "visual": "progressive-image-scans",
+          "onWord": "progressive",
+          "params": { "phase": "scans" }
+        },
+        {
+          "visual": "progressive-image-scans",
+          "onWord": "получает",
+          "params": { "phase": "scans" }
+        },
+        {
+          "visual": "progressive-image-scans",
+          "onWord": "кальки",
+          "params": { "phase": "tracing" }
+        },
+        {
+          "visual": "progressive-image-scans",
+          "onWord": "первый",
+          "params": { "phase": "shapes" }
+        },
+        {
+          "visual": "progressive-image-scans",
+          "onWord": "следующие",
+          "params": { "phase": "details" }
+        }
+      ]
+    },
+    {
+      "type": "story",
+      "heading": "Не сверху вниз",
+      "narration": "В файле данные могут идти не строками сверху вниз: первый проход может нести базовые данные цвета и яркости блоков, следующие уточняют детали по всему изображению. Вау-факт: верхняя полоса не обязана приходить первой.",
+      "beats": [
+        {
+          "visual": "progressive-image-scans",
+          "onWord": "строками",
+          "params": { "phase": "blocks" }
+        },
+        {
+          "visual": "progressive-image-scans",
+          "onWord": "базовые",
+          "params": { "phase": "blocks" }
+        },
+        {
+          "visual": "progressive-image-scans",
+          "onWord": "цвета",
+          "params": { "phase": "blocks" }
+        },
+        {
+          "visual": "progressive-image-scans",
+          "onWord": "следующие",
+          "params": { "phase": "details" }
+        },
+        {
+          "visual": "progressive-image-scans",
+          "onWord": "верхняя",
+          "params": { "phase": "blocks" }
+        }
+      ]
+    },
+    {
+      "type": "outro",
+      "title": "Чёткость по проходам",
+      "bullets": [
+        "Один файл · несколько проходов",
+        "Сначала мутный весь кадр",
+        "Формы → детали → резкость",
+        "Формат и сайт должны поддержать"
+      ],
+      "cta": "Подпишись: дальше — скрытый трюк сайта",
+      "narration": "Итак, {progressive JPEG|прогрессивный джейпег} — это грубый набросок кадра, который браузер уточняет проходами: чёткость приходит постепенно. Но так работает не каждый файл и не каждый сайт. Подпишись — дальше скрытый трюк сайта."
+    }
+  ]
+}
