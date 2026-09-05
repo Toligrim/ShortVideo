@@ -179,6 +179,7 @@ export interface StoryBeat {
   | "attention-cost"
   | "wallet-copy"
   | "multi-frame-stack"
+  | "ois-stabilization"
   | "mail-queue"
   | "mail-server-handoff"
   | "totp-window"

@@ -1,0 +1,66 @@
+{
+  "id": "auto-20260905-112604",
+  "title": "Почему камера телефона не дрожит, хотя руки трясутся?",
+  "scenes": [
+    {
+      "type": "story",
+      "heading": "Кто удержал кадр?",
+      "narration": "Ты идёшь, снимаешь друга на ходу: руки заметно трясутся, а в готовом видео лицо почти не плавает. Кто удержал кадр — ты или телефон?",
+      "beats": [
+        { "visual": "ois-stabilization", "onWord": "Ты", "params": { "phase": "handheld" } },
+        { "visual": "ois-stabilization", "onWord": "трясутся", "params": { "phase": "handheld" } },
+        { "visual": "ois-stabilization", "onWord": "плавает", "params": { "phase": "hold" } },
+        { "visual": "title-slam", "onWord": "телефон", "params": { "text": "ТЫ ИЛИ ТЕЛЕФОН?", "sub": "кто держит кадр" } }
+      ]
+    },
+    {
+      "type": "story",
+      "heading": "Противодвижение",
+      "narration": "Представь фонарь на маленькой тележке: тележка дёрнулась вправо — фонарь сдвинули влево, и свет остался на той же стене. В камере происходит похожий манёвр.",
+      "beats": [
+        { "visual": "ois-stabilization", "onWord": "фонарь", "params": { "phase": "cart" } },
+        { "visual": "ois-stabilization", "onWord": "дёрнулась", "params": { "phase": "cart" } },
+        { "visual": "ois-stabilization", "onWord": "сдвинули", "params": { "phase": "cart" } },
+        { "visual": "ois-stabilization", "onWord": "свет", "params": { "phase": "cart" } },
+        { "visual": "ois-stabilization", "onWord": "камере", "params": { "phase": "countermove" } }
+      ]
+    },
+    {
+      "type": "story",
+      "heading": "Как работает OIS",
+      "narration": "В камерах с этой деталью имя механизма — оптическая стабилизация изображения, {OIS|оу ай эс}. Гироскоп измеряет угловое движение телефона: если корпус повернулся вправо, привод сдвигает линзу влево.",
+      "beats": [
+        { "visual": "ois-stabilization", "onWord": "камерах", "params": { "phase": "countermove" } },
+        { "visual": "ois-stabilization", "onWord": "OIS", "params": { "phase": "countermove" } },
+        { "visual": "ois-stabilization", "onWord": "Гироскоп", "params": { "phase": "gyro" } },
+        { "visual": "ois-stabilization", "onWord": "повернулся", "params": { "phase": "countermove" } },
+        { "visual": "ois-stabilization", "onWord": "сдвигает", "params": { "phase": "countermove" } }
+      ]
+    },
+    {
+      "type": "story",
+      "heading": "Линза на подвесе",
+      "narration": "Внутри линза не приклеена намертво: её держит миниатюрный подвес, а электромагнитный привод двигает её вбок. Вау-факт: стекло внутри телефона реально двигается против твоей руки.",
+      "beats": [
+        { "visual": "ois-stabilization", "onWord": "линза", "params": { "phase": "suspension" } },
+        { "visual": "ois-stabilization", "onWord": "держит", "params": { "phase": "suspension" } },
+        { "visual": "ois-stabilization", "onWord": "подвес", "params": { "phase": "suspension" } },
+        { "visual": "ois-stabilization", "onWord": "привод", "params": { "phase": "actuator" } },
+        { "visual": "ois-stabilization", "onWord": "двигает", "params": { "phase": "actuator" } },
+        { "visual": "ois-stabilization", "onWord": "реально", "params": { "phase": "countermove" } }
+      ]
+    },
+    {
+      "type": "outro",
+      "title": "Гироскоп замечает",
+      "bullets": [
+        "Гироскоп замечает движение",
+        "Привод возражает",
+        "Линза сдвигается навстречу",
+        "Свет держится на матрице"
+      ],
+      "cta": "Подпишись: предел стабилизации",
+      "narration": "Световой рисунок поэтому попадает почти туда же, и изображение на матрице не уезжает. Запомни: гироскоп замечает движение, привод возражает. Подпишись — дальше разберём, почему стабилизация иногда сдаётся."
+    }
+  ]
+}

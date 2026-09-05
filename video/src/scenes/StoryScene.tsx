@@ -65,6 +65,7 @@ import { IncognitoSessionVisual, type IncognitoSessionPhase } from "./IncognitoS
 import { ContextWindowVisual, type ContextWindowPhase } from "./ContextWindowVisual";
 import { AttentionCostVisual, type AttentionCostPhase } from "./AttentionCostVisual";
 import { MultiFrameStackVisual, type MultiFrameStackPhase } from "./MultiFrameStackVisual";
+import { OisStabilizationVisual, type OisStabilizationPhase } from "./OisStabilizationVisual";
 import { TotpWindowVisual, type TotpWindowPhase } from "./TotpWindowVisual";
 import { SpellDistanceVisual, type SpellDistancePhase } from "./SpellDistanceVisual";
 import { OperationalTransformVisual, type OperationalTransformPhase } from "./OperationalTransformVisual";
@@ -438,6 +439,10 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
     if (beat.visual === "multi-frame-stack") {
       const phase = beat.params?.phase as MultiFrameStackPhase | undefined;
       impact = start + Math.round(dur * (phase === "reject" ? 0.68 : phase === "capture" ? 0.55 : 0.62));
+    }
+    if (beat.visual === "ois-stabilization") {
+      const phase = beat.params?.phase as OisStabilizationPhase | undefined;
+      impact = start + Math.round(dur * (phase === "countermove" || phase === "actuator" ? 0.68 : phase === "hold" ? 0.72 : phase === "gyro" ? 0.62 : 0.58));
     }
     if (beat.visual === "mail-queue") {
       const phase = beat.params?.phase as MailQueuePhase | undefined;
@@ -872,6 +877,11 @@ export const storySfx = (
     if (s.beat.visual === "multi-frame-stack") {
       const ph = s.beat.params?.phase as MultiFrameStackPhase | undefined;
       const sound = ph === "reject" ? "slam" : ph === "average" ? "ding" : ph === "align" ? "pop" : "click";
+      events.push({ frame: s.impact, sound });
+    }
+    if (s.beat.visual === "ois-stabilization") {
+      const ph = s.beat.params?.phase as OisStabilizationPhase | undefined;
+      const sound = ph === "countermove" || ph === "actuator" ? "slam" : ph === "hold" ? "ding" : ph === "gyro" ? "click" : "pop";
       events.push({ frame: s.impact, sound });
     }
     if (s.beat.visual === "mail-queue") {
@@ -11866,6 +11876,7 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     "attention-cost": { scale: 0.9, y: -20 },
     "wallet-copy": { scale: 0.92, y: -20 },
     "multi-frame-stack": { scale: 0.9, y: -20 },
+    "ois-stabilization": { scale: 0.88, y: -20 },
     "mail-queue": { scale: 0.9, y: -20 },
     "mail-server-handoff": { scale: 0.9, y: -20 },
     "totp-window": { scale: 0.9, y: -20 },
@@ -12912,6 +12923,15 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             fps={fps}
             impactLocal={impactLocal}
             phase={(slot.beat.params?.phase as MultiFrameStackPhase | undefined) ?? "capture"}
+          />
+        );
+      case "ois-stabilization":
+        return (
+          <OisStabilizationVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as OisStabilizationPhase | undefined) ?? "handheld"}
           />
         );
       case "mail-queue":
