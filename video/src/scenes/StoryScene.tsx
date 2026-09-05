@@ -79,6 +79,7 @@ import { PowerResetSequenceVisual, type PowerResetPhase } from "./PowerResetSequ
 import { ResetVectorVisual, type ResetVectorPhase } from "./ResetVectorVisual";
 import { AudioFingerprintVisual, type AudioFingerprintPhase } from "./AudioFingerprintVisual";
 import { EchoCancellationVisual, type EchoCancellationPhase } from "./EchoCancellationVisual";
+import { InvertedIndexVisual, type InvertedIndexPhase } from "./InvertedIndexMergeVisual";
 
 /* ──────────────────────────── расписание битов ──────────────────────────── */
 
@@ -129,6 +130,10 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
     if (beat.visual === "spell-distance") {
       const phase = beat.params?.phase as SpellDistancePhase | undefined;
       impact = start + Math.round(dur * (phase === "typo" ? 0.62 : phase === "repair" ? 0.68 : phase === "rank" ? 0.72 : 0.64));
+    }
+    if (beat.visual === "inverted-index-merge") {
+      const phase = beat.params?.phase as InvertedIndexPhase | undefined;
+      impact = start + Math.round(dur * (phase === "intersect" ? 0.72 : phase === "lookup" ? 0.64 : 0.68));
     }
     if (beat.visual === "password-leak") impact = start + Math.round(dur * 0.4);
     if (beat.visual === "hash-table") impact = start + Math.round(dur * 0.62);
@@ -487,6 +492,10 @@ export const storySfx = (
     if (s.beat.visual === "spell-distance") {
       const phase = s.beat.params?.phase as SpellDistancePhase | undefined;
       events.push({ frame: s.impact, sound: phase === "repair" || phase === "rank" ? "ding" : phase === "typo" ? "click" : "pop" });
+    }
+    if (s.beat.visual === "inverted-index-merge") {
+      const phase = s.beat.params?.phase as InvertedIndexPhase | undefined;
+      events.push({ frame: s.impact, sound: phase === "intersect" ? "ding" : phase === "lookup" ? "click" : "pop" });
     }
     if (s.beat.visual === "password-leak") events.push({ frame: s.impact, sound: "click" });
     if (s.beat.visual === "hash-table") events.push({ frame: s.impact, sound: "click" });
@@ -11718,6 +11727,7 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     "nfc-card-coil": { scale: 0.9, y: -20 },
     "nfc-field-response": { scale: 0.9, y: -20 },
     "spell-distance": { scale: 0.9, y: -20 },
+    "inverted-index-merge": { scale: 0.88, y: -20 },
     "password-leak": { scale: 1.05, y: -30 },
     "hash-table": { scale: 0.98, y: -20 },
     "minimal-perfect-hash": { scale: 0.9, y: -20 },
@@ -11889,6 +11899,16 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             source={slot.beat.params?.source as string | undefined}
             target={slot.beat.params?.target as string | undefined}
             limit={slot.beat.params?.limit as number | undefined}
+          />
+        );
+      case "inverted-index-merge":
+        return (
+          <InvertedIndexVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as InvertedIndexPhase | undefined) ?? "preindex"}
+            source={(slot.beat.params?.source as "library" | "web" | undefined) ?? "web"}
           />
         );
       case "password-leak":

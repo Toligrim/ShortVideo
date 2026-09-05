@@ -75,6 +75,7 @@ export interface StoryBeat {
     | "nfc-card-coil"
     | "nfc-field-response"
     | "spell-distance"
+    | "inverted-index-merge"
     | "password-leak"
     | "hash-table"
     | "minimal-perfect-hash"
