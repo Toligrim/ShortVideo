@@ -1,0 +1,204 @@
+{
+  "id": "auto-20260905-065610",
+  "title": "Почему телефон не ставит поддельное обновление приложения?",
+  "scenes": [
+    {
+      "type": "story",
+      "heading": "Обновление из магазина",
+      "narration": "Телефон показывает обновление приложения из магазина. Вредная копия может выглядеть один в один — почему он не принимает её за настоящее? Ответ решает одна проверка.",
+      "beats": [
+        {
+          "visual": "apk-update-signature",
+          "onWord": "Телефон",
+          "params": {
+            "phase": "store",
+            "app": "Заметки",
+            "version": "v2.4",
+            "certificate": "CERT A7·2C",
+            "installedCertificate": "CERT A7·2C",
+            "incomingCertificate": "CERT X1·9D"
+          }
+        },
+        {
+          "visual": "apk-update-signature",
+          "onWord": "Вредная",
+          "params": {
+            "phase": "clone",
+            "app": "Заметки",
+            "version": "v2.4",
+            "certificate": "CERT A7·2C",
+            "installedCertificate": "CERT A7·2C",
+            "incomingCertificate": "CERT X1·9D"
+          }
+        },
+        {
+          "visual": "apk-update-signature",
+          "onWord": "принимает",
+          "params": {
+            "phase": "reject",
+            "app": "Заметки",
+            "version": "v2.4",
+            "certificate": "CERT A7·2C",
+            "installedCertificate": "CERT A7·2C",
+            "incomingCertificate": "CERT X1·9D"
+          }
+        }
+      ]
+    },
+    {
+      "type": "story",
+      "heading": "Проверка подписанта",
+      "narration": "Перед установкой Андроид проверяет цифровую подпись нового файла и сравнивает сертификат с тем, которым подписана установленная версия. Не совпал с доверенной цепочкой ключей — обновление отклоняется.",
+      "beats": [
+        {
+          "visual": "apk-update-signature",
+          "onWord": "проверяет",
+          "params": {
+            "phase": "certificate",
+            "app": "Заметки",
+            "version": "v2.4",
+            "certificate": "CERT A7·2C",
+            "installedCertificate": "CERT A7·2C",
+            "incomingCertificate": "CERT X1·9D",
+            "signature": "SIG 7b·91"
+          }
+        },
+        {
+          "visual": "apk-update-signature",
+          "onWord": "сравнивает",
+          "params": {
+            "phase": "compare",
+            "app": "Заметки",
+            "version": "v2.4",
+            "installedVersion": "v2.3",
+            "certificate": "CERT A7·2C",
+            "installedCertificate": "CERT A7·2C",
+            "incomingCertificate": "CERT X1·9D"
+          }
+        },
+        {
+          "visual": "apk-update-signature",
+          "onWord": "отклоняется",
+          "params": {
+            "phase": "reject",
+            "app": "Заметки",
+            "version": "v2.4",
+            "certificate": "CERT A7·2C",
+            "installedCertificate": "CERT A7·2C",
+            "incomingCertificate": "CERT X1·9D"
+          }
+        }
+      ]
+    },
+    {
+      "type": "story",
+      "heading": "Печать с ключом",
+      "narration": "Цифровая подпись — как печать с секретным штампом: разработчик ставит её закрытым ключом, а телефон проверяет подпись открытым ключом и сверяет его с ключом установленной версии.",
+      "beats": [
+        {
+          "visual": "apk-update-signature",
+          "onWord": "печать",
+          "params": {
+            "phase": "sign",
+            "app": "Заметки",
+            "version": "v2.4",
+            "signature": "SIG 7b·91"
+          }
+        },
+        {
+          "visual": "apk-update-signature",
+          "onWord": "разработчик",
+          "params": {
+            "phase": "sign",
+            "app": "Заметки",
+            "version": "v2.4",
+            "signature": "SIG 7b·91"
+          }
+        },
+        {
+          "visual": "apk-update-signature",
+          "onWord": "проверяет",
+          "params": {
+            "phase": "verify",
+            "app": "Заметки",
+            "version": "v2.4",
+            "certificate": "CERT A7·2C",
+            "signature": "SIG 7b·91"
+          }
+        },
+        {
+          "visual": "apk-update-signature",
+          "onWord": "сверяет",
+          "params": {
+            "phase": "compare",
+            "app": "Заметки",
+            "version": "v2.4",
+            "installedVersion": "v2.3",
+            "certificate": "CERT A7·2C",
+            "installedCertificate": "CERT A7·2C"
+          }
+        }
+      ]
+    },
+    {
+      "type": "story",
+      "heading": "Предел подписи",
+      "narration": "Изменишь содержимое, старая подпись перестанет сходиться: без закрытого ключа новую не сделаешь. Но в две тысячи двадцатом «СоларВиндс Орион» показал предел защиты: вредный «Санбёрст» попал в сборку с действующей подписью компании.",
+      "beats": [
+        {
+          "visual": "apk-update-signature",
+          "onWord": "содержимое",
+          "params": {
+            "phase": "tamper",
+            "app": "Заметки",
+            "version": "v2.4",
+            "signature": "SIG 7b·91"
+          }
+        },
+        {
+          "visual": "apk-update-signature",
+          "onWord": "закрытого",
+          "params": {
+            "phase": "no-key",
+            "app": "Заметки",
+            "version": "v2.4",
+            "signature": "SIG 7b·91"
+          }
+        },
+        {
+          "visual": "apk-update-signature",
+          "onWord": "СоларВиндс",
+          "params": {
+            "phase": "solarwinds",
+            "company": "SolarWinds",
+            "payload": "SUNBURST",
+            "signature": "SIG ✓ компании"
+          }
+        },
+        {
+          "visual": "apk-update-signature",
+          "onWord": "предел",
+          "params": {
+            "phase": "boundary",
+            "certificate": "CERT A7·2C",
+            "incomingCertificate": "CERT X1·9D",
+            "company": "SolarWinds",
+            "payload": "SUNBURST"
+          }
+        }
+      ]
+    },
+    {
+      "type": "outro",
+      "title": "Подпись — не добро",
+      "bullets": [
+        "Чужой ключ → отказ",
+        "Подпись знает доверенный ключ",
+        "Код может быть вредным",
+        "SolarWinds: подпись действовала"
+      ],
+      "cta": "Подпишись: дальше — следующий механизм",
+      "narration": "Ограничение: подпись подтверждает, что файл подписан доверенным ключом, но не подтверждает доброту кода. Чужую копию телефон отвергнет, но взломанная цепочка разработчика может выпустить вредное обновление. Подпишись — дальше разберём следующий механизм."
+    }
+  ]
+}
