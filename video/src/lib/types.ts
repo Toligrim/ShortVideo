@@ -161,6 +161,7 @@ export interface StoryBeat {
     | "usb-pd-negotiation"
     | "convolution-stencil"
     | "quantization-loss"
+    | "progressive-image-scans"
   | "wifi-airtime"
   | "wifi-signal-vs-airtime"
   | "bluetooth-hopping"

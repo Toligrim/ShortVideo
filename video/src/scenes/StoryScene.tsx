@@ -49,6 +49,7 @@ import { BgpRerouteVisual, type BgpReroutePhase } from "./BgpRerouteVisual";
 import { UsbPdNegotiationVisual, type UsbPdNegotiationPhase } from "./UsbPdNegotiationVisual";
 import { ConvolutionStencilVisual, type ConvolutionStencilPhase } from "./ConvolutionStencilVisual";
 import { QuantizationLossVisual, type QuantizationLossPhase } from "./QuantizationLossVisual";
+import { ProgressiveImageScansVisual, type ProgressiveImageScansPhase } from "./ProgressiveImageScansVisual";
 import { WifiAirtimeVisual, type WifiAirtimePhase } from "./WifiAirtimeVisual";
 import { WifiSignalVsAirtimeVisual } from "./WifiSignalVsAirtimeVisual";
 import { BluetoothHoppingVisual, type BluetoothHoppingPhase } from "./BluetoothHoppingVisual";
@@ -336,6 +337,19 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
     if (beat.visual === "quantization-loss") {
       const phase = beat.params?.phase as QuantizationLossPhase | undefined;
       impact = start + Math.round(dur * (phase === "zero" ? 0.68 : phase === "tail" ? 0.72 : phase === "rebuild" ? 0.66 : phase === "quantize" ? 0.64 : phase === "copy" ? 0.62 : 0.58));
+    }
+    if (beat.visual === "progressive-image-scans") {
+      const phase = beat.params?.phase as ProgressiveImageScansPhase | undefined;
+      impact = start + Math.round(dur * (
+        phase === "blur" ? 0.56
+          : phase === "shapes" ? 0.62
+          : phase === "scans" ? 0.64
+          : phase === "tracing" ? 0.62
+          : phase === "details" ? 0.68
+          : phase === "blocks" ? 0.66
+          : phase === "sharp" ? 0.72
+          : 0.6
+      ));
     }
     if (beat.visual === "wifi-airtime") {
       const phase = beat.params?.phase;
@@ -775,6 +789,11 @@ export const storySfx = (
     if (s.beat.visual === "quantization-loss") {
       const phase = s.beat.params?.phase as QuantizationLossPhase | undefined;
       const sound = phase === "zero" || phase === "tail" ? "slam" : phase === "rebuild" ? "ding" : phase === "quantize" ? "pop" : phase === "coefficients" ? "click" : "whoosh";
+      events.push({ frame: s.impact, sound });
+    }
+    if (s.beat.visual === "progressive-image-scans") {
+      const phase = s.beat.params?.phase as ProgressiveImageScansPhase | undefined;
+      const sound = phase === "sharp" || phase === "details" ? "ding" : phase === "blocks" ? "slam" : phase === "scans" || phase === "tracing" ? "whoosh" : "pop";
       events.push({ frame: s.impact, sound });
     }
     if (s.beat.visual === "wifi-airtime") {
@@ -11835,6 +11854,7 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     "usb-pd-negotiation": { scale: 0.92, y: -20 },
     "convolution-stencil": { scale: 0.92, y: -20 },
     "quantization-loss": { scale: 0.9, y: -20 },
+    "progressive-image-scans": { scale: 0.9, y: -20 },
     "wifi-airtime": { scale: 0.92, y: -20 },
     "wifi-signal-vs-airtime": { scale: 0.9, y: -20 },
     "bluetooth-hopping": { scale: 0.9, y: -20 },
@@ -12743,6 +12763,15 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             fps={fps}
             impactLocal={impactLocal}
             phase={(slot.beat.params?.phase as QuantizationLossPhase | undefined) ?? "sharp"}
+          />
+        );
+      case "progressive-image-scans":
+        return (
+          <ProgressiveImageScansVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as ProgressiveImageScansPhase | undefined) ?? "blur"}
           />
         );
       case "wifi-airtime":
