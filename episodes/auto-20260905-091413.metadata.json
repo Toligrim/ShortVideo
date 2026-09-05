@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "slug": "auto-20260905-091413",
+  "targets": {
+    "youtube": {
+      "title": "Почему картинка на сайте сначала мутная, а потом становится чёткой?",
+      "description": "Почему изображение на сайте сначала показывает грубый весь кадр, а потом уточняется? Разбираем progressive JPEG и его последовательные сканы.",
+      "tags": [
+        "jpeg",
+        "progressive jpeg",
+        "изображения",
+        "браузер",
+        "интернет",
+        "технологии",
+        "как это работает",
+        "shortvideo"
+      ],
+      "category_id": "28",
+      "privacy_status": "public",
+      "made_for_kids": false,
+      "contains_synthetic_media": true,
+      "notify_subscribers": false
+    },
+    "instagram": {
+      "caption": "Почему картинка на сайте сначала мутная, а потом становится чёткой? Разбираем progressive JPEG и последовательные сканы. #jpeg #интернет #технологии",
+      "share_to_feed": true
+    }
+  }
+}
