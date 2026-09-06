@@ -52,6 +52,8 @@ import { QuantizationLossVisual, type QuantizationLossPhase } from "./Quantizati
 import { ProgressiveImageScansVisual, type ProgressiveImageScansPhase } from "./ProgressiveImageScansVisual";
 import { WifiAirtimeVisual, type WifiAirtimePhase } from "./WifiAirtimeVisual";
 import { WifiSignalVsAirtimeVisual } from "./WifiSignalVsAirtimeVisual";
+import { WifiLoginVisual, type WifiLoginPhase } from "./WifiLoginVisual";
+import { WifiFourWayVisual, type WifiFourWayPhase } from "./WifiFourWayVisual";
 import { BluetoothHoppingVisual, type BluetoothHoppingPhase } from "./BluetoothHoppingVisual";
 import { FileDeleteRecoveryVisual, type FileDeleteRecoveryPhase } from "./FileDeleteRecovery";
 import { BlockChainVisual, type BlockChainPhase } from "./BlockChainVisual";
@@ -381,6 +383,24 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
               ? 0.6
               : 0.55)
         );
+    }
+    if (beat.visual === "wifi-login") {
+      const phase = beat.params?.phase as WifiLoginPhase | undefined;
+      impact = start + Math.round(dur * (phase === "air" ? 0.66 : 0.62));
+    }
+    if (beat.visual === "wifi-four-way") {
+      const phase = beat.params?.phase as WifiFourWayPhase | undefined;
+      impact = start + Math.round(dur * (
+        phase === "messages" ? 0.72
+          : phase === "nonces" ? 0.66
+          : phase === "replay" ? 0.68
+          : phase === "mix" ? 0.7
+          : phase === "mic" ? 0.66
+          : phase === "check" ? 0.72
+          : phase === "complete" ? 0.7
+          : phase === "offline" ? 0.72
+          : 0.6
+      ));
     }
     if (beat.visual === "wifi-signal-vs-airtime") impact = start + Math.round(dur * 0.64);
     if (beat.visual === "file-delete-recovery") {
@@ -843,6 +863,23 @@ export const storySfx = (
           : phase === "contention"
           ? "pop"
           : "click";
+      events.push({ frame: s.impact, sound });
+    }
+    if (s.beat.visual === "wifi-login") {
+      const phase = s.beat.params?.phase as WifiLoginPhase | undefined;
+      events.push({ frame: s.impact, sound: phase === "air" ? "whoosh" : "click" });
+    }
+    if (s.beat.visual === "wifi-four-way") {
+      const phase = s.beat.params?.phase as WifiFourWayPhase | undefined;
+      const sound = phase === "replay" || phase === "offline"
+        ? "slam"
+        : phase === "check" || phase === "complete"
+        ? "ding"
+        : phase === "nonces"
+        ? "whoosh"
+        : phase === "mic"
+        ? "click"
+        : "pop";
       events.push({ frame: s.impact, sound });
     }
     if (s.beat.visual === "wifi-signal-vs-airtime") events.push({ frame: s.impact, sound: "ding" });
@@ -11905,6 +11942,8 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     "progressive-image-scans": { scale: 0.9, y: -20 },
     "wifi-airtime": { scale: 0.92, y: -20 },
     "wifi-signal-vs-airtime": { scale: 0.9, y: -20 },
+    "wifi-login": { scale: 0.9, y: -20 },
+    "wifi-four-way": { scale: 0.86, y: -20 },
     "bluetooth-hopping": { scale: 0.9, y: -20 },
     "diffusion-denoise": { scale: 0.92, y: -20 },
     "tls-handshake": { scale: 0.92, y: -20 },
@@ -12841,6 +12880,24 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             fps={fps}
             impactLocal={impactLocal}
             phase={(slot.beat.params?.phase as WifiAirtimePhase | undefined) ?? "signal"}
+          />
+        );
+      case "wifi-login":
+        return (
+          <WifiLoginVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as WifiLoginPhase | undefined) ?? "enter"}
+          />
+        );
+      case "wifi-four-way":
+        return (
+          <WifiFourWayVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as WifiFourWayPhase | undefined) ?? "messages"}
           />
         );
       case "wifi-signal-vs-airtime":

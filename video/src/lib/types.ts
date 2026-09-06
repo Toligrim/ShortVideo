@@ -165,6 +165,8 @@ export interface StoryBeat {
     | "progressive-image-scans"
   | "wifi-airtime"
   | "wifi-signal-vs-airtime"
+  | "wifi-login"
+  | "wifi-four-way"
   | "bluetooth-hopping"
   | "file-delete-recovery"
   | "tls-handshake"
