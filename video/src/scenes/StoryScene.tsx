@@ -48,6 +48,8 @@ import { FaceIdDepthVisual, type FaceIdDepthPhase } from "./FaceIdDepthVisual";
 import { BgpRerouteVisual, type BgpReroutePhase } from "./BgpRerouteVisual";
 import { UsbPdNegotiationVisual, type UsbPdNegotiationPhase } from "./UsbPdNegotiationVisual";
 import { ConvolutionStencilVisual, type ConvolutionStencilPhase } from "./ConvolutionStencilVisual";
+import { GpuDataCenterVisual, type GpuDataCenterPhase } from "./GpuDataCenterVisual";
+import { MatrixMultiplyVisual, type MatrixMultiplyPhase } from "./MatrixMultiplyVisual";
 import { QuantizationLossVisual, type QuantizationLossPhase } from "./QuantizationLossVisual";
 import { ProgressiveImageScansVisual, type ProgressiveImageScansPhase } from "./ProgressiveImageScansVisual";
 import { WifiAirtimeVisual, type WifiAirtimePhase } from "./WifiAirtimeVisual";
@@ -349,6 +351,14 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
     if (beat.visual === "convolution-stencil") {
       const phase = beat.params?.phase;
       impact = start + Math.round(dur * (phase === "input" ? 0.62 : phase === "scan" ? 0.58 : phase === "features" ? 0.6 : 0.64));
+    }
+    if (beat.visual === "gpu-data-center") {
+      const phase = beat.params?.phase as GpuDataCenterPhase | undefined;
+      impact = start + Math.round(dur * (phase === "queue" ? 0.66 : phase === "shards" ? 0.7 : phase === "parallel" ? 0.62 : phase === "scale" ? 0.6 : 0.58));
+    }
+    if (beat.visual === "matrix-multiply") {
+      const phase = beat.params?.phase as MatrixMultiplyPhase | undefined;
+      impact = start + Math.round(dur * (phase === "dot-product" ? 0.68 : phase === "repeat" ? 0.64 : phase === "workers" ? 0.62 : 0.58));
     }
     if (beat.visual === "quantization-loss") {
       const phase = beat.params?.phase as QuantizationLossPhase | undefined;
@@ -841,6 +851,16 @@ export const storySfx = (
     if (s.beat.visual === "convolution-stencil") {
       const phase = s.beat.params?.phase;
       const sound = phase === "input" ? "pop" : phase === "scan" ? "click" : phase === "features" ? "ding" : "whoosh";
+      events.push({ frame: s.impact, sound });
+    }
+    if (s.beat.visual === "gpu-data-center") {
+      const phase = s.beat.params?.phase as GpuDataCenterPhase | undefined;
+      const sound = phase === "queue" ? "slam" : phase === "shards" ? "ding" : phase === "parallel" ? "whoosh" : phase === "scale" ? "pop" : "click";
+      events.push({ frame: s.impact, sound });
+    }
+    if (s.beat.visual === "matrix-multiply") {
+      const phase = s.beat.params?.phase as MatrixMultiplyPhase | undefined;
+      const sound = phase === "dot-product" ? "ding" : phase === "repeat" ? "whoosh" : phase === "workers" ? "pop" : "click";
       events.push({ frame: s.impact, sound });
     }
     if (s.beat.visual === "quantization-loss") {
@@ -11938,6 +11958,8 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     "bgp-reroute": { scale: 0.92, y: -20 },
     "usb-pd-negotiation": { scale: 0.92, y: -20 },
     "convolution-stencil": { scale: 0.92, y: -20 },
+    "gpu-data-center": { scale: 0.88, y: -20 },
+    "matrix-multiply": { scale: 0.88, y: -20 },
     "quantization-loss": { scale: 0.9, y: -20 },
     "progressive-image-scans": { scale: 0.9, y: -20 },
     "wifi-airtime": { scale: 0.92, y: -20 },
@@ -12853,6 +12875,24 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             fps={fps}
             impactLocal={impactLocal}
             phase={(slot.beat.params?.phase as ConvolutionStencilPhase | undefined) ?? "input"}
+          />
+        );
+      case "gpu-data-center":
+        return (
+          <GpuDataCenterVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as GpuDataCenterPhase | undefined) ?? "hall"}
+          />
+        );
+      case "matrix-multiply":
+        return (
+          <MatrixMultiplyVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as MatrixMultiplyPhase | undefined) ?? "tables"}
           />
         );
       case "quantization-loss":

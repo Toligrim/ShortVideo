@@ -161,6 +161,8 @@ export interface StoryBeat {
     | "bgp-reroute"
     | "usb-pd-negotiation"
     | "convolution-stencil"
+    | "gpu-data-center"
+    | "matrix-multiply"
     | "quantization-loss"
     | "progressive-image-scans"
   | "wifi-airtime"
