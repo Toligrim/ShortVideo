@@ -535,8 +535,8 @@ export const SleepToRamVisual: React.FC<{
   }
 
   if (phase === "resume") {
-    // Reveal the resumed session in the first third; keep impactLocal for the existing pulse/SFX timing.
-    const revealAt = Math.round(dur * 0.24);
+    // Reveal the resumed session on phase entry; keep impactLocal for the existing pulse/SFX timing.
+    const revealAt = 0;
     const reveal = spring({ frame: Math.max(0, local - revealAt), fps, config: { damping: 13, mass: 0.7 } });
     return (
       <>
