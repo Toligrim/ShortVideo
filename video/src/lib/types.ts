@@ -190,7 +190,8 @@ export interface StoryBeat {
   | "hotword-spotting"
   | "halving-schedule"
   | "traffic-segment"
-  | "reward-check";
+  | "reward-check"
+  | "double-ratchet";
   onWord?: string; // бит начинается на этом слове реплики
   params?: Record<string, unknown>;
 }

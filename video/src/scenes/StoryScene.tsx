@@ -76,6 +76,7 @@ import { HotwordSpottingVisual, type HotwordSpottingPhase } from "./HotwordSpott
 import { HalvingScheduleVisual, type HalvingSchedulePhase } from "./HalvingScheduleVisual";
 import { TrafficSegmentVisual, type TrafficSegmentPhase } from "./TrafficSegmentVisual";
 import { RewardCheckVisual, type RewardCheckPhase } from "./RewardCheckVisual";
+import { DoubleRatchetVisual, type DoubleRatchetPhase } from "./DoubleRatchetVisual";
 import { NfcCardCoilVisual, type NfcCardCoilPhase } from "./NfcCardCoilVisual";
 import { NfcFieldResponseVisual, type NfcFieldResponsePhase } from "./NfcFieldResponseVisual";
 import { PowerResetSequenceVisual, type PowerResetPhase } from "./PowerResetSequenceVisual";
@@ -491,6 +492,20 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
     if (beat.visual === "reward-check") {
       const phase = beat.params?.phase as RewardCheckPhase | undefined;
       impact = start + Math.round(dur * (phase === "reject" ? 0.68 : phase === "consensus" ? 0.7 : phase === "coinbase" ? 0.62 : phase === "nodes" ? 0.64 : phase === "rules" ? 0.58 : 0.6));
+    }
+    if (beat.visual === "double-ratchet") {
+      const phase = beat.params?.phase as DoubleRatchetPhase | undefined;
+      impact = start + Math.round(dur * (
+        phase === "ciphertext" ? 0.66
+          : phase === "derive" ? 0.68
+          : phase === "advance" ? 0.64
+          : phase === "encrypt" ? 0.68
+          : phase === "decrypt" ? 0.72
+          : phase === "server" ? 0.62
+          : phase === "metadata" ? 0.66
+          : phase === "backup" ? 0.64
+          : 0.58
+      ));
     }
     return { beat, start, end, impact };
   });
@@ -942,6 +957,11 @@ export const storySfx = (
     if (s.beat.visual === "reward-check") {
       const ph = s.beat.params?.phase as RewardCheckPhase | undefined;
       const sound = ph === "reject" || ph === "consensus" ? "slam" : ph === "coinbase" || ph === "nodes" ? "ding" : ph === "rules" ? "pop" : "click";
+      events.push({ frame: s.impact, sound });
+    }
+    if (s.beat.visual === "double-ratchet") {
+      const ph = s.beat.params?.phase as DoubleRatchetPhase | undefined;
+      const sound = ph === "ciphertext" || ph === "server" ? "slam" : ph === "decrypt" || ph === "metadata" ? "ding" : ph === "advance" || ph === "encrypt" ? "pop" : "click";
       events.push({ frame: s.impact, sound });
     }
   }
@@ -11888,6 +11908,7 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     "halving-schedule": { scale: 0.9, y: -20 },
     "traffic-segment": { scale: 0.9, y: -20 },
     "reward-check": { scale: 0.9, y: -20 },
+    "double-ratchet": { scale: 0.88, y: -20 },
   };
   const cur = cams[slot.beat.visual] ?? { scale: 1, y: 0 };
   const prev = idx > 0 ? cams[slots[idx - 1].beat.visual] ?? cur : cur;
@@ -13034,6 +13055,15 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             fps={fps}
             impactLocal={impactLocal}
             phase={(slot.beat.params?.phase as RewardCheckPhase | undefined) ?? "attempt"}
+          />
+        );
+      case "double-ratchet":
+        return (
+          <DoubleRatchetVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as DoubleRatchetPhase | undefined) ?? "message"}
           />
         );
       default:
