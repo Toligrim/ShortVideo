@@ -1,0 +1,71 @@
+{
+  "id": "auto-20260906-064526",
+  "title": "Почему закрываешь крышку ноутбука — и всё открыто через секунду?",
+  "scenes": [
+    {
+      "type": "story",
+      "heading": "Куда делась работа?",
+      "narration": "Закрыл крышку — ушёл в сон. Открыл почти сразу — вкладки и документ уже на месте. Всё заново загрузить не успело. Где держалась работа?",
+      "beats": [
+        { "visual": "sleep-to-ram", "onWord": "Закрыл", "params": { "phase": "lid" } },
+        { "visual": "sleep-to-ram", "onWord": "сон", "params": { "phase": "sleep" } },
+        { "visual": "sleep-to-ram", "onWord": "Открыл", "params": { "phase": "wake" } },
+        { "visual": "sleep-to-ram", "onWord": "вкладки", "params": { "phase": "resume" } }
+      ]
+    },
+    {
+      "type": "story",
+      "heading": "Сон — не выключение",
+      "narration": "Представь раскрытую книгу: ты гасишь лампу, но страницы не убираешь. Это {suspend-to-RAM|саспе́нд ту рэ́м}: рабочее состояние остаётся в оперативной памяти.",
+      "beats": [
+        { "visual": "sleep-to-ram", "onWord": "книгу", "params": { "phase": "analogy" } },
+        { "visual": "sleep-to-ram", "onWord": "suspend-to-RAM", "params": { "phase": "sleep" } }
+      ]
+    },
+    {
+      "type": "story",
+      "heading": "Что остаётся включённым",
+      "narration": "Оперативная память остаётся под питанием, а процессор и остальные узлы переходят в низкое энергопотребление. Поэтому окна не исчезают: их состояние всё ещё в памяти.",
+      "beats": [
+        { "visual": "sleep-to-ram", "onWord": "Оперативная", "params": { "phase": "sleep" } },
+        { "visual": "sleep-to-ram", "onWord": "процессор", "params": { "phase": "sleep" } },
+        { "visual": "sleep-to-ram", "onWord": "окна", "params": { "phase": "refresh" } },
+        { "visual": "sleep-to-ram", "onWord": "памяти", "params": { "phase": "refresh" } }
+      ]
+    },
+    {
+      "type": "story",
+      "heading": "RAM сама держит данные",
+      "narration": "Внутри память включается в режим самообновления: микросхемы сами периодически поддерживают данные, пока процессор почти молчит. Вау-факт: память поддерживает данные, не накопитель.",
+      "beats": [
+        { "visual": "sleep-to-ram", "onWord": "самообновления", "params": { "phase": "refresh" } },
+        { "visual": "sleep-to-ram", "onWord": "поддерживают", "params": { "phase": "refresh" } },
+        { "visual": "sleep-to-ram", "onWord": "процессор", "params": { "phase": "sleep" } },
+        { "visual": "sleep-to-ram", "onWord": "накопитель", "params": { "phase": "refresh" } }
+      ]
+    },
+    {
+      "type": "story",
+      "heading": "Пробуждение продолжает сеанс",
+      "narration": "При открытии система возвращает процессор и устройства к работе и продолжает сеанс прямо из памяти. С диска состояние окон заново не загружается.",
+      "beats": [
+        { "visual": "sleep-to-ram", "onWord": "открытии", "params": { "phase": "wake" } },
+        { "visual": "sleep-to-ram", "onWord": "возвращает", "params": { "phase": "wake" } },
+        { "visual": "sleep-to-ram", "onWord": "продолжает", "params": { "phase": "resume" } },
+        { "visual": "sleep-to-ram", "onWord": "диска", "params": { "phase": "resume" } }
+      ]
+    },
+    {
+      "type": "outro",
+      "title": "Сон хранит сеанс",
+      "bullets": [
+        "крышка → сон",
+        "RAM держит состояние",
+        "пробуждение → продолжение",
+        "гибернация → накопитель"
+      ],
+      "cta": "Подпишись: дальше — задержки пробуждения",
+      "narration": "Это не гибернация: содержимое памяти записывается на накопитель, затем питание памяти отключается. Запомни цепочку: крышка запускает сон, память держит состояние, пробуждение продолжает сеанс. Дальше разберём задержки пробуждения. Подпишись."
+    }
+  ]
+}

@@ -80,6 +80,7 @@ import { DoubleRatchetVisual, type DoubleRatchetPhase } from "./DoubleRatchetVis
 import { NfcCardCoilVisual, type NfcCardCoilPhase } from "./NfcCardCoilVisual";
 import { NfcFieldResponseVisual, type NfcFieldResponsePhase } from "./NfcFieldResponseVisual";
 import { PowerResetSequenceVisual, type PowerResetPhase } from "./PowerResetSequenceVisual";
+import { SleepToRamVisual, type SleepToRamPhase } from "./SleepToRamVisual";
 import { ResetVectorVisual, type ResetVectorPhase } from "./ResetVectorVisual";
 import { AudioFingerprintVisual, type AudioFingerprintPhase } from "./AudioFingerprintVisual";
 import { EchoCancellationVisual, type EchoCancellationPhase } from "./EchoCancellationVisual";
@@ -119,6 +120,17 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
     if (beat.visual === "power-reset-sequence") {
       const phase = beat.params?.phase as PowerResetPhase | undefined;
       impact = start + Math.round(dur * (phase === "release" ? 0.62 : phase === "firmware" ? 0.68 : phase === "black-screen" ? 0.58 : 0.6));
+    }
+    if (beat.visual === "sleep-to-ram") {
+      const phase = beat.params?.phase as SleepToRamPhase | undefined;
+      impact = start + Math.round(dur * (
+        phase === "lid" ? 0.68
+          : phase === "refresh" ? 0.72
+          : phase === "wake" ? 0.68
+          : phase === "resume" ? 0.72
+          : phase === "hibernate" ? 0.66
+          : 0.6
+      ));
     }
     if (beat.visual === "reset-vector-launch") {
       const phase = beat.params?.phase as ResetVectorPhase | undefined;
@@ -529,6 +541,11 @@ export const storySfx = (
     if (s.beat.visual === "power-reset-sequence") {
       const phase = s.beat.params?.phase as PowerResetPhase | undefined;
       const sound = phase === "release" ? "slam" : phase === "firmware" ? "ding" : phase === "black-screen" ? "pop" : "click";
+      events.push({ frame: s.impact, sound });
+    }
+    if (s.beat.visual === "sleep-to-ram") {
+      const phase = s.beat.params?.phase as SleepToRamPhase | undefined;
+      const sound = phase === "lid" ? "slam" : phase === "refresh" ? "click" : phase === "wake" ? "pop" : phase === "resume" ? "ding" : phase === "hibernate" ? "whoosh" : "pop";
       events.push({ frame: s.impact, sound });
     }
     if (s.beat.visual === "reset-vector-launch") {
@@ -11810,6 +11827,7 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     handshake: { scale: 1.22, y: -110 },
     "title-slam": { scale: 1.0, y: 0 },
     "power-reset-sequence": { scale: 0.88, y: -20 },
+    "sleep-to-ram": { scale: 0.9, y: -20 },
     "reset-vector-launch": { scale: 0.88, y: -20 },
     "nfc-card-coil": { scale: 0.9, y: -20 },
     "nfc-field-response": { scale: 0.9, y: -20 },
@@ -11950,6 +11968,15 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             fps={fps}
             impactLocal={impactLocal}
             phase={(slot.beat.params?.phase as PowerResetPhase | undefined) ?? "stabilize"}
+          />
+        );
+      case "sleep-to-ram":
+        return (
+          <SleepToRamVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as SleepToRamPhase | undefined) ?? "sleep"}
           />
         );
       case "reset-vector-launch":

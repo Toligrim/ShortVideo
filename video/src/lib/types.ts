@@ -71,6 +71,7 @@ export interface StoryBeat {
     | "handshake"
     | "title-slam"
     | "power-reset-sequence"
+    | "sleep-to-ram"
     | "reset-vector-launch"
     | "nfc-card-coil"
     | "nfc-field-response"
