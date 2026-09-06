@@ -11975,6 +11975,7 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
           <SleepToRamVisual
             local={local}
             fps={fps}
+            dur={dur}
             impactLocal={impactLocal}
             phase={(slot.beat.params?.phase as SleepToRamPhase | undefined) ?? "sleep"}
           />

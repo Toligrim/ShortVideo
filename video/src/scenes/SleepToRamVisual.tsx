@@ -444,9 +444,10 @@ const ResumePanel: React.FC<{ left: number; top: number; enter: number; reveal: 
 export const SleepToRamVisual: React.FC<{
   local: number;
   fps: number;
+  dur: number;
   impactLocal: number;
   phase?: SleepToRamPhase;
-}> = ({ local, fps, impactLocal, phase = "sleep" }) => {
+}> = ({ local, fps, dur, impactLocal, phase = "sleep" }) => {
   const enter = spring({ frame: local, fps, config: { damping: 15, mass: 0.8 } });
   const phaseTone = phaseColor[phase];
   const after = smooth((local - impactLocal) / 18);
@@ -534,7 +535,9 @@ export const SleepToRamVisual: React.FC<{
   }
 
   if (phase === "resume") {
-    const reveal = spring({ frame: Math.max(0, local - impactLocal), fps, config: { damping: 13, mass: 0.7 } });
+    // Reveal the resumed session in the first third; keep impactLocal for the existing pulse/SFX timing.
+    const revealAt = Math.round(dur * 0.24);
+    const reveal = spring({ frame: Math.max(0, local - revealAt), fps, config: { damping: 13, mass: 0.7 } });
     return (
       <>
         <Header phase={phase} enter={enter} />
