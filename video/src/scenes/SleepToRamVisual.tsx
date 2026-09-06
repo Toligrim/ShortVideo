@@ -46,7 +46,9 @@ const Header: React.FC<{ phase: SleepToRamPhase; enter: number }> = ({ phase, en
     style={{
       position: "absolute",
       left: W / 2,
-      top: 220,
+      // Keep the phase header below wrapped story headings while leaving a
+      // clear gutter before the visual panels (the scene camera shifts by -20).
+      top: 360,
       transform: "translateX(-50%)",
       display: "flex",
       alignItems: "center",
