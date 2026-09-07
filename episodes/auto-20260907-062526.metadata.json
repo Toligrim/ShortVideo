@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "slug": "auto-20260907-062526",
+  "targets": {
+    "youtube": {
+      "title": "Почему потерянные наушники находятся, хотя в них нет GPS?",
+      "description": "Как сеть ближайших телефонов находит потерянные наушники без GPS: BLE-маяк, координата и зашифрованный отчёт.",
+      "tags": ["технологии", "наушники", "bluetooth", "поиск", "shorts"],
+      "category_id": "28",
+      "privacy_status": "public",
+      "made_for_kids": false,
+      "contains_synthetic_media": true,
+      "notify_subscribers": false
+    },
+    "instagram": {
+      "caption": "Почему потерянные наушники находятся, хотя в них нет GPS? #технологии #shorts",
+      "share_to_feed": true
+    }
+  }
+}
