@@ -145,19 +145,14 @@ const StreamArrow: React.FC<{ local: number; impactLocal: number; opacity: numbe
           left: x,
           top: 636,
           transform: "translate(-50%, -50%)",
-          minWidth: 92,
-          padding: "10px 14px",
-          borderRadius: 999,
+          width: 18,
+          height: 18,
+          borderRadius: "50%",
           background: color,
-          color: "#06121A",
-          fontSize: 17,
-          textAlign: "center",
+          boxShadow: `0 0 18px ${color}`,
           opacity: progress > 0.02 ? opacity : 0,
-          ...mono,
         }}
-      >
-        SEG-07
-      </div>
+      />
     </>
   );
 };
