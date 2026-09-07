@@ -94,6 +94,7 @@ export interface StoryBeat {
     | "fft-wave"
     | "audio-fingerprint"
     | "echo-cancellation"
+    | "active-noise-cancel"
     | "orbit-fft-groups"
     | "qr-repair"
     | "qr-phone-scan"

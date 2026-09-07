@@ -88,6 +88,7 @@ import { SleepToRamVisual, type SleepToRamPhase } from "./SleepToRamVisual";
 import { ResetVectorVisual, type ResetVectorPhase } from "./ResetVectorVisual";
 import { AudioFingerprintVisual, type AudioFingerprintPhase } from "./AudioFingerprintVisual";
 import { EchoCancellationVisual, type EchoCancellationPhase } from "./EchoCancellationVisual";
+import { ActiveNoiseCancelVisual, type ActiveNoiseCancelPhase } from "./ActiveNoiseCancelVisual";
 import { InvertedIndexVisual, type InvertedIndexPhase } from "./InvertedIndexMergeVisual";
 import { ApkUpdateSignatureVisual, type ApkUpdateSignaturePhase } from "./ApkUpdateSignatureVisual";
 
@@ -179,6 +180,10 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
     if (beat.visual === "echo-cancellation") {
       const phase = beat.params?.phase as EchoCancellationPhase | undefined;
       impact = start + Math.round(dur * (phase === "subtract" ? 0.72 : phase === "loop" ? 0.66 : phase === "path" ? 0.64 : 0.58));
+    }
+    if (beat.visual === "active-noise-cancel") {
+      const phase = beat.params?.phase as ActiveNoiseCancelPhase | undefined;
+      impact = start + Math.round(dur * (phase === "antiphase" ? 0.68 : phase === "ear-zone" ? 0.72 : phase === "speech" ? 0.68 : phase === "swing" ? 0.64 : phase === "listen" ? 0.6 : 0.58));
     }
     if (beat.visual === "qr-repair") impact = start + Math.round(dur * 0.6);
     if (beat.visual === "qr-phone-scan") impact = start + Math.round(dur * 0.68);
@@ -625,6 +630,11 @@ export const storySfx = (
     if (s.beat.visual === "echo-cancellation") {
       const phase = s.beat.params?.phase as EchoCancellationPhase | undefined;
       const sound = phase === "loop" ? "slam" : phase === "subtract" ? "ding" : phase === "path" ? "click" : "pop";
+      events.push({ frame: s.impact, sound });
+    }
+    if (s.beat.visual === "active-noise-cancel") {
+      const phase = s.beat.params?.phase as ActiveNoiseCancelPhase | undefined;
+      const sound = phase === "ear-zone" ? "ding" : phase === "antiphase" ? "whoosh" : phase === "speech" ? "click" : phase === "swing" ? "pop" : "click";
       events.push({ frame: s.impact, sound });
     }
     if (s.beat.visual === "qr-repair") {
@@ -11904,6 +11914,7 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     "fft-wave": { scale: 0.94, y: -30 },
     "audio-fingerprint": { scale: 0.9, y: -20 },
     "echo-cancellation": { scale: 0.9, y: -20 },
+    "active-noise-cancel": { scale: 0.9, y: -20 },
     "orbit-fft-groups": { scale: 0.88, y: -30 },
     "qr-repair": { scale: 0.9, y: -30 },
     "qr-phone-scan": { scale: 0.9, y: -25 },
@@ -12227,6 +12238,15 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             fps={fps}
             impactLocal={impactLocal}
             phase={(slot.beat.params?.phase as EchoCancellationPhase | undefined) ?? "mixture"}
+          />
+        );
+      case "active-noise-cancel":
+        return (
+          <ActiveNoiseCancelVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as ActiveNoiseCancelPhase | undefined) ?? "life"}
           />
         );
       case "qr-repair":
