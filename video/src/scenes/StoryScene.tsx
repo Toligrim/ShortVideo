@@ -57,6 +57,8 @@ import { WifiSignalVsAirtimeVisual } from "./WifiSignalVsAirtimeVisual";
 import { WifiLoginVisual, type WifiLoginPhase } from "./WifiLoginVisual";
 import { WifiFourWayVisual, type WifiFourWayPhase } from "./WifiFourWayVisual";
 import { BluetoothHoppingVisual, type BluetoothHoppingPhase } from "./BluetoothHoppingVisual";
+import { FindNetworkVisual, type FindNetworkPhase } from "./FindNetworkVisual";
+import { RotatingKeyLockVisual, type RotatingKeyPhase } from "./RotatingKeyLockVisual";
 import { FileDeleteRecoveryVisual, type FileDeleteRecoveryPhase } from "./FileDeleteRecovery";
 import { BlockChainVisual, type BlockChainPhase } from "./BlockChainVisual";
 import { MempoolRbfVisual, type MempoolRbfPhase } from "./MempoolRbfVisual";
@@ -539,6 +541,26 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
     if (beat.visual === "reward-check") {
       const phase = beat.params?.phase as RewardCheckPhase | undefined;
       impact = start + Math.round(dur * (phase === "reject" ? 0.68 : phase === "consensus" ? 0.7 : phase === "coinbase" ? 0.62 : phase === "nodes" ? 0.64 : phase === "rules" ? 0.58 : 0.6));
+    }
+    if (beat.visual === "find-network") {
+      const phase = beat.params?.phase as FindNetworkPhase | undefined;
+      impact = start + Math.round(dur * (
+        phase === "network" ? 0.72
+          : phase === "cloud" ? 0.68
+          : phase === "anonymous" ? 0.66
+          : phase === "point" ? 0.64
+          : phase === "heard" ? 0.62
+          : 0.58
+      ));
+    }
+    if (beat.visual === "rotating-key-lock") {
+      const phase = beat.params?.phase as RotatingKeyPhase | undefined;
+      impact = start + Math.round(dur * (
+        phase === "seal" ? 0.7
+          : phase === "neighbor" ? 0.68
+          : phase === "owner" ? 0.72
+          : 0.62
+      ));
     }
     if (beat.visual === "double-ratchet") {
       const phase = beat.params?.phase as DoubleRatchetPhase | undefined;
@@ -1041,6 +1063,16 @@ export const storySfx = (
     if (s.beat.visual === "reward-check") {
       const ph = s.beat.params?.phase as RewardCheckPhase | undefined;
       const sound = ph === "reject" || ph === "consensus" ? "slam" : ph === "coinbase" || ph === "nodes" ? "ding" : ph === "rules" ? "pop" : "click";
+      events.push({ frame: s.impact, sound });
+    }
+    if (s.beat.visual === "find-network") {
+      const ph = s.beat.params?.phase as FindNetworkPhase | undefined;
+      const sound = ph === "network" ? "whoosh" : ph === "cloud" || ph === "anonymous" ? "ding" : ph === "point" ? "pop" : "click";
+      events.push({ frame: s.impact, sound });
+    }
+    if (s.beat.visual === "rotating-key-lock") {
+      const ph = s.beat.params?.phase as RotatingKeyPhase | undefined;
+      const sound = ph === "seal" || ph === "neighbor" ? "slam" : ph === "owner" ? "ding" : "whoosh";
       events.push({ frame: s.impact, sound });
     }
     if (s.beat.visual === "double-ratchet") {
@@ -11978,6 +12010,8 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     "wifi-login": { scale: 0.9, y: -20 },
     "wifi-four-way": { scale: 0.86, y: -20 },
     "bluetooth-hopping": { scale: 0.9, y: -20 },
+    "find-network": { scale: 0.88, y: -20 },
+    "rotating-key-lock": { scale: 0.9, y: -20 },
     "diffusion-denoise": { scale: 0.92, y: -20 },
     "tls-handshake": { scale: 0.92, y: -20 },
     "cold-battery-voltage-drop": { scale: 0.9, y: -20 },
@@ -12969,6 +13003,24 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             fps={fps}
             impactLocal={impactLocal}
             phase={(slot.beat.params?.phase as BluetoothHoppingPhase | undefined) ?? "hopping"}
+          />
+        );
+      case "find-network":
+        return (
+          <FindNetworkVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as FindNetworkPhase | undefined) ?? "network"}
+          />
+        );
+      case "rotating-key-lock":
+        return (
+          <RotatingKeyLockVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as RotatingKeyPhase | undefined) ?? "rotate"}
           />
         );
       case "file-delete-recovery":

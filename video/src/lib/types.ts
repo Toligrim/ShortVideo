@@ -171,6 +171,8 @@ export interface StoryBeat {
   | "wifi-login"
   | "wifi-four-way"
   | "bluetooth-hopping"
+  | "find-network"
+  | "rotating-key-lock"
   | "file-delete-recovery"
   | "tls-handshake"
 | "block-chain"
