@@ -1,0 +1,117 @@
+{
+  "id": "auto-20260907-084634",
+  "title": "Почему видео не останавливается, когда интернет стал медленнее?",
+  "scenes": [
+    {
+      "type": "story",
+      "narration": "Интернет просел, картинка стала мыльнее, а ролик не остановился. Как плеер успевает перестроиться, пока ты смотришь без паузы?",
+      "beats": [
+        {
+          "visual": "segment-buffer-playback",
+          "onWord": "Интернет",
+          "params": { "phase": "symptom" }
+        },
+        {
+          "visual": "segment-buffer-playback",
+          "onWord": "перестроиться",
+          "params": { "phase": "boundary" }
+        }
+      ]
+    },
+    {
+      "type": "story",
+      "narration": "Потоковое видео приходит не одним файлом: сервер режет его на короткие {сегменты|сегменты}. Плеер берёт следующий, пока предыдущий играет — как официант, который несёт блюда порциями.",
+      "beats": [
+        {
+          "visual": "segment-buffer-playback",
+          "onWord": "Потоковое",
+          "params": { "phase": "split" }
+        },
+        {
+          "visual": "segment-buffer-playback",
+          "onWord": "Плеер",
+          "params": { "phase": "queue" }
+        },
+        {
+          "visual": "segment-buffer-playback",
+          "onWord": "порциями",
+          "params": { "phase": "boundary" }
+        }
+      ]
+    },
+    {
+      "type": "story",
+      "narration": "Для следующего сегмента есть несколько ступеней качества. Это {адаптивный битрейт|адаптивный битрейт}: как лестница, где плеер выбирает лёгкую или тяжёлую коробку.",
+      "beats": [
+        {
+          "visual": "adaptive-bitrate-ladder",
+          "onWord": "следующего",
+          "params": { "phase": "variants" }
+        },
+        {
+          "visual": "adaptive-bitrate-ladder",
+          "onWord": "лестница",
+          "params": { "phase": "ladder" }
+        },
+        {
+          "visual": "adaptive-bitrate-ladder",
+          "onWord": "выбирает",
+          "params": { "phase": "choose" }
+        }
+      ]
+    },
+    {
+      "type": "story",
+      "narration": "Плеер не знает «реальную скорость» одним числом: смотрит, как быстро пришёл сегмент и сколько времени осталось в {буфере|буфере}. Запас тает — просьба легче.",
+      "beats": [
+        {
+          "visual": "adaptive-bitrate-ladder",
+          "onWord": "смотрит",
+          "params": { "phase": "measure" }
+        },
+        {
+          "visual": "adaptive-bitrate-ladder",
+          "onWord": "буфере",
+          "params": { "phase": "buffer" }
+        },
+        {
+          "visual": "adaptive-bitrate-ladder",
+          "onWord": "легче",
+          "params": { "phase": "downshift" }
+        }
+      ]
+    },
+    {
+      "type": "story",
+      "narration": "Вау-факт: скачанный кусочек уже не облегчить на лету. Обычно на границе {сегмента|сегмента} текущий доигрывает, а плеер просит следующий на ступень ниже — картинка мягче, буфер успевает расти.",
+      "beats": [
+        {
+          "visual": "adaptive-bitrate-ladder",
+          "onWord": "скачанный",
+          "params": { "phase": "frozen" }
+        },
+        {
+          "visual": "segment-buffer-playback",
+          "onWord": "границе",
+          "params": { "phase": "boundary" }
+        },
+        {
+          "visual": "adaptive-bitrate-ladder",
+          "onWord": "ниже",
+          "params": { "phase": "switch" }
+        }
+      ]
+    },
+    {
+      "type": "outro",
+      "title": "Буфер спасает паузу",
+      "bullets": [
+        "Сегменты дают запас",
+        "Следующий может быть легче",
+        "Буфер держит воспроизведение"
+      ],
+      "cta": "Подпишись: дальше — пустой буфер",
+      "narration": "Итак, сегменты дают запас, а адаптивный битрейт меняет ступень до пустого буфера. Поэтому чёткость падает, а воспроизведение продолжается. Подпишись: дальше — почему буфер пустеет."
+    }
+  ]
+}

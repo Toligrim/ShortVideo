@@ -52,6 +52,8 @@ import { GpuDataCenterVisual, type GpuDataCenterPhase } from "./GpuDataCenterVis
 import { MatrixMultiplyVisual, type MatrixMultiplyPhase } from "./MatrixMultiplyVisual";
 import { QuantizationLossVisual, type QuantizationLossPhase } from "./QuantizationLossVisual";
 import { ProgressiveImageScansVisual, type ProgressiveImageScansPhase } from "./ProgressiveImageScansVisual";
+import { SegmentBufferPlaybackVisual, type SegmentBufferPlaybackPhase } from "./SegmentBufferPlaybackVisual";
+import { AdaptiveBitrateLadderVisual, type AdaptiveBitratePhase } from "./AdaptiveBitrateLadderVisual";
 import { WifiAirtimeVisual, type WifiAirtimePhase } from "./WifiAirtimeVisual";
 import { WifiSignalVsAirtimeVisual } from "./WifiSignalVsAirtimeVisual";
 import { WifiLoginVisual, type WifiLoginPhase } from "./WifiLoginVisual";
@@ -382,6 +384,21 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
           : phase === "blocks" ? 0.66
           : phase === "sharp" ? 0.72
           : 0.6
+      ));
+    }
+    if (beat.visual === "segment-buffer-playback") {
+      const phase = beat.params?.phase as SegmentBufferPlaybackPhase | undefined;
+      impact = start + Math.round(dur * (phase === "boundary" ? 0.72 : phase === "queue" ? 0.64 : phase === "split" ? 0.6 : 0.58));
+    }
+    if (beat.visual === "adaptive-bitrate-ladder") {
+      const phase = beat.params?.phase as AdaptiveBitratePhase | undefined;
+      impact = start + Math.round(dur * (
+        phase === "switch" ? 0.72
+          : phase === "frozen" ? 0.62
+          : phase === "downshift" ? 0.68
+          : phase === "buffer" ? 0.64
+          : phase === "measure" ? 0.62
+          : 0.58
       ));
     }
     if (beat.visual === "wifi-airtime") {
@@ -903,6 +920,16 @@ export const storySfx = (
     if (s.beat.visual === "progressive-image-scans") {
       const phase = s.beat.params?.phase as ProgressiveImageScansPhase | undefined;
       const sound = phase === "sharp" || phase === "details" ? "ding" : phase === "blocks" ? "slam" : phase === "scans" || phase === "tracing" ? "whoosh" : "pop";
+      events.push({ frame: s.impact, sound });
+    }
+    if (s.beat.visual === "segment-buffer-playback") {
+      const phase = s.beat.params?.phase as SegmentBufferPlaybackPhase | undefined;
+      const sound = phase === "boundary" ? "ding" : phase === "queue" ? "whoosh" : phase === "split" ? "pop" : "click";
+      events.push({ frame: s.impact, sound });
+    }
+    if (s.beat.visual === "adaptive-bitrate-ladder") {
+      const phase = s.beat.params?.phase as AdaptiveBitratePhase | undefined;
+      const sound = phase === "switch" ? "ding" : phase === "frozen" || phase === "downshift" ? "slam" : phase === "measure" || phase === "buffer" ? "pop" : "click";
       events.push({ frame: s.impact, sound });
     }
     if (s.beat.visual === "wifi-airtime") {
@@ -12005,6 +12032,8 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     "matrix-multiply": { scale: 0.88, y: -20 },
     "quantization-loss": { scale: 0.9, y: -20 },
     "progressive-image-scans": { scale: 0.9, y: -20 },
+    "segment-buffer-playback": { scale: 0.88, y: -20 },
+    "adaptive-bitrate-ladder": { scale: 0.88, y: -20 },
     "wifi-airtime": { scale: 0.92, y: -20 },
     "wifi-signal-vs-airtime": { scale: 0.9, y: -20 },
     "wifi-login": { scale: 0.9, y: -20 },
@@ -12965,6 +12994,24 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             fps={fps}
             impactLocal={impactLocal}
             phase={(slot.beat.params?.phase as ProgressiveImageScansPhase | undefined) ?? "blur"}
+          />
+        );
+      case "segment-buffer-playback":
+        return (
+          <SegmentBufferPlaybackVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as SegmentBufferPlaybackPhase | undefined) ?? "queue"}
+          />
+        );
+      case "adaptive-bitrate-ladder":
+        return (
+          <AdaptiveBitrateLadderVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as AdaptiveBitratePhase | undefined) ?? "variants"}
           />
         );
       case "wifi-airtime":

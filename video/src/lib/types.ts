@@ -166,6 +166,8 @@ export interface StoryBeat {
     | "matrix-multiply"
     | "quantization-loss"
     | "progressive-image-scans"
+    | "segment-buffer-playback"
+    | "adaptive-bitrate-ladder"
   | "wifi-airtime"
   | "wifi-signal-vs-airtime"
   | "wifi-login"
