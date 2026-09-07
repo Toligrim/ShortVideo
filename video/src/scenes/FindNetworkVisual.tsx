@@ -69,7 +69,7 @@ const Header: React.FC<{ phase: FindNetworkPhase; opacity: number }> = ({ phase,
     style={{
       position: "absolute",
       left: CX,
-      top: 228,
+      top: 320,
       transform: "translateX(-50%)",
       display: "flex",
       alignItems: "center",
