@@ -1,0 +1,73 @@
+{
+  "id": "auto-20260907-050024",
+  "title": "Почему шумоподавление убирает гул самолёта, но не разговор?",
+  "scenes": [
+    {
+      "type": "story",
+      "narration": "Гул самолёта исчезает, а голос соседа остаётся. Почему наушники гасят один звук, но пропускают другой, хотя слышат оба?",
+      "beats": [
+        { "visual": "active-noise-cancel", "onWord": "Гул", "params": { "phase": "life" } },
+        { "visual": "active-noise-cancel", "onWord": "голос", "params": { "phase": "speech" } }
+      ]
+    },
+    {
+      "type": "story",
+      "narration": "Представь качели: если толкнуть их точно навстречу движению, размах уменьшится. Со звуком наушники делают похожий фокус — это противофа́за.",
+      "beats": [
+        { "visual": "active-noise-cancel", "onWord": "качели", "params": { "phase": "swing" } },
+        { "visual": "active-noise-cancel", "onWord": "толкнуть", "params": { "phase": "swing" } },
+        { "visual": "active-noise-cancel", "onWord": "навстречу", "params": { "phase": "swing" } },
+        { "visual": "active-noise-cancel", "onWord": "звуком", "params": { "phase": "antiphase" } },
+        { "visual": "active-noise-cancel", "onWord": "противофа́за", "params": { "phase": "antiphase" } }
+      ]
+    },
+    {
+      "type": "story",
+      "narration": "Микрофо́н снаружи слушает гул. Электро́ника подаёт в дина́мик волну с обратным подъёмом и спадом: там, где гул толкает воздух вперёд, вторая толкает назад.",
+      "beats": [
+        { "visual": "active-noise-cancel", "onWord": "Микрофо́н", "params": { "phase": "listen" } },
+        { "visual": "active-noise-cancel", "onWord": "снаружи", "params": { "phase": "listen" } },
+        { "visual": "active-noise-cancel", "onWord": "Электро́ника", "params": { "phase": "antiphase" } },
+        { "visual": "active-noise-cancel", "onWord": "обратным", "params": { "phase": "antiphase" } },
+        { "visual": "active-noise-cancel", "onWord": "вперёд", "params": { "phase": "antiphase" } },
+        { "visual": "active-noise-cancel", "onWord": "назад", "params": { "phase": "antiphase" } }
+      ]
+    },
+    {
+      "type": "story",
+      "narration": "У уха эти две волны складываются: амплиту́да становится меньше, и стабильный низкий гул почти теряет силу. Самое странное — вокруг головы волна не обязана исчезать: её подстроили именно у уха.",
+      "beats": [
+        { "visual": "active-noise-cancel", "onWord": "У", "params": { "phase": "ear-zone" } },
+        { "visual": "active-noise-cancel", "onWord": "складываются", "params": { "phase": "ear-zone" } },
+        { "visual": "active-noise-cancel", "onWord": "амплиту́да", "params": { "phase": "ear-zone" } },
+        { "visual": "active-noise-cancel", "onWord": "меньше", "params": { "phase": "ear-zone" } },
+        { "visual": "active-noise-cancel", "onWord": "вокруг", "params": { "phase": "ear-zone" } },
+        { "visual": "active-noise-cancel", "onWord": "подстроили", "params": { "phase": "ear-zone" } }
+      ]
+    },
+    {
+      "type": "story",
+      "narration": "Речь рядом не исчезает полностью: она меняется, приходит сбоку и состоит из сложных деталей. Точную волну навстречу ей труднее создать вовремя.",
+      "beats": [
+        { "visual": "active-noise-cancel", "onWord": "Речь", "params": { "phase": "speech" } },
+        { "visual": "active-noise-cancel", "onWord": "меняется", "params": { "phase": "speech" } },
+        { "visual": "active-noise-cancel", "onWord": "сбоку", "params": { "phase": "speech" } },
+        { "visual": "active-noise-cancel", "onWord": "сложных", "params": { "phase": "speech" } },
+        { "visual": "active-noise-cancel", "onWord": "Точную", "params": { "phase": "speech" } },
+        { "visual": "active-noise-cancel", "onWord": "вовремя", "params": { "phase": "speech" } }
+      ]
+    },
+    {
+      "type": "outro",
+      "title": "Гул исчезает, речь остаётся",
+      "bullets": [
+        "Микрофон слышит внешний гул",
+        "Электроника строит противофазу",
+        "Сложение работает у уха",
+        "Речь сбоку меняется быстрее"
+      ],
+      "cta": "Подпишись: дальше — ветер в наушниках",
+      "narration": "Итог: микрофо́н слышит гул, дина́мик отвечает противофа́зой, и у уха две волны дают меньшую амплиту́ду. Подпишись — дальше разберём, почему ветер для наушников особенно неудобен."
+    }
+  ]
+}
