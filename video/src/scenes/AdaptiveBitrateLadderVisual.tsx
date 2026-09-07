@@ -125,6 +125,7 @@ const StepCard: React.FC<{
       boxSizing: "border-box",
       display: "flex",
       alignItems: "center",
+      gap: 8,
       padding: "0 18px",
       borderRadius: 16,
       border: `2px solid ${color}${active ? "DD" : "55"}`,
@@ -134,9 +135,9 @@ const StepCard: React.FC<{
       ...mono,
     }}
   >
-    <div style={{ width: 108, color, fontSize: 26 }}>{quality}</div>
-    <div style={{ fontSize: 18 }}>{stripStress(`SEG-08 · ${bitrate}`)}</div>
-    {label ? <div style={{ marginLeft: "auto", color, fontSize: 16 }}>{label}</div> : null}
+    <div style={{ width: 100, flexShrink: 0, color, fontSize: 26, whiteSpace: "nowrap" }}>{quality}</div>
+    <div style={{ flexShrink: 0, fontSize: 16, whiteSpace: "nowrap" }}>{stripStress(`SEG-08 · ${bitrate}`)}</div>
+    {label ? <div style={{ marginLeft: "auto", flexShrink: 0, color, fontSize: 16, whiteSpace: "nowrap" }}>{label}</div> : null}
   </div>
 );
 
