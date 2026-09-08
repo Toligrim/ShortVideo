@@ -1,0 +1,157 @@
+{
+  "id": "auto-20260908-100040",
+  "title": "Почему лента понимает, что тебе нравится, даже если ты ничего не лайкаешь?",
+  "scenes": [
+    {
+      "type": "story",
+      "heading": "ДОСМОТР БЕЗ ЛАЙКА",
+      "narration": "Досмотрел один ролик до конца — и лента внезапно заполнилась похожими. Ни лайка, ни подписки: что именно она заметила?",
+      "beats": [
+        {
+          "visual": "recommendation-loop",
+          "onWord": "Досмотрел",
+          "params": { "phase": "feed", "view": "watch" }
+        },
+        {
+          "visual": "recommendation-loop",
+          "onWord": "заполнилась",
+          "params": { "phase": "feed", "view": "similar" }
+        },
+        {
+          "visual": "recommendation-loop",
+          "onWord": "заметила",
+          "params": { "phase": "signals", "focus": "all" }
+        }
+      ]
+    },
+    {
+      "type": "story",
+      "heading": "ТИХИЕ СИГНАЛЫ",
+      "narration": "Лайк — громкое «да», свайп — «нет». Но лента видит, сколько ты смотрел, где остановился и вернулся ли к ролику.",
+      "beats": [
+        {
+          "visual": "recommendation-loop",
+          "onWord": "Лайк",
+          "params": { "phase": "explicit" }
+        },
+        {
+          "visual": "recommendation-loop",
+          "onWord": "свайп",
+          "params": { "phase": "signals", "focus": "swipe" }
+        },
+        {
+          "visual": "recommendation-loop",
+          "onWord": "смотрел",
+          "params": { "phase": "signals", "focus": "watch" }
+        },
+        {
+          "visual": "recommendation-loop",
+          "onWord": "остановился",
+          "params": { "phase": "signals", "focus": "pause" }
+        },
+        {
+          "visual": "recommendation-loop",
+          "onWord": "вернулся",
+          "params": { "phase": "signals", "focus": "return" }
+        }
+      ]
+    },
+    {
+      "type": "story",
+      "heading": "НЕЯВНАЯ ОБРАТНАЯ СВЯЗЬ",
+      "narration": "Это {implicit feedback|импли́сит фи́дбэк}, или неявная обратная связь: следы действий вместо кнопки «нравится». Как продавец запоминает, у какой полки ты задержался, даже без покупки.",
+      "beats": [
+        {
+          "visual": "recommendation-loop",
+          "onWord": "implicit",
+          "params": { "phase": "signals", "focus": "all" }
+        },
+        {
+          "visual": "recommendation-loop",
+          "onWord": "следы",
+          "params": { "phase": "signals", "focus": "all" }
+        },
+        {
+          "visual": "recommendation-loop",
+          "onWord": "продавец",
+          "params": { "phase": "analogy", "view": "seller" }
+        },
+        {
+          "visual": "recommendation-loop",
+          "onWord": "задержался",
+          "params": { "phase": "analogy", "view": "pause" }
+        }
+      ]
+    },
+    {
+      "type": "story",
+      "heading": "СЛЕДЫ СКЛАДЫВАЮТСЯ",
+      "narration": "Досмотр и возврат усиливают гипотезу интереса, быстрый свайп её ослабляет, а пауза может стать следом внимания. Несколько событий складываются.",
+      "beats": [
+        {
+          "visual": "recommendation-loop",
+          "onWord": "Досмотр",
+          "params": { "phase": "signals", "focus": "watch" }
+        },
+        {
+          "visual": "recommendation-loop",
+          "onWord": "возврат",
+          "params": { "phase": "signals", "focus": "return" }
+        },
+        {
+          "visual": "recommendation-loop",
+          "onWord": "свайп",
+          "params": { "phase": "signals", "focus": "swipe" }
+        },
+        {
+          "visual": "recommendation-loop",
+          "onWord": "пауза",
+          "params": { "phase": "signals", "focus": "pause" }
+        },
+        {
+          "visual": "recommendation-loop",
+          "onWord": "складываются",
+          "params": { "phase": "signals", "focus": "all" }
+        }
+      ]
+    },
+    {
+      "type": "story",
+      "heading": "БАЛЛЫ МЕНЯЮТ ЛЕНТУ",
+      "narration": "Внутри лента не ставит штамп «ты любишь тему»: {ранжировщик|ранжиро́вщик} пересчитывает баллы роликов, и похожие поднимаются выше. Один досмотр меняет следующие шансы.",
+      "beats": [
+        {
+          "visual": "recommendation-loop",
+          "onWord": "ранжировщик",
+          "params": { "phase": "score", "view": "ranker" }
+        },
+        {
+          "visual": "recommendation-loop",
+          "onWord": "пересчитывает",
+          "params": { "phase": "score", "view": "recalculate" }
+        },
+        {
+          "visual": "recommendation-loop",
+          "onWord": "поднимаются",
+          "params": { "phase": "reorder" }
+        },
+        {
+          "visual": "recommendation-loop",
+          "onWord": "досмотр",
+          "params": { "phase": "reorder", "view": "chance" }
+        }
+      ]
+    },
+    {
+      "type": "outro",
+      "title": "ЛЕНТА СЧИТАЕТ ПОВЕДЕНИЕ",
+      "bullets": [
+        "Досмотр — это сигнал",
+        "Пауза тоже заметна",
+        "Баллы меняют порядок"
+      ],
+      "cta": "Подпишись: дальше — проверка гипотезы",
+      "narration": "Итак, ты молчишь, а лента получает сигнал: досмотр, пауза, свайп и возврат меняют порядок роликов. Подпишись — дальше разберём, как она проверяет догадку."
+    }
+  ]
+}
