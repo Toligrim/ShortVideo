@@ -1,0 +1,107 @@
+{
+  "id": "auto-20260908-074451",
+  "title": "Почему менеджер паролей не вставляет пароль на поддельном сайте?",
+  "scenes": [
+    {
+      "type": "story",
+      "heading": "ПОХОЖИЙ БАНК · ПОЛЕ ПУСТО",
+      "narration": "Переходишь по ссылке на «банк»: логотип тот же, поле входа на месте, а менеджер паролей молчит. Он сломался? Скорее, сработал строгий режим.",
+      "beats": [
+        {
+          "visual": "browser-click",
+          "onWord": "Переходишь",
+          "params": { "url": "bank-login.example" }
+        },
+        {
+          "visual": "origin-check",
+          "onWord": "молчит",
+          "params": { "phase": "phishing", "variant": "phishing" }
+        }
+      ]
+    },
+    {
+      "type": "story",
+      "heading": "МЕНЕДЖЕР СВЕРЯЕТ АДРЕС",
+      "narration": "Миф: менеджер смотрит на вывеску и название бренда. Если включено строгое сопоставление {origin|о́риджин}, он сначала сверяет схему, хост и порт полного адреса.",
+      "beats": [
+        {
+          "visual": "origin-check",
+          "onWord": "смотрит",
+          "params": { "phase": "phishing", "variant": "phishing" }
+        },
+        {
+          "visual": "origin-check",
+          "onWord": "origin",
+          "params": { "phase": "address" }
+        },
+        {
+          "visual": "origin-check",
+          "onWord": "сверяет",
+          "params": { "phase": "compare" }
+        }
+      ]
+    },
+    {
+      "type": "story",
+      "heading": "КОНТРОЛЁР И ПОЛНЫЙ АДРЕС",
+      "narration": "Представь контролёра: ему мало той же вывески. Он сверяет улицу, номер дома и подъезд; похожий дом рядом не проходит.",
+      "beats": [
+        {
+          "visual": "origin-check",
+          "onWord": "контролёра",
+          "params": { "phase": "analogy" }
+        },
+        {
+          "visual": "origin-check",
+          "onWord": "похожий",
+          "params": { "phase": "reject", "variant": "house" }
+        }
+      ]
+    },
+    {
+      "type": "story",
+      "heading": "ДРУГАЯ ТОЧКА",
+      "narration": "Сменилась схема, хост или порт — это уже другая точка. При такой политике менеджер не подставляет ей пароль автоматически, и поле остаётся пустым.",
+      "beats": [
+        {
+          "visual": "origin-check",
+          "onWord": "Сменилась",
+          "params": { "phase": "mismatch" }
+        },
+        {
+          "visual": "origin-check",
+          "onWord": "пустым",
+          "params": { "phase": "reject", "variant": "field" }
+        }
+      ]
+    },
+    {
+      "type": "story",
+      "heading": "ОТКАЗ ФИШИНГОВОМУ ДОМЕНУ",
+      "narration": "Если причина именно в несовпадении адреса, отказ выглядит как тишина: похожий домен есть, а менеджер не подставляет пароль автоматически. Так защита не выдаёт себя.",
+      "beats": [
+        {
+          "visual": "origin-check",
+          "onWord": "похожий",
+          "params": { "phase": "phishing", "variant": "phishing" }
+        },
+        {
+          "visual": "origin-check",
+          "onWord": "менеджер",
+          "params": { "phase": "reject", "variant": "phishing" }
+        }
+      ]
+    },
+    {
+      "type": "outro",
+      "title": "ЗАПОМНИ АДРЕС",
+      "bullets": [
+        "Схема, хост и порт",
+        "Логотипа недостаточно",
+        "Поддельный домен — отказ"
+      ],
+      "cta": "Подпишись: дальше — адреса глазами",
+      "narration": "Итак, при строгом сопоставлении менеджер узнаёт не логотип, а точный {origin|о́риджин}: схема, хост и порт. Дальше разберём, как отличать такие адреса глазами. Подпишись."
+    }
+  ]
+}
