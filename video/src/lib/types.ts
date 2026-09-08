@@ -72,6 +72,7 @@ export interface StoryBeat {
     | "devices-meet"
     | "handshake"
     | "title-slam"
+    | "storage-capacity"
     | "power-reset-sequence"
     | "sleep-to-ram"
     | "reset-vector-launch"

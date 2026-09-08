@@ -98,6 +98,7 @@ import { ActiveNoiseCancelVisual, type ActiveNoiseCancelPhase } from "./ActiveNo
 import { InvertedIndexVisual, type InvertedIndexPhase } from "./InvertedIndexMergeVisual";
 import { ApkUpdateSignatureVisual, type ApkUpdateSignaturePhase } from "./ApkUpdateSignatureVisual";
 import { OriginCheckVisual, type OriginCheckPhase } from "./OriginCheckVisual";
+import { StorageCapacityVisual, type StorageCapacityPhase } from "./StorageCapacityVisual";
 import {
   RecommendationLoopVisual,
   type RecommendationFocus,
@@ -157,6 +158,17 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
     }
     if (beat.visual === "handshake") impact = start + 10;
     if (beat.visual === "title-slam") impact = start + 8;
+    if (beat.visual === "storage-capacity") {
+      const phase = beat.params?.phase as StorageCapacityPhase | undefined;
+      impact = start + Math.round(dur * (
+        phase === "gap" ? 0.64
+          : phase === "scales" ? 0.66
+          : phase === "binary" ? 0.68
+          : phase === "division" ? 0.7
+          : phase === "result" ? 0.72
+          : 0.58
+      ));
+    }
     if (beat.visual === "power-reset-sequence") {
       const phase = beat.params?.phase as PowerResetPhase | undefined;
       impact = start + Math.round(dur * (phase === "release" ? 0.62 : phase === "firmware" ? 0.68 : phase === "black-screen" ? 0.58 : 0.6));
@@ -669,6 +681,11 @@ export const storySfx = (
     if (s.beat.visual === "handshake")
       events.push({ frame: s.impact, sound: "slam" }, { frame: s.impact + 2, sound: "ding" });
     if (s.beat.visual === "title-slam") events.push({ frame: s.impact, sound: "slam" });
+    if (s.beat.visual === "storage-capacity") {
+      const phase = s.beat.params?.phase as StorageCapacityPhase | undefined;
+      const sound = phase === "gap" ? "slam" : phase === "division" || phase === "result" ? "ding" : phase === "scales" ? "whoosh" : "pop";
+      events.push({ frame: s.impact, sound });
+    }
     if (s.beat.visual === "power-reset-sequence") {
       const phase = s.beat.params?.phase as PowerResetPhase | undefined;
       const sound = phase === "release" ? "slam" : phase === "firmware" ? "ding" : phase === "black-screen" ? "pop" : "click";
@@ -12021,6 +12038,7 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     "devices-meet": { scale: 1.12, y: -60 },
     handshake: { scale: 1.22, y: -110 },
     "title-slam": { scale: 1.0, y: 0 },
+    "storage-capacity": { scale: 0.9, y: -20 },
     "power-reset-sequence": { scale: 0.88, y: -20 },
     "sleep-to-ram": { scale: 0.9, y: -20 },
     "reset-vector-launch": { scale: 0.88, y: -20 },
@@ -12186,6 +12204,15 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             impactLocal={impactLocal}
             text={slot.beat.params?.text as string}
             sub={slot.beat.params?.sub as string | undefined}
+          />
+        );
+      case "storage-capacity":
+        return (
+          <StorageCapacityVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as StorageCapacityPhase | undefined) ?? "symptom"}
           />
         );
       case "power-reset-sequence":
