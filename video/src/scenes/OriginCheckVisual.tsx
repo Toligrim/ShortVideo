@@ -22,57 +22,12 @@ export type OriginCheckPhase =
 
 type RejectVariant = "house" | "field" | "phishing";
 
-const phaseTitle: Record<OriginCheckPhase, string> = {
-  phishing: "ПОХОЖАЯ СТРАНИЦА · ПОЛЕ ПУСТО",
-  address: "ПОЛНЫЙ АДРЕС · ТРИ ЧАСТИ",
-  compare: "СВЕРКА · АДРЕС С ЗАПИСЬЮ",
-  analogy: "БЫТОВОЙ КОНТРОЛЁР · ПОЛНЫЙ АДРЕС",
-  mismatch: "ИЗМЕНЕНИЕ АДРЕСА · НОВАЯ ТОЧКА",
-  reject: "ПРОВЕРКА · АВТОВЫДАЧА ОСТАНОВЛЕНА",
-};
-
-const phaseIcon: Record<OriginCheckPhase, string> = {
-  phishing: "globe",
-  address: "map-pin",
-  compare: "list-checks",
-  analogy: "clipboard-check",
-  mismatch: "git-compare-arrows",
-  reject: "ban",
-};
-
 const panel = (color: string): React.CSSProperties => ({
   borderRadius: 24,
   background: `${theme.panel}F2`,
   border: `3px solid ${color}66`,
   boxShadow: `0 0 42px ${color}20`,
 });
-
-const Header: React.FC<{ phase: OriginCheckPhase; enter: number }> = ({ phase, enter }) => (
-  <div
-    style={{
-      position: "absolute",
-      left: W / 2,
-      top: 220,
-      transform: "translateX(-50%)",
-      display: "flex",
-      alignItems: "center",
-      gap: 12,
-      color: theme.subtext,
-      fontSize: 24,
-      whiteSpace: "nowrap",
-      opacity: enter,
-      ...mono,
-    }}
-  >
-    <IconGlyph
-      name={phaseIcon[phase]}
-      size={30}
-      color={phase === "reject" || phase === "mismatch" ? theme.danger : theme.accent}
-      strokeWidth={1.8}
-    />
-    <span>{phaseTitle[phase]}</span>
-  </div>
-);
 
 const AddressText: React.FC<{
   value: string;
@@ -273,12 +228,9 @@ export const OriginCheckVisual: React.FC<{
     config: { damping: 12, mass: 0.7 },
   });
 
-  const header = <Header phase={phase} enter={enter} />;
-
   if (phase === "phishing") {
     return (
       <div style={{ position: "relative", width: W, height: 1280, overflow: "hidden" }}>
-        {header}
         <BrowserPage
           left={55}
           top={350}
@@ -317,7 +269,6 @@ export const OriginCheckVisual: React.FC<{
     ];
     return (
       <div style={{ position: "relative", width: W, height: 1280, overflow: "hidden" }}>
-        {header}
         <div
           style={{
             position: "absolute",
@@ -418,7 +369,6 @@ export const OriginCheckVisual: React.FC<{
     ];
     return (
       <div style={{ position: "relative", width: W, height: 1280, overflow: "hidden" }}>
-        {header}
         <div style={{ position: "absolute", left: 55, top: 350, width: 455, height: 170, ...panel(theme.accent), opacity: enter, padding: "25px 26px" }}>
           <div style={{ ...mono, color: theme.accent, fontSize: 19, marginBottom: 17 }}>АДРЕС СТРАНИЦЫ</div>
           <AddressText value="https://bank.example:443/login" fontSize={19} />
@@ -474,7 +424,6 @@ export const OriginCheckVisual: React.FC<{
     ];
     return (
       <div style={{ position: "relative", width: W, height: 1280, overflow: "hidden" }}>
-        {header}
         <div style={{ position: "absolute", left: 65, top: 385, width: 275, height: 465, ...panel(theme.warning), opacity: enter, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 18 }}>
           <IconGlyph name="clipboard-check" size={82} color={theme.warning} strokeWidth={1.6} />
           <div style={{ ...mono, color: theme.warning, fontSize: 24 }}>КОНТРОЛЁР</div>
@@ -523,7 +472,6 @@ export const OriginCheckVisual: React.FC<{
     const labels = ["СХЕМА", "ХОСТ", "ПОРТ"];
     return (
       <div style={{ position: "relative", width: W, height: 1280, overflow: "hidden" }}>
-        {header}
         {columns.map((column) => (
           <div key={column.title} style={{ position: "absolute", left: column.left, top: 370, width: 465, height: 485, ...panel(column.color), opacity: enter, padding: "28px 24px" }}>
             <div style={{ ...mono, color: column.color, fontSize: 19, textAlign: "center", marginBottom: 18 }}>{column.title}</div>
@@ -549,7 +497,6 @@ export const OriginCheckVisual: React.FC<{
   if (variant === "house") {
     return (
       <div style={{ position: "relative", width: W, height: 1280, overflow: "hidden" }}>
-        {header}
         <div style={{ position: "absolute", left: 62, top: 390, width: 430, height: 430, ...panel(theme.success), opacity: enter, padding: "28px 25px" }}>
           <div style={{ ...mono, color: theme.success, fontSize: 20, textAlign: "center" }}>ДОМ ИЗ ЗАПИСИ</div>
           <IconGlyph name="house" size={78} color={theme.success} strokeWidth={1.6} />
@@ -573,7 +520,6 @@ export const OriginCheckVisual: React.FC<{
 
   return (
     <div style={{ position: "relative", width: W, height: 1280, overflow: "hidden" }}>
-      {header}
       <BrowserPage
         left={50}
         top={360}
