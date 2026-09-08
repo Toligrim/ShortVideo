@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "slug": "auto-20260908-074451",
+  "targets": {
+    "youtube": {
+      "title": "Почему менеджер паролей не вставляет пароль на поддельном сайте?",
+      "description": "Менеджер паролей сверяет origin — схему, хост и порт — поэтому узнаёт поддельный домен и не вставляет пароль.",
+      "tags": ["менеджер паролей", "фишинг", "безопасность", "пароли", "технологии", "shortvideo"],
+      "category_id": "28",
+      "privacy_status": "public",
+      "made_for_kids": false,
+      "contains_synthetic_media": true,
+      "notify_subscribers": false
+    },
+    "instagram": {
+      "caption": "Почему менеджер паролей молчит на поддельном сайте? Он сверяет схему, хост и порт — одного логотипа недостаточно. #безопасность #технологии #shortvideo",
+      "share_to_feed": true
+    }
+  }
+}
