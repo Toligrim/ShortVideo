@@ -97,6 +97,7 @@ import { EchoCancellationVisual, type EchoCancellationPhase } from "./EchoCancel
 import { ActiveNoiseCancelVisual, type ActiveNoiseCancelPhase } from "./ActiveNoiseCancelVisual";
 import { InvertedIndexVisual, type InvertedIndexPhase } from "./InvertedIndexMergeVisual";
 import { ApkUpdateSignatureVisual, type ApkUpdateSignaturePhase } from "./ApkUpdateSignatureVisual";
+import { OriginCheckVisual, type OriginCheckPhase } from "./OriginCheckVisual";
 
 /* ──────────────────────────── расписание битов ──────────────────────────── */
 
@@ -126,6 +127,17 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
     const dur = end - start;
     let impact: number | null = null;
     if (beat.visual === "browser-click") impact = start + Math.round(dur * 0.55);
+    if (beat.visual === "origin-check") {
+      const phase = beat.params?.phase as OriginCheckPhase | undefined;
+      impact = start + Math.round(dur * (
+        phase === "compare" ? 0.7
+          : phase === "analogy" ? 0.62
+          : phase === "mismatch" ? 0.64
+          : phase === "reject" ? 0.7
+          : phase === "address" ? 0.58
+          : 0.62
+      ));
+    }
     if (beat.visual === "handshake") impact = start + 10;
     if (beat.visual === "title-slam") impact = start + 8;
     if (beat.visual === "power-reset-sequence") {
@@ -626,6 +638,11 @@ export const storySfx = (
     if (i > 0) events.push({ frame: s.start, sound: "whoosh-short" });
     if (s.impact === null) continue;
     if (s.beat.visual === "browser-click") events.push({ frame: s.impact, sound: "click" });
+    if (s.beat.visual === "origin-check") {
+      const phase = s.beat.params?.phase as OriginCheckPhase | undefined;
+      const sound = phase === "reject" || phase === "mismatch" ? "slam" : phase === "compare" ? "ding" : "click";
+      events.push({ frame: s.impact, sound });
+    }
     if (s.beat.visual === "handshake")
       events.push({ frame: s.impact, sound: "slam" }, { frame: s.impact + 2, sound: "ding" });
     if (s.beat.visual === "title-slam") events.push({ frame: s.impact, sound: "slam" });
@@ -11976,6 +11993,7 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
   // камера: у каждого визуала свой план; переход — пружинный прыжок за ~9 кадров
   const cams: Record<string, { scale: number; y: number }> = {
     "browser-click": { scale: 1.0, y: 0 },
+    "origin-check": { scale: 0.9, y: -20 },
     "devices-meet": { scale: 1.12, y: -60 },
     handshake: { scale: 1.22, y: -110 },
     "title-slam": { scale: 1.0, y: 0 },
@@ -12111,6 +12129,16 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     switch (slot.beat.visual) {
       case "browser-click":
         return <BrowserClick local={local} dur={dur} impactLocal={impactLocal} fps={fps} url={slot.beat.params?.url as string} />;
+      case "origin-check":
+        return (
+          <OriginCheckVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as OriginCheckPhase | undefined) ?? "phishing"}
+            variant={(slot.beat.params?.variant as "house" | "field" | "phishing" | undefined) ?? "phishing"}
+          />
+        );
       case "devices-meet":
         return <DevicesMeet local={local} fps={fps} />;
       case "handshake":
