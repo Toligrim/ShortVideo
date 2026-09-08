@@ -156,6 +156,8 @@ export interface StoryBeat {
     | "password-hash"
     | "polarizer-stack"
     | "capacitive-touch"
+    | "tilt-weight"
+    | "mems-capacitor"
     | "proximity-sensor"
     | "digital-signature"
     | "apk-update-signature"

@@ -74,6 +74,8 @@ import { ContextWindowVisual, type ContextWindowPhase } from "./ContextWindowVis
 import { AttentionCostVisual, type AttentionCostPhase } from "./AttentionCostVisual";
 import { MultiFrameStackVisual, type MultiFrameStackPhase } from "./MultiFrameStackVisual";
 import { OisStabilizationVisual, type OisStabilizationPhase } from "./OisStabilizationVisual";
+import { TiltWeightVisual, type TiltWeightPhase } from "./TiltWeightVisual";
+import { MemsCapacitorVisual, type MemsCapacitorPhase } from "./MemsCapacitorVisual";
 import { TotpWindowVisual, type TotpWindowPhase } from "./TotpWindowVisual";
 import { SpellDistanceVisual, type SpellDistancePhase } from "./SpellDistanceVisual";
 import { OperationalTransformVisual, type OperationalTransformPhase } from "./OperationalTransformVisual";
@@ -345,6 +347,21 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
       ));
     }
     if (beat.visual === "capacitive-touch") impact = start + Math.round(dur * 0.58);
+    if (beat.visual === "tilt-weight") {
+      const phase = beat.params?.phase as TiltWeightPhase | undefined;
+      impact = start + Math.round(dur * (phase === "phone" ? 0.64 : phase === "screen" ? 0.72 : phase === "gravity" ? 0.68 : 0.62));
+    }
+    if (beat.visual === "mems-capacitor") {
+      const phase = beat.params?.phase as MemsCapacitorPhase | undefined;
+      impact = start + Math.round(dur * (
+        phase === "capacitance" ? 0.72
+          : phase === "axes" || phase === "bottom" ? 0.68
+          : phase === "switch" || phase === "result" ? 0.7
+          : phase === "horizontal" ? 0.72
+          : phase === "gravity" ? 0.66
+          : 0.6
+      ));
+    }
     if (beat.visual === "proximity-sensor") {
       const phase = beat.params?.phase as ProximitySensorPhase | undefined;
       impact = start + Math.round(dur * (phase === "lock" ? 0.72 : phase === "threshold" ? 0.66 : phase === "emit" ? 0.6 : 0.55));
@@ -1030,6 +1047,16 @@ export const storySfx = (
     if (s.beat.visual === "ois-stabilization") {
       const ph = s.beat.params?.phase as OisStabilizationPhase | undefined;
       const sound = ph === "countermove" || ph === "actuator" ? "slam" : ph === "hold" ? "ding" : ph === "gyro" ? "click" : "pop";
+      events.push({ frame: s.impact, sound });
+    }
+    if (s.beat.visual === "tilt-weight") {
+      const ph = s.beat.params?.phase as TiltWeightPhase | undefined;
+      const sound = ph === "phone" || ph === "screen" ? "whoosh" : ph === "gravity" ? "ding" : ph === "shift" ? "slam" : "pop";
+      events.push({ frame: s.impact, sound });
+    }
+    if (s.beat.visual === "mems-capacitor") {
+      const ph = s.beat.params?.phase as MemsCapacitorPhase | undefined;
+      const sound = ph === "gap" || ph === "gravity" ? "slam" : ph === "capacitance" || ph === "axes" || ph === "bottom" || ph === "horizontal" || ph === "result" ? "ding" : ph === "switch" ? "whoosh" : "pop";
       events.push({ frame: s.impact, sound });
     }
     if (s.beat.visual === "mail-queue") {
@@ -12050,6 +12077,8 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     "wallet-copy": { scale: 0.92, y: -20 },
     "multi-frame-stack": { scale: 0.9, y: -20 },
     "ois-stabilization": { scale: 0.88, y: -20 },
+    "tilt-weight": { scale: 0.92, y: -20 },
+    "mems-capacitor": { scale: 0.9, y: -20 },
     "mail-queue": { scale: 0.9, y: -20 },
     "mail-server-handoff": { scale: 0.9, y: -20 },
     "totp-window": { scale: 0.9, y: -20 },
@@ -13197,6 +13226,24 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             fps={fps}
             impactLocal={impactLocal}
             phase={(slot.beat.params?.phase as OisStabilizationPhase | undefined) ?? "handheld"}
+          />
+        );
+      case "tilt-weight":
+        return (
+          <TiltWeightVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as TiltWeightPhase | undefined) ?? "phone"}
+          />
+        );
+      case "mems-capacitor":
+        return (
+          <MemsCapacitorVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as MemsCapacitorPhase | undefined) ?? "mass"}
           />
         );
       case "mail-queue":
