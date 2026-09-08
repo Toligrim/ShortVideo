@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "slug": "auto-20260908-113939",
+  "targets": {
+    "youtube": {
+      "title": "Почему флешка на 128 ГБ показывает только 119?",
+      "description": "Почему флешка на 128 ГБ показывает около 119? Разбираем разницу между десятичными GB и двоичными GiB: те же 128 000 000 000 байт компьютер делит на 1 073 741 824 и получает примерно 119,2 GiB.",
+      "tags": [
+        "флешка",
+        "память",
+        "гигабайты",
+        "GB и GiB",
+        "накопитель",
+        "технологии",
+        "как это работает",
+        "shortvideo"
+      ],
+      "category_id": "28",
+      "privacy_status": "public",
+      "made_for_kids": false,
+      "contains_synthetic_media": true,
+      "notify_subscribers": false
+    },
+    "instagram": {
+      "caption": "Почему флешка на 128 ГБ показывает только 119? Те же байты, но две разные шкалы: GB и GiB. #технологии #память #shortvideo",
+      "share_to_feed": true
+    }
+  }
+}
