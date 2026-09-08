@@ -98,6 +98,12 @@ import { ActiveNoiseCancelVisual, type ActiveNoiseCancelPhase } from "./ActiveNo
 import { InvertedIndexVisual, type InvertedIndexPhase } from "./InvertedIndexMergeVisual";
 import { ApkUpdateSignatureVisual, type ApkUpdateSignaturePhase } from "./ApkUpdateSignatureVisual";
 import { OriginCheckVisual, type OriginCheckPhase } from "./OriginCheckVisual";
+import {
+  RecommendationLoopVisual,
+  type RecommendationFocus,
+  type RecommendationLoopPhase,
+  type RecommendationLoopView,
+} from "./RecommendationLoopVisual";
 
 /* ──────────────────────────── расписание битов ──────────────────────────── */
 
@@ -127,6 +133,17 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
     const dur = end - start;
     let impact: number | null = null;
     if (beat.visual === "browser-click") impact = start + Math.round(dur * 0.55);
+    if (beat.visual === "recommendation-loop") {
+      const phase = beat.params?.phase as RecommendationLoopPhase | undefined;
+      impact = start + Math.round(dur * (
+        phase === "feed" ? 0.62
+          : phase === "explicit" ? 0.58
+          : phase === "signals" ? 0.68
+          : phase === "analogy" ? 0.62
+          : phase === "score" ? 0.66
+          : 0.72
+      ));
+    }
     if (beat.visual === "origin-check") {
       const phase = beat.params?.phase as OriginCheckPhase | undefined;
       impact = start + Math.round(dur * (
@@ -638,6 +655,12 @@ export const storySfx = (
     if (i > 0) events.push({ frame: s.start, sound: "whoosh-short" });
     if (s.impact === null) continue;
     if (s.beat.visual === "browser-click") events.push({ frame: s.impact, sound: "click" });
+    if (s.beat.visual === "recommendation-loop") {
+      const phase = s.beat.params?.phase as RecommendationLoopPhase | undefined;
+      const view = s.beat.params?.view as RecommendationLoopView | undefined;
+      const sound = phase === "reorder" ? "slam" : phase === "score" && view === "recalculate" ? "ding" : phase === "feed" && view === "similar" ? "ding" : phase === "signals" ? "pop" : phase === "analogy" ? "click" : "pop";
+      events.push({ frame: s.impact, sound });
+    }
     if (s.beat.visual === "origin-check") {
       const phase = s.beat.params?.phase as OriginCheckPhase | undefined;
       const sound = phase === "reject" || phase === "mismatch" ? "slam" : phase === "compare" ? "ding" : "click";
@@ -11993,6 +12016,7 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
   // камера: у каждого визуала свой план; переход — пружинный прыжок за ~9 кадров
   const cams: Record<string, { scale: number; y: number }> = {
     "browser-click": { scale: 1.0, y: 0 },
+    "recommendation-loop": { scale: 0.88, y: -20 },
     "origin-check": { scale: 0.9, y: -20 },
     "devices-meet": { scale: 1.12, y: -60 },
     handshake: { scale: 1.22, y: -110 },
@@ -12129,6 +12153,17 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     switch (slot.beat.visual) {
       case "browser-click":
         return <BrowserClick local={local} dur={dur} impactLocal={impactLocal} fps={fps} url={slot.beat.params?.url as string} />;
+      case "recommendation-loop":
+        return (
+          <RecommendationLoopVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as RecommendationLoopPhase | undefined) ?? "feed"}
+            focus={(slot.beat.params?.focus as RecommendationFocus | undefined) ?? "all"}
+            view={(slot.beat.params?.view as RecommendationLoopView | undefined) ?? "watch"}
+          />
+        );
       case "origin-check":
         return (
           <OriginCheckVisual

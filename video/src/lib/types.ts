@@ -67,6 +67,7 @@ export interface OutroScene {
 export interface StoryBeat {
   visual:
     | "browser-click"
+    | "recommendation-loop"
     | "origin-check"
     | "devices-meet"
     | "handshake"
