@@ -1,0 +1,70 @@
+{
+  "id": "auto-20260908-053456",
+  "title": "Почему экран телефона сам поворачивается, когда ты наклоняешь телефон?",
+  "scenes": [
+    {
+      "type": "story",
+      "heading": "Экран знает, где верх",
+      "narration": "Повернул телефон боком — экран тут же лёг следом. Никакой кнопки ты не нажимал: откуда телефон знает, где теперь верх?",
+      "beats": [
+        { "visual": "tilt-weight", "onWord": "Повернул", "params": { "phase": "phone" } },
+        { "visual": "tilt-weight", "onWord": "откуда", "params": { "phase": "screen" } }
+      ]
+    },
+    {
+      "type": "story",
+      "heading": "Гирька на пружинках",
+      "narration": "Сначала бытовая картинка: рамка с маленькой гирькой на пружинках. Наклонил рамку — гирька сместилась относительно неё и подсказала, где низ.",
+      "beats": [
+        { "visual": "tilt-weight", "onWord": "рамка", "params": { "phase": "frame" } },
+        { "visual": "tilt-weight", "onWord": "Наклонил", "params": { "phase": "shift" } },
+        { "visual": "tilt-weight", "onWord": "подсказала", "params": { "phase": "gravity" } }
+      ]
+    },
+    {
+      "type": "story",
+      "heading": "Микромасса и ёмкость",
+      "narration": "Вау-факт: {MEMS-акселерометр|мемс-акселерометр} измеряет ускорение по осям через подвешенную микромассу: её сдвиг меняет зазор между микропластинами и {ёмкость|ёмкость}. Это как гирька на пружинках между пластинами.",
+      "beats": [
+        { "visual": "mems-capacitor", "onWord": "MEMS-акселерометр", "params": { "phase": "mass" } },
+        { "visual": "mems-capacitor", "onWord": "зазор", "params": { "phase": "gap" } },
+        { "visual": "mems-capacitor", "onWord": "ёмкость", "params": { "phase": "capacitance" } },
+        { "visual": "mems-capacitor", "onWord": "гирька", "params": { "phase": "analogy" } }
+      ]
+    },
+    {
+      "type": "story",
+      "heading": "Три оси находят низ",
+      "narration": "Когда ты наклоняешь телефон и на миг держишь его спокойно, земное притяжение смещает массу относительно рамки. Электроника получает три значения и понимает, какая сторона теперь внизу.",
+      "beats": [
+        { "visual": "mems-capacitor", "onWord": "наклоняешь", "params": { "phase": "tilt" } },
+        { "visual": "mems-capacitor", "onWord": "притяжение", "params": { "phase": "gravity" } },
+        { "visual": "mems-capacitor", "onWord": "три", "params": { "phase": "axes" } },
+        { "visual": "mems-capacitor", "onWord": "внизу", "params": { "phase": "bottom" } }
+      ]
+    },
+    {
+      "type": "story",
+      "heading": "Поворот после движения",
+      "narration": "Система переключает экран между вертикальным и горизонтальным режимом. Поэтому картинка поворачивается уже после твоего движения, а не вместе с ним.",
+      "beats": [
+        { "visual": "mems-capacitor", "onWord": "переключает", "params": { "phase": "switch" } },
+        { "visual": "mems-capacitor", "onWord": "вертикальным", "params": { "phase": "vertical" } },
+        { "visual": "mems-capacitor", "onWord": "горизонтальным", "params": { "phase": "horizontal" } },
+        { "visual": "mems-capacitor", "onWord": "поворачивается", "params": { "phase": "result" } }
+      ]
+    },
+    {
+      "type": "outro",
+      "title": "Масса → поворот",
+      "bullets": [
+        "Масса сдвигается",
+        "Ёмкость меняется",
+        "Три оси находят низ",
+        "Экран выбирает режим"
+      ],
+      "cta": "Подпишись: дальше — скрытый механизм",
+      "narration": "Итак: масса сдвигается, {ёмкость|ёмкость} меняется, система вычисляет, где низ, и выбирает поворот экрана. Теперь ты знаешь, что происходит внутри; подпишись — дальше разберём другой скрытый механизм."
+    }
+  ]
+}
