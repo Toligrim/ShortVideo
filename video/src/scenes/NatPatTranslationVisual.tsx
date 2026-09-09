@@ -295,7 +295,7 @@ export const NatPatTranslationVisual: React.FC<Props> = ({
           <div style={{ position: "absolute", left: 0, right: 0, top: 115, textAlign: "center" }}>
             <IconGlyph name="globe-2" size={82} color={theme.accent2} strokeWidth={1.8} />
           </div>
-          <div style={{ position: "absolute", left: 0, right: 0, top: 235, textAlign: "center", color: theme.subtext, fontSize: 17, ...mono }}>СНАРУЖИ ВИДИТ</div>
+          <div style={{ position: "absolute", left: 0, right: 0, top: 205, textAlign: "center", color: theme.subtext, fontSize: 17, ...mono }}>СНАРУЖИ ВИДИТ</div>
           <Endpoint left={16} top={305} width={253} text={publicEndpoint} color={theme.accent2} opacity={enter} fontSize={19} />
         </Panel>
 
