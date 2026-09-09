@@ -109,6 +109,7 @@ import {
 } from "./RecommendationLoopVisual";
 import { TokenSamplerVisual, type TokenSamplerPhase } from "./TokenSamplerVisual";
 import { MnemonicSeedDerivationVisual, type MnemonicSeedDerivationPhase } from "./MnemonicSeedDerivationVisual";
+import { NatPatTranslationVisual, type NatPatPhase } from "./NatPatTranslationVisual";
 
 /* ──────────────────────────── расписание битов ──────────────────────────── */
 
@@ -162,6 +163,10 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
     }
     if (beat.visual === "handshake") impact = start + 10;
     if (beat.visual === "title-slam") impact = start + 8;
+    if (beat.visual === "nat-pat-translation") {
+      const phase = beat.params?.phase as NatPatPhase | undefined;
+      impact = start + Math.round(dur * (phase === "return" ? 0.72 : phase === "ticket" ? 0.66 : phase === "translate" ? 0.64 : 0.62));
+    }
     if (beat.visual === "storage-capacity") {
       const phase = beat.params?.phase as StorageCapacityPhase | undefined;
       impact = start + Math.round(dur * (
@@ -724,6 +729,11 @@ export const storySfx = (
     if (s.beat.visual === "handshake")
       events.push({ frame: s.impact, sound: "slam" }, { frame: s.impact + 2, sound: "ding" });
     if (s.beat.visual === "title-slam") events.push({ frame: s.impact, sound: "slam" });
+    if (s.beat.visual === "nat-pat-translation") {
+      const phase = s.beat.params?.phase as NatPatPhase | undefined;
+      const sound = phase === "return" ? "ding" : phase === "ticket" ? "whoosh" : phase === "translate" ? "pop" : "click";
+      events.push({ frame: s.impact, sound });
+    }
     if (s.beat.visual === "storage-capacity") {
       const phase = s.beat.params?.phase as StorageCapacityPhase | undefined;
       const sound = phase === "gap" ? "slam" : phase === "division" || phase === "result" ? "ding" : phase === "scales" ? "whoosh" : "pop";
@@ -12101,6 +12111,7 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     "devices-meet": { scale: 1.12, y: -60 },
     handshake: { scale: 1.22, y: -110 },
     "title-slam": { scale: 1.0, y: 0 },
+    "nat-pat-translation": { scale: 0.9, y: -20 },
     "storage-capacity": { scale: 0.9, y: -20 },
     "power-reset-sequence": { scale: 0.88, y: -20 },
     "sleep-to-ram": { scale: 0.9, y: -20 },
@@ -12271,6 +12282,21 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             impactLocal={impactLocal}
             text={slot.beat.params?.text as string}
             sub={slot.beat.params?.sub as string | undefined}
+          />
+        );
+      case "nat-pat-translation":
+        return (
+          <NatPatTranslationVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as NatPatPhase | undefined) ?? "home"}
+            privateIp={slot.beat.params?.privateIp as string | undefined}
+            privatePort={slot.beat.params?.privatePort as string | undefined}
+            publicIp={slot.beat.params?.publicIp as string | undefined}
+            publicPort={slot.beat.params?.publicPort as string | undefined}
+            deviceLabel={slot.beat.params?.deviceLabel as string | undefined}
+            siteLabel={slot.beat.params?.siteLabel as string | undefined}
           />
         );
       case "storage-capacity":

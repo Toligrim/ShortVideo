@@ -72,6 +72,7 @@ export interface StoryBeat {
     | "devices-meet"
     | "handshake"
     | "title-slam"
+    | "nat-pat-translation"
     | "storage-capacity"
     | "power-reset-sequence"
     | "sleep-to-ram"
