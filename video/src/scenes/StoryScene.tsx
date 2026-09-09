@@ -106,6 +106,7 @@ import {
   type RecommendationLoopPhase,
   type RecommendationLoopView,
 } from "./RecommendationLoopVisual";
+import { TokenSamplerVisual, type TokenSamplerPhase } from "./TokenSamplerVisual";
 
 /* ──────────────────────────── расписание битов ──────────────────────────── */
 
@@ -377,6 +378,18 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
     if (beat.visual === "ai-hallucination") {
       const phase = beat.params?.phase;
       impact = start + Math.round(dur * (phase === "predict" ? 0.62 : phase === "bluff-score" ? 0.58 : phase === "fake-citation" ? 0.64 : phase === "verify" ? 0.62 : 0.6));
+    }
+    if (beat.visual === "token-sampler") {
+      const phase = beat.params?.phase as TokenSamplerPhase | undefined;
+      impact = start + Math.round(dur * (
+        phase === "answers" ? 0.62
+          : phase === "tokens" ? 0.66
+          : phase === "distribution" ? 0.72
+          : phase === "sample" ? 0.68
+          : phase === "branch" ? 0.7
+          : phase === "temperature" ? 0.66
+          : 0.6
+      ));
     }
     if (beat.visual === "password-hash") impact = start + Math.round(dur * 0.58);
     if (beat.visual === "polarizer-stack") {
@@ -944,6 +957,11 @@ export const storySfx = (
     if (s.beat.visual === "ai-hallucination") {
       const phase = s.beat.params?.phase;
       const sound = phase === "fake-citation" ? "slam" : phase === "verify" ? "ding" : phase === "bluff-score" ? "pop" : "click";
+      events.push({ frame: s.impact, sound });
+    }
+    if (s.beat.visual === "token-sampler") {
+      const phase = s.beat.params?.phase as TokenSamplerPhase | undefined;
+      const sound = phase === "sample" || phase === "branch" ? "slam" : phase === "temperature" ? "ding" : phase === "distribution" ? "pop" : "click";
       events.push({ frame: s.impact, sound });
     }
     if (s.beat.visual === "password-hash") {
@@ -12125,6 +12143,7 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     "skip-list": { scale: 0.92, y: -20 },
     "elias-fano": { scale: 0.9, y: -20 },
     "ariane-overflow": { scale: 0.88, y: -20 },
+    "token-sampler": { scale: 0.9, y: -20 },
     "password-hash": { scale: 0.92, y: -20 },
     "polarizer-stack": { scale: 0.9, y: -20 },
     "capacitive-touch": { scale: 0.94, y: -20 },
@@ -12992,6 +13011,21 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             fps={fps}
             impactLocal={impactLocal}
             phase={(slot.beat.params?.phase as ArianeOverflowPhase | undefined) ?? "overflow"}
+          />
+        );
+      case "token-sampler":
+        return (
+          <TokenSamplerVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as TokenSamplerPhase | undefined) ?? "distribution"}
+            answer={slot.beat.params?.answer as "question" | "ventilate" | "phone" | undefined}
+            tokenStage={slot.beat.params?.tokenStage as "fixed" | "append" | undefined}
+            focus={slot.beat.params?.focus as "all" | "ventilate" | "phone" | "weight" | undefined}
+            sampleStage={slot.beat.params?.sampleStage as "setup" | "draw" | "frequency" | undefined}
+            branchStage={slot.beat.params?.branchStage as "select" | "context" | "distribution" | "ripple" | undefined}
+            temperatureStage={slot.beat.params?.temperatureStage as "range" | "low" | "high" | "api" | "limit" | undefined}
           />
         );
       case "ai-hallucination":

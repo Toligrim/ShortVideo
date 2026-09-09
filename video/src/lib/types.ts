@@ -156,6 +156,7 @@ export interface StoryBeat {
     | "elias-fano"
     | "raft-quorum"
     | "ariane-overflow"
+    | "token-sampler"
     | "ai-hallucination"
     | "password-hash"
     | "polarizer-stack"
