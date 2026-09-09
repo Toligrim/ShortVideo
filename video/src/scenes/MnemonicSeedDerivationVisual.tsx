@@ -291,8 +291,8 @@ const BitGrid: React.FC<{
     <div
       style={{
         display: "grid",
-        gridTemplateColumns: "repeat(3, 1fr)",
-        gap: 10,
+        gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+        gap: 8,
         marginTop: 24,
       }}
     >
@@ -301,7 +301,8 @@ const BitGrid: React.FC<{
           key={`${bits}-${i}`}
           style={{
             minHeight: 92,
-            padding: "10px 8px",
+            minWidth: 0,
+            padding: "10px 6px",
             boxSizing: "border-box",
             borderRadius: 14,
             border: `2px solid ${theme.accent}66`,
@@ -314,7 +315,7 @@ const BitGrid: React.FC<{
           }}
         >
           <div style={{ ...mono, color: theme.subtext, fontSize: 14 }}>#{String(i + 1).padStart(2, "0")} · {indices[i] ?? "—"}</div>
-          <div style={{ ...mono, color: theme.text, fontSize: 18, letterSpacing: 1.5 }}>{bits.slice(0, 11)}</div>
+          <div style={{ ...mono, color: theme.text, fontSize: 15, letterSpacing: 0.5, whiteSpace: "nowrap" }}>{bits.slice(0, 11)}</div>
         </div>
       ))}
     </div>
