@@ -1,0 +1,77 @@
+{
+  "id": "auto-20260909-072331",
+  "title": "Почему ChatGPT каждый раз отвечает немного по-разному?",
+  "scenes": [
+    {
+      "type": "story",
+      "narration": "Один и тот же вопрос — два ответа: спрашиваешь чат-джи-пи-ти, как уснуть, а он советует проветрить или убрать телефон.",
+      "beats": [
+        { "visual": "token-sampler", "onWord": "спрашиваешь", "params": { "phase": "answers", "answer": "question" } },
+        { "visual": "token-sampler", "onWord": "проветрить", "params": { "phase": "answers", "answer": "ventilate" } },
+        { "visual": "token-sampler", "onWord": "убрать", "params": { "phase": "answers", "answer": "phone" } }
+      ]
+    },
+    {
+      "type": "story",
+      "narration": "Слова те же, но ответ не лежит готовым абзацем: модель собирает его шаг за шагом, токен за токеном.",
+      "beats": [
+        { "visual": "token-sampler", "onWord": "Слова", "params": { "phase": "tokens", "tokenStage": "fixed" } },
+        { "visual": "token-sampler", "onWord": "собирает", "params": { "phase": "tokens", "tokenStage": "append" } },
+        { "visual": "token-sampler", "onWord": "токеном", "params": { "phase": "tokens", "tokenStage": "append" } }
+      ]
+    },
+    {
+      "type": "story",
+      "narration": "На каждом шаге модель строит распределение вероятностей следующих токенов: «проветри», «убери» и другие варианты получают каждый свой вес.",
+      "beats": [
+        { "visual": "token-sampler", "onWord": "строит", "params": { "phase": "distribution", "focus": "all" } },
+        { "visual": "token-sampler", "onWord": "проветри", "params": { "phase": "distribution", "focus": "ventilate" } },
+        { "visual": "token-sampler", "onWord": "убери", "params": { "phase": "distribution", "focus": "phone" } },
+        { "visual": "token-sampler", "onWord": "вес", "params": { "phase": "distribution", "focus": "weight" } }
+      ]
+    },
+    {
+      "type": "story",
+      "narration": "Это сэмплирование: сэмплер выбирает токен из распределения, как ты вытягиваешь записку из чашки, где вероятные варианты встречаются чаще.",
+      "beats": [
+        { "visual": "token-sampler", "onWord": "сэмплирование", "params": { "phase": "sample", "sampleStage": "setup" } },
+        { "visual": "token-sampler", "onWord": "сэмплер", "params": { "phase": "sample", "sampleStage": "draw" } },
+        { "visual": "token-sampler", "onWord": "вытягиваешь", "params": { "phase": "sample", "sampleStage": "draw" } },
+        { "visual": "token-sampler", "onWord": "чаще", "params": { "phase": "sample", "sampleStage": "frequency" } }
+      ]
+    },
+    {
+      "type": "story",
+      "narration": "Первый выбор сдвинул продолжение. Следующий шаг видит другой текст и строит новое распределение. Одна развилка меняет весь ответ.",
+      "beats": [
+        { "visual": "token-sampler", "onWord": "выбор", "params": { "phase": "branch", "branchStage": "select" } },
+        { "visual": "token-sampler", "onWord": "Следующий", "params": { "phase": "branch", "branchStage": "context" } },
+        { "visual": "token-sampler", "onWord": "новое", "params": { "phase": "branch", "branchStage": "distribution" } },
+        { "visual": "token-sampler", "onWord": "Одна", "params": { "phase": "branch", "branchStage": "ripple" } }
+      ]
+    },
+    {
+      "type": "story",
+      "narration": "Температура управляет разбросом: около нуля выбор обычно стабильнее, выше — случайнее. В апи она бывает от нуля до двух; полной одинаковости системы не обещают.",
+      "beats": [
+        { "visual": "token-sampler", "onWord": "Температура", "params": { "phase": "temperature", "temperatureStage": "range" } },
+        { "visual": "token-sampler", "onWord": "нуля", "params": { "phase": "temperature", "temperatureStage": "low" } },
+        { "visual": "token-sampler", "onWord": "выше", "params": { "phase": "temperature", "temperatureStage": "high" } },
+        { "visual": "token-sampler", "onWord": "апи", "params": { "phase": "temperature", "temperatureStage": "api" } },
+        { "visual": "token-sampler", "onWord": "одинаковости", "params": { "phase": "temperature", "temperatureStage": "limit" } }
+      ]
+    },
+    {
+      "type": "outro",
+      "title": "Запомни",
+      "bullets": [
+        "Ответ собирается по токенам",
+        "Распределение даёт варианты",
+        "Температура меняет разброс",
+        "Один вопрос ≠ один ответ"
+      ],
+      "cta": "Подпишись: дальше — развилки",
+      "narration": "Проверь: задай вопрос трижды и сравни ответы. Итак, меняется не вопрос, а выбор внутри распределения. Подпишись — дальше разберём развилки."
+    }
+  ]
+}
