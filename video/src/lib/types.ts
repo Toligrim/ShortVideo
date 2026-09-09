@@ -196,6 +196,7 @@ export interface StoryBeat {
   | "context-window"
   | "attention-cost"
   | "wallet-copy"
+  | "mnemonic-seed-derivation"
   | "multi-frame-stack"
   | "ois-stabilization"
   | "mail-queue"

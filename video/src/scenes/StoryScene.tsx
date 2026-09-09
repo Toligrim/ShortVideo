@@ -108,6 +108,7 @@ import {
   type RecommendationLoopView,
 } from "./RecommendationLoopVisual";
 import { TokenSamplerVisual, type TokenSamplerPhase } from "./TokenSamplerVisual";
+import { MnemonicSeedDerivationVisual, type MnemonicSeedDerivationPhase } from "./MnemonicSeedDerivationVisual";
 
 /* ──────────────────────────── расписание битов ──────────────────────────── */
 
@@ -591,6 +592,17 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
     if (beat.visual === "wallet-copy") {
       const phase = beat.params?.phase;
       impact = start + Math.round(dur * (phase === "double" ? 0.62 : 0.58));
+    }
+    if (beat.visual === "mnemonic-seed-derivation") {
+      const phase = beat.params?.phase as MnemonicSeedDerivationPhase | undefined;
+      impact = start + Math.round(dur * (
+        phase === "bits" ? 0.64
+          : phase === "kdf" ? 0.66
+          : phase === "seed" ? 0.72
+          : phase === "addresses" ? 0.7
+          : phase === "balance" ? 0.72
+          : 0.62
+      ));
     }
     if (beat.visual === "multi-frame-stack") {
       const phase = beat.params?.phase as MultiFrameStackPhase | undefined;
@@ -1235,6 +1247,11 @@ export const storySfx = (
     if (s.beat.visual === "double-ratchet") {
       const ph = s.beat.params?.phase as DoubleRatchetPhase | undefined;
       const sound = ph === "ciphertext" || ph === "server" ? "slam" : ph === "decrypt" || ph === "metadata" ? "ding" : ph === "advance" || ph === "encrypt" ? "pop" : "click";
+      events.push({ frame: s.impact, sound });
+    }
+    if (s.beat.visual === "mnemonic-seed-derivation") {
+      const ph = s.beat.params?.phase as MnemonicSeedDerivationPhase | undefined;
+      const sound = ph === "seed" || ph === "balance" ? "ding" : ph === "kdf" ? "whoosh" : ph === "addresses" ? "pop" : ph === "bits" ? "click" : "slam";
       events.push({ frame: s.impact, sound });
     }
   }
@@ -12184,6 +12201,7 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     "context-window": { scale: 0.9, y: -20 },
     "attention-cost": { scale: 0.9, y: -20 },
     "wallet-copy": { scale: 0.92, y: -20 },
+    "mnemonic-seed-derivation": { scale: 0.88, y: -20 },
     "multi-frame-stack": { scale: 0.9, y: -20 },
     "ois-stabilization": { scale: 0.88, y: -20 },
     "tilt-weight": { scale: 0.92, y: -20 },
@@ -13380,6 +13398,28 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             fps={fps}
             impactLocal={impactLocal}
             phase={(slot.beat.params?.phase as WalletCopyPhase | undefined) ?? "copy"}
+          />
+        );
+      case "mnemonic-seed-derivation":
+        return (
+          <MnemonicSeedDerivationVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as MnemonicSeedDerivationPhase | undefined) ?? "restore"}
+            words={slot.beat.params?.words as string[] | undefined}
+            indices={slot.beat.params?.indices as string[] | undefined}
+            bitGroups={slot.beat.params?.bitGroups as string[] | undefined}
+            entropyBits={slot.beat.params?.entropyBits as string | undefined}
+            checksumBits={slot.beat.params?.checksumBits as string | undefined}
+            iterations={slot.beat.params?.iterations as number | undefined}
+            seed={slot.beat.params?.seed as string | undefined}
+            seedBits={slot.beat.params?.seedBits as string[] | undefined}
+            addresses={slot.beat.params?.addresses as string[] | undefined}
+            derivationPath={slot.beat.params?.derivationPath as string | undefined}
+            passphrase={slot.beat.params?.passphrase as string | undefined}
+            balance={slot.beat.params?.balance as string | undefined}
+            utxos={slot.beat.params?.utxos as string[] | undefined}
           />
         );
       case "multi-frame-stack":
