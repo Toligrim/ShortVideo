@@ -1,0 +1,67 @@
+{
+  "id": "auto-20260909-052001",
+  "title": "Почему будильник звонит в авиарежиме?",
+  "scenes": [
+    {
+      "type": "story",
+      "heading": "Сеть пропала — будильник звенит",
+      "narration": "Включаешь авиарежим перед сном: нет мобильной сети и интернета, но утром будильник всё равно звонит. Как телефон знает, что наступило нужное время?",
+      "beats": [
+        { "visual": "rtc-alarm-wakeup", "onWord": "Включаешь", "params": { "phase": "symptom" } },
+        { "visual": "rtc-alarm-wakeup", "onWord": "сети", "params": { "phase": "offline" } },
+        { "visual": "rtc-alarm-wakeup", "onWord": "будильник", "params": { "phase": "ring" } },
+        { "visual": "rtc-alarm-wakeup", "onWord": "знает", "params": { "phase": "rtc" } }
+      ]
+    },
+    {
+      "type": "story",
+      "heading": "Время уже внутри",
+      "narration": "Проверка простая: убери из этой истории сеть. Будильник не спрашивает вышку и не скачивает время из интернета — нужный момент уже записан внутри.",
+      "beats": [
+        { "visual": "rtc-alarm-wakeup", "onWord": "Проверка", "params": { "phase": "offline" } },
+        { "visual": "rtc-alarm-wakeup", "onWord": "записан", "params": { "phase": "save" } }
+      ]
+    },
+    {
+      "type": "story",
+      "heading": "Часы отдельно от CPU",
+      "narration": "Его отсчитывают часы́ реального времени, или {RTC|ар-ти́-си}: отдельный аппаратный счётчик продолжает тикать, пока основной процессор спит. Это как кухонный таймер, спрятанный внутри телефона.",
+      "beats": [
+        { "visual": "rtc-alarm-wakeup", "onWord": "часы́", "params": { "phase": "rtc" } },
+        { "visual": "rtc-alarm-wakeup", "onWord": "процессор", "params": { "phase": "sleep" } },
+        { "visual": "rtc-alarm-wakeup", "onWord": "кухонный", "params": { "phase": "analogy" } }
+      ]
+    },
+    {
+      "type": "story",
+      "heading": "Аппаратный сигнал",
+      "narration": "В назначенный момент срабатывает отдельный аппаратный {alarm|ала́рм}: он посылает сигнал пробуждения спящему процессору, и тот возвращается к работе без сети.",
+      "beats": [
+        { "visual": "rtc-alarm-wakeup", "onWord": "срабатывает", "params": { "phase": "alarm" } },
+        { "visual": "rtc-alarm-wakeup", "onWord": "сигнал", "params": { "phase": "wakeup" } }
+      ]
+    },
+    {
+      "type": "story",
+      "heading": "Процессор не дежурит каждую секунду",
+      "narration": "Вот вау-момент: процессор не просыпается каждую секунду проверить время. Аппаратный сигнал приходит сам, когда отдельный счётчик доходит до назначенной точки.",
+      "beats": [
+        { "visual": "rtc-alarm-wakeup", "onWord": "процессор", "params": { "phase": "no-poll" } },
+        { "visual": "rtc-alarm-wakeup", "onWord": "Аппаратный", "params": { "phase": "alarm" } },
+        { "visual": "rtc-alarm-wakeup", "onWord": "доходит", "params": { "phase": "wakeup" } }
+      ]
+    },
+    {
+      "type": "outro",
+      "title": "Связи нет — будильник работает",
+      "bullets": [
+        "Авиарежим убирает связь",
+        "RTC считает время",
+        "Alarm будит процессор",
+        "Звук включается офлайн"
+      ],
+      "cta": "Подпишись: дальше — ещё механизм",
+      "narration": "Итак, авиарежим убирает связь, но не часы: {RTC|ар-ти́-си} отсчитывает, {alarm|ала́рм} будит процессор, и звук включается без сети. Подпишись — дальше разберём ещё один скрытый механизм."
+    }
+  ]
+}

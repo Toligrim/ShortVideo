@@ -91,6 +91,7 @@ import { NfcCardCoilVisual, type NfcCardCoilPhase } from "./NfcCardCoilVisual";
 import { NfcFieldResponseVisual, type NfcFieldResponsePhase } from "./NfcFieldResponseVisual";
 import { PowerResetSequenceVisual, type PowerResetPhase } from "./PowerResetSequenceVisual";
 import { SleepToRamVisual, type SleepToRamPhase } from "./SleepToRamVisual";
+import { RtcAlarmWakeupVisual, type RtcAlarmWakeupPhase } from "./RtcAlarmWakeupVisual";
 import { ResetVectorVisual, type ResetVectorPhase } from "./ResetVectorVisual";
 import { AudioFingerprintVisual, type AudioFingerprintPhase } from "./AudioFingerprintVisual";
 import { EchoCancellationVisual, type EchoCancellationPhase } from "./EchoCancellationVisual";
@@ -182,6 +183,18 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
           : phase === "resume" ? 0.72
           : phase === "hibernate" ? 0.66
           : 0.6
+      ));
+    }
+    if (beat.visual === "rtc-alarm-wakeup") {
+      const phase = beat.params?.phase as RtcAlarmWakeupPhase | undefined;
+      impact = start + Math.round(dur * (
+        phase === "no-poll" ? 0.7
+          : phase === "alarm" ? 0.72
+          : phase === "wakeup" ? 0.42
+          : phase === "ring" ? 0.62
+          : phase === "save" || phase === "analogy" ? 0.65
+          : phase === "offline" ? 0.58
+          : 0.62
       ));
     }
     if (beat.visual === "reset-vector-launch") {
@@ -694,6 +707,11 @@ export const storySfx = (
     if (s.beat.visual === "sleep-to-ram") {
       const phase = s.beat.params?.phase as SleepToRamPhase | undefined;
       const sound = phase === "lid" ? "slam" : phase === "refresh" ? "click" : phase === "wake" ? "pop" : phase === "resume" ? "ding" : phase === "hibernate" ? "whoosh" : "pop";
+      events.push({ frame: s.impact, sound });
+    }
+    if (s.beat.visual === "rtc-alarm-wakeup") {
+      const phase = s.beat.params?.phase as RtcAlarmWakeupPhase | undefined;
+      const sound = phase === "wakeup" ? "slam" : phase === "ring" ? "ding" : phase === "alarm" ? "pop" : phase === "save" ? "click" : phase === "analogy" ? "pop" : phase === "no-poll" ? "pop" : "whoosh";
       events.push({ frame: s.impact, sound });
     }
     if (s.beat.visual === "reset-vector-launch") {
@@ -12041,6 +12059,7 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     "storage-capacity": { scale: 0.9, y: -20 },
     "power-reset-sequence": { scale: 0.88, y: -20 },
     "sleep-to-ram": { scale: 0.9, y: -20 },
+    "rtc-alarm-wakeup": { scale: 0.9, y: -20 },
     "reset-vector-launch": { scale: 0.88, y: -20 },
     "nfc-card-coil": { scale: 0.9, y: -20 },
     "nfc-field-response": { scale: 0.9, y: -20 },
@@ -12232,6 +12251,15 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             dur={dur}
             impactLocal={impactLocal}
             phase={(slot.beat.params?.phase as SleepToRamPhase | undefined) ?? "sleep"}
+          />
+        );
+      case "rtc-alarm-wakeup":
+        return (
+          <RtcAlarmWakeupVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as RtcAlarmWakeupPhase | undefined) ?? "symptom"}
           />
         );
       case "reset-vector-launch":
