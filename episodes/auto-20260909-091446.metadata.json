@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "slug": "auto-20260909-091446",
+  "targets": {
+    "youtube": {
+      "title": "Почему приложение не может просто прочитать все твои фотографии?",
+      "description": "Почему приложение видит только выбранный снимок? Разбираем песочницу Android, системный Photo Picker и URI permission grant — разрешение, привязанное к одному адресу, а не ко всей галерее.",
+      "tags": [
+        "андроид",
+        "фотографии",
+        "приватность",
+        "разрешения приложений",
+        "как это работает",
+        "технологии",
+        "shortvideo"
+      ],
+      "category_id": "28",
+      "privacy_status": "public",
+      "made_for_kids": false,
+      "contains_synthetic_media": true,
+      "notify_subscribers": false
+    },
+    "instagram": {
+      "caption": "Почему приложение не может просто прочитать все твои фотографии? Песочница Android и URI permission grant дают доступ к выбранному снимку, а не ко всей галерее. #андроид #приватность #технологии #shortvideo",
+      "share_to_feed": true
+    }
+  }
+}
