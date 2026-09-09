@@ -1,0 +1,58 @@
+{
+  "id": "auto-20260909-091446",
+  "title": "Почему приложение не может просто прочитать все твои фотографии?",
+  "scenes": [
+    {
+      "type": "story",
+      "narration": "Ставишь фоторедактор, жмёшь «добавить фото» — пусто. После доступа видит галерею, после выбора — один снимок. Почему приложение не заглянет в папку?",
+      "beats": [
+        { "visual": "photo-access-boundary", "onWord": "пусто", "params": { "phase": "symptom" } },
+        { "visual": "photo-access-boundary", "onWord": "доступа", "params": { "phase": "symptom" } }
+      ]
+    },
+    {
+      "type": "story",
+      "narration": "Представь общежитие: у каждого приложения своя запертая комната и отдельный ключ. Андроид запускает его в песочнице: чужие папки процессу закрыты.",
+      "beats": [
+        { "visual": "photo-access-boundary", "onWord": "запертая", "params": { "phase": "sandbox" } },
+        { "visual": "photo-access-boundary", "onWord": "песочнице", "params": { "phase": "sandbox" } }
+      ]
+    },
+    {
+      "type": "story",
+      "narration": "Фотографии лежат в общей медиатеке, которую охраняет системный посредник. Без разрешения процесс не получает список и байты снимков: открыть их по пути нельзя.",
+      "beats": [
+        { "visual": "photo-access-boundary", "onWord": "медиатеке", "params": { "phase": "mediator" } },
+        { "visual": "photo-access-boundary", "onWord": "список", "params": { "phase": "mediator" } }
+      ]
+    },
+    {
+      "type": "story",
+      "narration": "Нажимаешь «выбрать» — открывается системный выборщик андроид. Он показывает медиатеку сам, а приложению возвращает адрес выбранного файла, не доступ к папке.",
+      "beats": [
+        { "visual": "photo-access-boundary", "onWord": "выборщик", "params": { "phase": "picker" } },
+        { "visual": "photo-access-boundary", "onWord": "адрес", "params": { "phase": "picker" } }
+      ]
+    },
+    {
+      "type": "story",
+      "narration": "Это {URI permission grant|грант ю ар ай}: ключ от одной комнаты, а не от всего общежития. Андроид даёт процессу читать ровно выбранный адрес; к соседнему доступа нет.",
+      "beats": [
+        { "visual": "photo-access-boundary", "onWord": "URI", "params": { "phase": "grant" } },
+        { "visual": "photo-access-boundary", "onWord": "соседнему", "params": { "phase": "neighbor" } }
+      ]
+    },
+    {
+      "type": "outro",
+      "title": "Один снимок, один адрес",
+      "bullets": [
+        "Песочница закрывает чужие папки",
+        "Выборщик отдаёт один URI",
+        "Грант привязан к адресу",
+        "Галерея не открывается целиком"
+      ],
+      "cta": "Подпишись: дальше — посредники",
+      "narration": "Итак: песочница отделяет процесс от чужих файлов, а {URI permission grant|грант ю ар ай} даёт один вход. Поэтому галерея не открывается целиком. Подпишись — дальше разберём посредников."
+    }
+  ]
+}
