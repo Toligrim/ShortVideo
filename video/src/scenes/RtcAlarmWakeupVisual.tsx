@@ -84,7 +84,9 @@ const Header: React.FC<{ phase: RtcAlarmWakeupPhase; opacity: number }> = ({ pha
         position: "absolute",
         left: 28,
         right: 28,
-        top: 262,
+        // The StoryScene heading occupies the top safe area outside this visual.
+        // Keep the phase label below it after the StoryScene camera transform.
+        top: 320,
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -321,7 +323,7 @@ const CounterCard: React.FC<{
   progress,
   title = "RTC · HARDWARE COUNTER",
   note = "ОТДЕЛЬНЫЕ ЧАСЫ · +1 s",
-  marker = 0.78,
+  marker = 0.62,
   fixedTime,
   highlight = false,
 }) => {
