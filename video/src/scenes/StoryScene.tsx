@@ -13574,9 +13574,13 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     }
   })();
 
+  const hideSceneHeading =
+    slot.beat.visual === "mnemonic-seed-derivation" &&
+    slot.beat.params?.phase === "restore";
+
   return (
     <>
-      {scene.heading ? <SceneHeading text={scene.heading} /> : null}
+      {scene.heading && !hideSceneHeading ? <SceneHeading text={scene.heading} /> : null}
       <div
         style={{
           position: "absolute",
