@@ -62,6 +62,7 @@ import { BluetoothHoppingVisual, type BluetoothHoppingPhase } from "./BluetoothH
 import { FindNetworkVisual, type FindNetworkPhase } from "./FindNetworkVisual";
 import { RotatingKeyLockVisual, type RotatingKeyPhase } from "./RotatingKeyLockVisual";
 import { FileDeleteRecoveryVisual, type FileDeleteRecoveryPhase } from "./FileDeleteRecovery";
+import { PhotoAccessBoundaryVisual, type PhotoAccessBoundaryPhase } from "./PhotoAccessBoundaryVisual";
 import { BlockChainVisual, type BlockChainPhase } from "./BlockChainVisual";
 import { MempoolRbfVisual, type MempoolRbfPhase } from "./MempoolRbfVisual";
 import { DiffusionDenoiseVisual, type DiffusionDenoisePhase } from "./DiffusionDenoiseVisual";
@@ -524,6 +525,10 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
     if (beat.visual === "file-delete-recovery") {
       const phase = beat.params?.phase;
       impact = start + Math.round(dur * (phase === "overwrite" ? 0.62 : phase === "trim" ? 0.64 : phase === "cloud" ? 0.58 : phase === "recovered" ? 0.58 : 0.55));
+    }
+    if (beat.visual === "photo-access-boundary") {
+      const phase = beat.params?.phase as PhotoAccessBoundaryPhase | undefined;
+      impact = start + Math.round(dur * (phase === "mediator" ? 0.66 : phase === "picker" ? 0.68 : phase === "grant" ? 0.7 : phase === "neighbor" ? 0.72 : phase === "sandbox" ? 0.62 : 0.58));
     }
     if (beat.visual === "block-chain") {
       const phase = beat.params?.phase;
@@ -1075,6 +1080,11 @@ export const storySfx = (
     if (s.beat.visual === "file-delete-recovery") {
       const phase = s.beat.params?.phase;
       const sound = phase === "overwrite" ? "slam" : phase === "trim" ? "pop" : phase === "cloud" ? "ding" : phase === "recovered" ? "ding" : "click";
+      events.push({ frame: s.impact, sound });
+    }
+    if (s.beat.visual === "photo-access-boundary") {
+      const phase = s.beat.params?.phase as PhotoAccessBoundaryPhase | undefined;
+      const sound = phase === "mediator" ? "slam" : phase === "picker" ? "click" : phase === "grant" ? "ding" : phase === "neighbor" ? "slam" : phase === "sandbox" ? "pop" : "click";
       events.push({ frame: s.impact, sound });
     }
     if (s.beat.visual === "block-chain") {
@@ -12166,6 +12176,7 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     "bluetooth-hopping": { scale: 0.9, y: -20 },
     "find-network": { scale: 0.88, y: -20 },
     "rotating-key-lock": { scale: 0.9, y: -20 },
+    "photo-access-boundary": { scale: 0.9, y: -20 },
     "diffusion-denoise": { scale: 0.92, y: -20 },
     "tls-handshake": { scale: 0.92, y: -20 },
     "cold-battery-voltage-drop": { scale: 0.9, y: -20 },
@@ -13258,6 +13269,15 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             fps={fps}
             impactLocal={impactLocal}
             phase={(slot.beat.params?.phase as FileDeleteRecoveryPhase | undefined) ?? "unlink"}
+          />
+        );
+      case "photo-access-boundary":
+        return (
+          <PhotoAccessBoundaryVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as PhotoAccessBoundaryPhase | undefined) ?? "symptom"}
           />
         );
       case "block-chain":

@@ -183,6 +183,7 @@ export interface StoryBeat {
   | "find-network"
   | "rotating-key-lock"
   | "file-delete-recovery"
+  | "photo-access-boundary"
   | "tls-handshake"
 | "block-chain"
     | "mempool-rbf"
