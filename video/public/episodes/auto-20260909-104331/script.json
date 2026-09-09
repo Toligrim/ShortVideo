@@ -1,0 +1,108 @@
+{
+  "id": "auto-20260909-104331",
+  "title": "Почему двенадцать слов восстанавливают биткоин-кошелёк, хотя монет в телефоне нет?",
+  "scenes": [
+    {
+      "type": "story",
+      "heading": "Телефон исчез — фраза осталась",
+      "narration": "Удалил приложение, потерял телефон, купил новый, ввёл те же двенадцать слов — тот же кошелёк. Монеты в словах? Нет.",
+      "beats": [
+        { "visual": "devices-meet", "onWord": "потерял" },
+        {
+          "visual": "mnemonic-seed-derivation",
+          "onWord": "ввёл",
+          "params": {
+            "phase": "restore",
+            "words": ["river", "candle", "orbit", "paper", "meadow", "silver", "harbor", "lantern", "walnut", "velvet", "rocket", "pioneer"]
+          }
+        }
+      ]
+    },
+    {
+      "type": "story",
+      "heading": "Слова → индексы",
+      "narration": "Миф: слова не хранят монеты — это рецепт ключей. {BIP-39|би́п три́дцать де́вять} для двенадцати слов берёт сто двадцать восемь бит случайности, добавляет четыре бита контрольной суммы и режет их на двенадцать индексов слов по одиннадцать.",
+      "beats": [
+        { "visual": "title-slam", "onWord": "Миф", "params": { "text": "СЛОВА → КЛЮЧИ", "sub": "BIP-39" } },
+        {
+          "visual": "mnemonic-seed-derivation",
+          "onWord": "BIP-39",
+          "params": {
+            "phase": "bits",
+            "words": ["river", "candle", "orbit", "paper", "meadow", "silver", "harbor", "lantern", "walnut", "velvet", "rocket", "pioneer"],
+            "indices": ["1421", "272", "1263", "1150", "1091", "1649", "782", "1232", "2007", "1954", "1502", "1304"],
+            "bitGroups": ["10110001101", "00100010000", "10011101111", "10001111110", "10001000011", "11001110001", "01100001110", "10011010000", "11111010111", "11110100010", "10111011110", "10100011000"],
+            "entropyBits": "128",
+            "checksumBits": "4"
+          }
+        }
+      ]
+    },
+    {
+      "type": "story",
+      "heading": "Из фразы в seed",
+      "narration": "Затем фраза детерминированно проходит через {PBKDF2-HMAC-SHA512|пи́ би́ кей ди́ эф два, э́йч эм э́й си, ша пятьсо́т двена́дцать}: две тысячи сорок восемь итераций дают {seed|си́д} длиной пятьсот двенадцать бит.",
+      "beats": [
+        {
+          "visual": "mnemonic-seed-derivation",
+          "onWord": "PBKDF2-HMAC-SHA512",
+          "params": {
+            "phase": "kdf",
+            "words": ["river", "candle", "orbit", "paper", "meadow", "silver", "harbor", "lantern", "walnut", "velvet", "rocket", "pioneer"],
+            "iterations": 2048
+          }
+        },
+        {
+          "visual": "mnemonic-seed-derivation",
+          "onWord": "seed",
+          "params": {
+            "phase": "seed",
+            "seed": "8f3a…91c0",
+            "seedBits": ["8f3a1c07d2e9b54a", "6c10e7b349a2d81f", "0b7c5e29f4a816d3", "91c0e5aa72bd4306", "f18b2d7c0a9e5364", "3d84a6f09b17c2e8", "5a6f0d13e7b9428c", "c4e2913a6b0f78d5"]
+          }
+        }
+      ]
+    },
+    {
+      "type": "story",
+      "heading": "Один seed — те же адреса",
+      "narration": "Та же фраза и та же парольная фраза дают тот же {seed|си́д}; {HD-кошелёк|эйч ди кошелёк} выводит те же ключи и адреса по тому же пути. Баланс берётся из блокчейна, не из телефона.",
+      "beats": [
+        {
+          "visual": "mnemonic-seed-derivation",
+          "onWord": "HD-кошелёк",
+          "params": {
+            "phase": "addresses",
+            "words": ["river", "candle", "orbit", "paper", "meadow", "silver", "harbor", "lantern", "walnut", "velvet", "rocket", "pioneer"],
+            "seed": "8f3a…91c0",
+            "addresses": ["bc1q7x…p4k", "bc1q7x…p4k"],
+            "derivationPath": "m/84'/0'/0'/0/0",
+            "passphrase": "ПАРОЛЬНАЯ ФРАЗА"
+          }
+        },
+        {
+          "visual": "mnemonic-seed-derivation",
+          "onWord": "Баланс",
+          "params": {
+            "phase": "balance",
+            "addresses": ["bc1q7x…p4k"],
+            "balance": "0,8 ₿",
+            "utxos": ["#a3f1 · 0,5 ₿", "#d8c2 · 0,3 ₿"]
+          }
+        }
+      ]
+    },
+    {
+      "type": "outro",
+      "title": "Фраза — это ключевой рецепт",
+      "bullets": [
+        "Мнемоника → один seed",
+        "Один seed → те же адреса",
+        "Баланс = записи UTXO",
+        "Фразу храни офлайн"
+      ],
+      "cta": "Подпишись: дальше — криптомеханизм",
+      "narration": "Итак: слова воспроизводят {seed|си́д}, {seed|си́д} — ключи и адреса, баланс — из блокчейна. Не вводи настоящую фразу на сайтах. Подпишись: дальше — ещё один криптомеханизм."
+    }
+  ]
+}
