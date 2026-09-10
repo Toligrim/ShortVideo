@@ -110,6 +110,7 @@ import {
 import { TokenSamplerVisual, type TokenSamplerPhase } from "./TokenSamplerVisual";
 import { MnemonicSeedDerivationVisual, type MnemonicSeedDerivationPhase } from "./MnemonicSeedDerivationVisual";
 import { NatPatTranslationVisual, type NatPatPhase } from "./NatPatTranslationVisual";
+import { UniqueInsertRaceVisual, type UniqueInsertRacePhase } from "./UniqueInsertRaceVisual";
 
 /* ──────────────────────────── расписание битов ──────────────────────────── */
 
@@ -226,6 +227,10 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
       impact = start + Math.round(dur * (phase === "intersect" ? 0.72 : phase === "lookup" ? 0.64 : 0.68));
     }
     if (beat.visual === "password-leak") impact = start + Math.round(dur * 0.4);
+    if (beat.visual === "unique-insert-race") {
+      const phase = beat.params?.phase as UniqueInsertRacePhase | undefined;
+      impact = start + Math.round(dur * (phase === "request" ? 0.62 : phase === "check" ? 0.64 : phase === "insert" ? 0.66 : phase === "wait" ? 0.68 : 0.7));
+    }
     if (beat.visual === "hash-table") impact = start + Math.round(dur * 0.62);
     if (beat.visual === "minimal-perfect-hash") {
       const phase = beat.params?.phase;
@@ -777,6 +782,11 @@ export const storySfx = (
       events.push({ frame: s.impact, sound: phase === "intersect" ? "ding" : phase === "lookup" ? "click" : "pop" });
     }
     if (s.beat.visual === "password-leak") events.push({ frame: s.impact, sound: "click" });
+    if (s.beat.visual === "unique-insert-race") {
+      const phase = s.beat.params?.phase as UniqueInsertRacePhase | undefined;
+      const sound = phase === "conflict" ? "slam" : phase === "wait" ? "click" : phase === "insert" ? "pop" : phase === "check" ? "whoosh" : "ding";
+      events.push({ frame: s.impact, sound });
+    }
     if (s.beat.visual === "hash-table") events.push({ frame: s.impact, sound: "click" });
     if (s.beat.visual === "minimal-perfect-hash") {
       const phase = s.beat.params?.phase;
@@ -12122,6 +12132,7 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     "spell-distance": { scale: 0.9, y: -20 },
     "inverted-index-merge": { scale: 0.88, y: -20 },
     "password-leak": { scale: 1.05, y: -30 },
+    "unique-insert-race": { scale: 0.9, y: -20 },
     "hash-table": { scale: 0.98, y: -20 },
     "minimal-perfect-hash": { scale: 0.9, y: -20 },
     "collision-compare": { scale: 0.9, y: -20 },
@@ -12394,6 +12405,17 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             fps={fps}
             impactLocal={impactLocal}
             password={slot.beat.params?.password as string | undefined}
+          />
+        );
+      case "unique-insert-race":
+        return (
+          <UniqueInsertRaceVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as UniqueInsertRacePhase | undefined) ?? "check"}
+            keyLabel={slot.beat.params?.key as string | undefined}
+            indexLabel={slot.beat.params?.index as string | undefined}
           />
         );
       case "hash-table":

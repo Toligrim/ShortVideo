@@ -83,6 +83,7 @@ export interface StoryBeat {
     | "spell-distance"
     | "inverted-index-merge"
     | "password-leak"
+    | "unique-insert-race"
     | "hash-table"
     | "minimal-perfect-hash"
     | "collision-compare"
