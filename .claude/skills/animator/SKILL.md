@@ -37,13 +37,17 @@ cd video && npx remotion still Episode /tmp/check.png --frame=<N> \
 # 5. Полный рендер (долгий — в фоне)
 cd video && npx remotion render Episode out/<slug>.mp4 --props='{"episodeId":"<slug>"}'
 
-# 6. Отправка в Telegram — ОБЯЗАТЕЛЬНЫЙ финальный шаг, не опция
-cd .. && python3 tools/telegram_bot.py send-video video/out/<slug>.mp4 --caption "<тема>"
+# 6. Approval-gated review (единственный способ отправки)
+python3 tools/publish.py validate-metadata <metadata.json>
+python3 tools/publish.py review --slug <slug> --video video/out/<slug>.mp4 \
+  --metadata <metadata.json> --mode live
 ```
 
-Токен и chat_id бота лежат в `.env` (`TELEGRAM_BOT_TOKEN`, `TELEGRAM_ALLOWED_CHAT_ID`) —
-скрипт подхватывает их сам, ничего передавать вручную не нужно. Любой готовый
-рендер эпизода должен закончиться отправкой в бот.
+Bot-сервис сам доставит видео и review-карточку в Telegram; YouTube/Instagram
+публикуются только после `Approve` оператора. Детали и формат metadata — раздел
+«Approval-gated social publishing» в `.claude/skills/produce/SKILL.md` и
+`docs/social-publishing.md`. Прямую `telegram_bot.py send-video` НЕ вызывай —
+она не создаёт immutable review и даёт дубликат.
 
 ## Ключевые факты о движке
 
@@ -85,5 +89,5 @@ cd video && npx remotion still Preview /tmp/preview.png --frame=<N> \
    (пропсы: scene, words, frames; примитивы — из `video/src/primitives/`).
 2. Зарегистрируй тип в `video/src/lib/types.ts`, `video/src/Root.tsx` (SceneRenderer)
    и в `schema/scenes.schema.json`.
-3. Опиши сцену в `catalog.md` (параметры + когда использовать) — язык растёт, документация обязана расти вместе с ним.
+3. Опиши сцену в `catalog.md` (параметры + когда использовать) — новый визуал обязан быть задокументирован в том же коммите.
 4. Проверь контрольным кадром, что сцена выглядит по правилам style.md.

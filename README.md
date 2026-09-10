@@ -12,7 +12,7 @@ schema/              JSON Schema языка сцен
 tools/
   validate.py        валидация эпизода (схема + смысловые проверки)
   tts_scenes.py      озвучка посценно + word boundaries → meta.json
-  telegram_bot.py    отправка готового MP4 в Telegram (send-video)
+  publish.py         approval-gated review → Telegram → YouTube/Instagram
 video/               Remotion-проект (движок рендера)
   src/primitives/    атомы: узлы, пакеты, терминал, код, бейджи
   src/scenes/        сцены: hook, diagram, terminal, code, outro
@@ -33,12 +33,15 @@ venv/bin/python tools/tts_scenes.py \
   episodes/<slug>.json --out video/public/episodes/<slug>
 cp episodes/<slug>.json video/public/episodes/<slug>/script.json
 cd video && npx remotion render Episode out/<slug>.mp4 --props='{"episodeId":"<slug>"}'
-cd .. && python3 tools/telegram_bot.py send-video video/out/<slug>.mp4 --caption "<тема>"
+cd .. && python3 tools/publish.py review --slug <slug> \
+  --video video/out/<slug>.mp4 --metadata <metadata.json> --mode live
 ```
 
 Ключевой принцип: тайминги не пишутся руками — длительность сцены равна длительности
 её реплики, элементы синхронизируются якорями `onWord` на слова диктора.
 
-Токен и chat_id бота — в `.env` (`TELEGRAM_BOT_TOKEN`, `TELEGRAM_ALLOWED_CHAT_ID`),
-`telegram_bot.py` подхватывает их сам. **Каждый готовый рендер отправляется в бот
-автоматически** — это последний шаг производства эпизода, а не опция по запросу.
+**Отправка — только approval-gated.** `publish.py review` создаёт immutable
+review; bot-сервис доставляет видео и карточку в Telegram; в YouTube/Instagram
+ничего не уходит без `Approve` оператора. Детали — `docs/social-publishing.md`.
+Прямую `telegram_bot.py send-video` для этого не использовать (нет review =
+не разрешение на публикацию).
