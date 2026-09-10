@@ -1,5 +1,8 @@
 import React from "react";
 import { interpolate, random, spring, useCurrentFrame, useVideoConfig } from "remotion";
+import type { Scene, Word } from "./types";
+import { cameraAt, CAMERA_ORIGIN } from "./motion/camera";
+import { MotionStage } from "./motion/MotionStage";
 import { theme, toneColor, Tone } from "./theme";
 
 /** Затухающая тряска после каждого кадра-импакта (прилёт пакета и т.п.). */
@@ -18,28 +21,31 @@ export const useShakeOffset = (impacts: number[], intensity = 12) => {
   return { dx, dy };
 };
 
-/** Обёртка сцены: вход (scale+fade), медленный наезд камеры, тряска на импактах. */
+/** Entry + bounded impact; semantic camera for non-story scenes (story owns its beat camera). */
 export const SceneContainer: React.FC<{
   frames: number;
+  scene?: Scene;
+  words?: Word[];
   impacts?: number[];
   children: React.ReactNode;
-}> = ({ frames, impacts = [], children }) => {
+}> = ({ frames, scene, words = [], impacts = [], children }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const enter = spring({ frame, fps, config: { damping: 16, mass: 0.7 } });
-  const drift = interpolate(frame, [0, frames], [1, 1.055]);
-  const { dx, dy } = useShakeOffset(impacts);
+  const plan = scene?.type === "story" ? undefined : scene?.motion;
+  const camera = scene?.type === "story" ? { x: 0, y: 0, scale: 1 } : cameraAt(frame, [{ start: 0, end: frames, motion: plan }], words);
+  const { dx, dy } = useShakeOffset(impacts.slice(0, 4), 6);
   return (
     <div
       style={{
         position: "absolute",
         inset: 0,
         opacity: enter,
-        transform: `translate(${dx}px, ${dy}px) scale(${(0.94 + 0.06 * enter) * drift})`,
-        transformOrigin: "50% 42%",
+        transform: `translate(${dx + camera.x}px, ${dy + camera.y}px) scale(${(0.97 + 0.03 * enter) * camera.scale})`,
+        transformOrigin: `${CAMERA_ORIGIN.x}px ${CAMERA_ORIGIN.y}px`,
       }}
     >
-      {children}
+      <MotionStage start={0} end={frames} words={words} plan={plan}>{children}</MotionStage>
     </div>
   );
 };

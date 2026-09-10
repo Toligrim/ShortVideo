@@ -2,10 +2,13 @@ import React from "react";
 import { interpolate, interpolateColors, random, spring, useCurrentFrame, useVideoConfig } from "remotion";
 import { fitText } from "@remotion/layout-utils";
 import { layout, theme, toneColor } from "../lib/theme";
-import { wordFrame } from "../lib/timeline";
+import { wordFrame, beatWindows } from "../lib/timeline";
 import type { StoryScene as StoryProps, StoryBeat, Word } from "../lib/types";
 import { IconGlyph } from "../primitives/IconGlyph";
 import { PulseRing } from "../lib/Motion";
+import { cameraAt, CAMERA_ORIGIN } from "../lib/motion/camera";
+import { MotionStage } from "../lib/motion/MotionStage";
+import { beatBlendFrames, transitionStyle } from "../lib/motion/transitions";
 import { SceneHeading } from "./SceneHeading";
 import { OrbitFftGroups } from "./OrbitFftGroups";
 import { GpsRelativity } from "./GpsRelativity";
@@ -126,18 +129,7 @@ const smooth = (t: number) => t * t * (3 - 2 * t);
 const clamp01 = (t: number) => Math.min(1, Math.max(0, t));
 
 export const storySchedule = (scene: StoryProps, words: Word[], frames: number): BeatSlot[] => {
-  const n = scene.beats.length;
-  const starts: number[] = [];
-  for (let i = 0; i < n; i++) {
-    const anchored = scene.beats[i].onWord ? wordFrame(words, scene.beats[i].onWord!) : null;
-    let s = anchored ?? Math.round((frames * i) / n);
-    if (i === 0) s = 0;
-    if (i > 0) s = Math.max(s, starts[i - 1] + 12);
-    starts.push(s);
-  }
-  return scene.beats.map((beat, i) => {
-    const start = starts[i];
-    const end = i + 1 < n ? starts[i + 1] : frames;
+  return beatWindows(scene, words, frames).map(({ beat, start, end }) => {
     const dur = end - start;
     let impact: number | null = null;
     if (beat.visual === "browser-click") impact = start + Math.round(dur * 0.55);
@@ -12116,163 +12108,11 @@ export const MailServerHandoffVisual: React.FC<{
 /* ──────────────────────────── сцена-сториборд ──────────────────────────── */
 
 /** Каждая фраза диктора — свой бит с движением камеры между битами. */
-export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: number }> = ({
-  scene,
-  words,
-  frames,
-}) => {
-  const frame = useCurrentFrame();
+const StoryVisual: React.FC<{ slot: BeatSlot; sampleFrame: number }> = ({ slot, sampleFrame }) => {
   const { fps } = useVideoConfig();
-  const slots = storySchedule(scene, words, frames);
-  const idx = Math.max(0, slots.findIndex((s, i) => frame >= s.start && (i + 1 >= slots.length || frame < slots[i + 1].start)));
-  const slot = slots[idx];
-  const local = frame - slot.start;
+  const local = sampleFrame - slot.start;
   const dur = slot.end - slot.start;
   const impactLocal = (slot.impact ?? slot.start) - slot.start;
-
-  // камера: у каждого визуала свой план; переход — пружинный прыжок за ~9 кадров
-  const cams: Record<string, { scale: number; y: number }> = {
-    "browser-click": { scale: 1.0, y: 0 },
-    "recommendation-loop": { scale: 0.88, y: -20 },
-    "origin-check": { scale: 0.9, y: -20 },
-    "devices-meet": { scale: 1.12, y: -60 },
-    handshake: { scale: 1.22, y: -110 },
-    "title-slam": { scale: 1.0, y: 0 },
-    "nat-pat-translation": { scale: 0.9, y: -20 },
-    "storage-capacity": { scale: 0.9, y: -20 },
-    "power-reset-sequence": { scale: 0.88, y: -20 },
-    "sleep-to-ram": { scale: 0.9, y: -20 },
-    "rtc-alarm-wakeup": { scale: 0.9, y: -20 },
-    "reset-vector-launch": { scale: 0.88, y: -20 },
-    "nfc-card-coil": { scale: 0.9, y: -20 },
-    "nfc-field-response": { scale: 0.9, y: -20 },
-    "spell-distance": { scale: 0.9, y: -20 },
-    "inverted-index-merge": { scale: 0.88, y: -20 },
-    "password-leak": { scale: 1.05, y: -30 },
-    "unique-insert-race": { scale: 0.9, y: -20 },
-    "hash-table": { scale: 0.98, y: -20 },
-    "minimal-perfect-hash": { scale: 0.9, y: -20 },
-    "collision-compare": { scale: 0.9, y: -20 },
-    "heap-graph": { scale: 0.86, y: -20 },
-    "gc-sweep": { scale: 0.9, y: -30 },
-    "medal-mint": { scale: 0.96, y: -10 },
-    "ancient-code": { scale: 0.92, y: -20 },
-    "verdict-scan": { scale: 0.98, y: -10 },
-    "paradox-box": { scale: 0.9, y: -30 },
-    "proof-sequence": { scale: 0.92, y: -20 },
-    "fft-wave": { scale: 0.94, y: -30 },
-    "audio-fingerprint": { scale: 0.9, y: -20 },
-    "echo-cancellation": { scale: 0.9, y: -20 },
-    "active-noise-cancel": { scale: 0.9, y: -20 },
-    "orbit-fft-groups": { scale: 0.88, y: -30 },
-    "qr-repair": { scale: 0.9, y: -30 },
-    "qr-phone-scan": { scale: 0.9, y: -25 },
-    "redundancy-note": { scale: 0.9, y: -20 },
-    "hll-estimate": { scale: 0.92, y: -20 },
-    "bloom-bitarray": { scale: 0.88, y: -30 },
-    "bloom-probe": { scale: 0.88, y: -20 },
-    "xor-filter": { scale: 0.86, y: -25 },
-    "coin-pair": { scale: 0.96, y: -10 },
-    "bit-extractor": { scale: 0.92, y: -20 },
-    "debruijn-cycle": { scale: 0.92, y: -20 },
-    "hamming-word": { scale: 0.9, y: -25 },
-    "hamming-syndrome": { scale: 0.88, y: -25 },
-    "gps-relativity": { scale: 0.9, y: -20 },
-    "gps-pseudorange": { scale: 0.9, y: -20 },
-    "mt-recovery": { scale: 0.92, y: -20 },
-    "cuckoo-table": { scale: 0.9, y: -30 },
-    "cuckoo-cycle": { scale: 0.88, y: -30 },
-    "cuckoo-stash": { scale: 0.9, y: -20 },
-    "inverse-sqrt-bits": { scale: 0.92, y: -20 },
-    "merkle-tree": { scale: 0.92, y: -20 },
-    "stable-matching": { scale: 0.88, y: -20 },
-    "busy-beaver": { scale: 0.9, y: -20 },
-    "secret-sharing": { scale: 0.9, y: -20 },
-    "reservoir-sampling": { scale: 0.9, y: -20 },
-    "union-find": { scale: 0.92, y: -20 },
-    "shuffle-deck": { scale: 0.9, y: -20 },
-    counter: { scale: 0.92, y: -20 },
-    "mincut-contract": { scale: 0.9, y: -20 },
-    "backtrack-tree": { scale: 0.86, y: -30 },
-    "thompson-parallel": { scale: 0.88, y: -25 },
-    "power-of-two-choices": { scale: 0.9, y: -20 },
-    "pollard-rho": { scale: 0.9, y: -20 },
-    "count-min-sketch": { scale: 0.88, y: -20 },
-    "sudoku-exact-cover": { scale: 0.88, y: -22 },
-    "amdahl-speedup": { scale: 0.9, y: -20 },
-    "gray-code": { scale: 0.92, y: -10 },
-    "ai-hallucination": { scale: 0.9, y: -20 },
-    "consistent-hash-ring": { scale: 0.9, y: -20 },
-    "bwt-matrix": { scale: 0.88, y: -20 },
-    "bwt-invert": { scale: 0.9, y: -20 },
-    "quic-migration": { scale: 0.9, y: -20 },
-    "skip-list": { scale: 0.92, y: -20 },
-    "elias-fano": { scale: 0.9, y: -20 },
-    "ariane-overflow": { scale: 0.88, y: -20 },
-    "token-sampler": { scale: 0.9, y: -20 },
-    "password-hash": { scale: 0.92, y: -20 },
-    "polarizer-stack": { scale: 0.9, y: -20 },
-    "capacitive-touch": { scale: 0.94, y: -20 },
-    "proximity-sensor": { scale: 0.9, y: -20 },
-    "apk-update-signature": { scale: 0.9, y: -20 },
-    "face-id-depth": { scale: 0.94, y: -20 },
-    "bgp-reroute": { scale: 0.92, y: -20 },
-    "usb-pd-negotiation": { scale: 0.92, y: -20 },
-    "convolution-stencil": { scale: 0.92, y: -20 },
-    "gpu-data-center": { scale: 0.88, y: -20 },
-    "matrix-multiply": { scale: 0.88, y: -20 },
-    "quantization-loss": { scale: 0.9, y: -20 },
-    "progressive-image-scans": { scale: 0.9, y: -20 },
-    "segment-buffer-playback": { scale: 0.88, y: -20 },
-    "adaptive-bitrate-ladder": { scale: 0.88, y: -20 },
-    "wifi-airtime": { scale: 0.92, y: -20 },
-    "wifi-signal-vs-airtime": { scale: 0.9, y: -20 },
-    "wifi-login": { scale: 0.9, y: -20 },
-    "wifi-four-way": { scale: 0.86, y: -20 },
-    "bluetooth-hopping": { scale: 0.9, y: -20 },
-    "find-network": { scale: 0.88, y: -20 },
-    "rotating-key-lock": { scale: 0.9, y: -20 },
-    "photo-access-boundary": { scale: 0.9, y: -20 },
-    "diffusion-denoise": { scale: 0.92, y: -20 },
-    "tls-handshake": { scale: 0.92, y: -20 },
-    "cold-battery-voltage-drop": { scale: 0.9, y: -20 },
-    "regenerative-braking": { scale: 0.9, y: -20 },
-    "incognito-session": { scale: 0.92, y: -20 },
-    "context-window": { scale: 0.9, y: -20 },
-    "attention-cost": { scale: 0.9, y: -20 },
-    "wallet-copy": { scale: 0.92, y: -20 },
-    "mnemonic-seed-derivation": { scale: 0.88, y: -20 },
-    "multi-frame-stack": { scale: 0.9, y: -20 },
-    "ois-stabilization": { scale: 0.88, y: -20 },
-    "tilt-weight": { scale: 0.92, y: -20 },
-    "mems-capacitor": { scale: 0.9, y: -20 },
-    "mail-queue": { scale: 0.9, y: -20 },
-    "mail-server-handoff": { scale: 0.9, y: -20 },
-    "totp-window": { scale: 0.9, y: -20 },
-    "rolling-shutter": { scale: 0.9, y: -20 },
-    "operational-transform": { scale: 0.9, y: -20 },
-    "microwave-dielectric": { scale: 0.9, y: -20 },
-    "magnetron-cavity": { scale: 0.88, y: -20 },
-    "hotword-spotting": { scale: 0.9, y: -20 },
-    "halving-schedule": { scale: 0.9, y: -20 },
-    "traffic-segment": { scale: 0.9, y: -20 },
-    "reward-check": { scale: 0.9, y: -20 },
-    "double-ratchet": { scale: 0.88, y: -20 },
-  };
-  const cur = cams[slot.beat.visual] ?? { scale: 1, y: 0 };
-  const prev = idx > 0 ? cams[slots[idx - 1].beat.visual] ?? cur : cur;
-  const tCam = smooth(clamp01(local / 9));
-  let scale = prev.scale + (cur.scale - prev.scale) * tCam;
-  let camY = prev.y + (cur.y - prev.y) * tCam;
-  // клик в браузере — доезд камеры к месту клика
-  if (slot.beat.visual === "browser-click" && local >= impactLocal) {
-    const p = smooth(clamp01((local - impactLocal) / 12));
-    scale *= 1 + 0.22 * p;
-    camY -= 140 * p;
-  }
-  // непрерывное блуждание камеры, чтобы кадр никогда не замирал
-  const wander = 5 * Math.sin(frame / 22);
-  const wanderX = 4 * Math.sin(frame / 31 + 2);
 
   const visual = (() => {
     switch (slot.beat.visual) {
@@ -13649,23 +13489,35 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     }
   })();
 
-  const hideSceneHeading =
-    slot.beat.visual === "mnemonic-seed-derivation" &&
-    slot.beat.params?.phase === "restore";
+  return visual;
+};
 
-  return (
-    <>
-      {scene.heading && !hideSceneHeading ? <SceneHeading text={scene.heading} /> : null}
-      <div
-        style={{
-          position: "absolute",
-          inset: 0,
-          transform: `translate(${wanderX}px, ${camY + wander}px) scale(${scale})`,
-          transformOrigin: "50% 45%",
-        }}
-      >
-        {visual}
-      </div>
-    </>
+export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: number }> = ({ scene, words, frames }) => {
+  const frame = useCurrentFrame();
+  const slots = storySchedule(scene, words, frames);
+  const idx = Math.max(0, slots.findIndex(s => frame >= s.start && frame < s.end));
+  const slot = slots[idx];
+  if (!slot) return null;
+  const previous = slots[idx - 1];
+  const blendFrames = previous ? beatBlendFrames(previous.end - previous.start, slot.end - slot.start) : 1;
+  const blend = previous ? smooth(clamp01((frame - slot.start) / Math.max(1, blendFrames - 1))) : 1;
+  const camera = cameraAt(frame, slots.map(s => ({ start: s.start, end: s.end, motion: s.beat.motion })), words);
+  const hideSceneHeading = slot.beat.visual === "mnemonic-seed-derivation" && slot.beat.params?.phase === "restore";
+  const layer = (s: BeatSlot, sampleFrame: number, entering: boolean, key: string) => (
+    <div key={key} data-motion-layer={key} style={{ position: "absolute", inset: 0,
+      ...transitionStyle(slot.beat.transition, blend, entering) }}>
+      <MotionStage start={s.start} end={s.end} words={words} plan={s.beat.motion} sampleFrame={sampleFrame}>
+        <StoryVisual slot={s} sampleFrame={sampleFrame} />
+      </MotionStage>
+    </div>
   );
+  return <>
+    {scene.heading && !hideSceneHeading ? <SceneHeading text={scene.heading} /> : null}
+    <div data-motion-camera style={{ position: "absolute", inset: 0,
+      transform: `translate(${camera.x}px, ${camera.y}px) scale(${camera.scale})`,
+      transformOrigin: `${CAMERA_ORIGIN.x}px ${CAMERA_ORIGIN.y}px` }}>
+      {previous && blend < 1 ? layer(previous, previous.end - 1, false, `beat-${idx - 1}`) : null}
+      {layer(slot, frame, true, `beat-${idx}`)}
+    </div>
+  </>;
 };

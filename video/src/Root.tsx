@@ -7,9 +7,9 @@ import {
   staticFile,
   useCurrentFrame,
 } from "remotion";
-import { TransitionSeries, linearTiming } from "@remotion/transitions";
-import { slide } from "@remotion/transitions/slide";
-import { fade } from "@remotion/transitions/fade";
+import { TransitionSeries } from "@remotion/transitions";
+import { MotionProbe } from "./lib/motion/MotionProbe";
+import { motionPresentation, motionTiming } from "./lib/motion/transitions";
 import { FPS, LEAD_SEC, TRANSITION_FRAMES, layout, theme } from "./lib/theme";
 import { sceneFrames } from "./lib/timeline";
 import { fakeMeta } from "./lib/fakeWords";
@@ -92,12 +92,13 @@ const sceneImpacts = (scene: Scene, meta: SceneMeta, frames: number): number[] =
       : [];
 
 interface EpisodeProps extends Record<string, unknown> {
+  motionProbe?: boolean;
   episodeId: string;
   episode: Episode | null;
   metas: SceneMeta[];
 }
 
-const EpisodeComp: React.FC<EpisodeProps> = ({ episodeId, episode, metas }) => {
+const EpisodeComp: React.FC<EpisodeProps> = ({ episodeId, episode, metas, motionProbe }) => {
   if (!episode) return <Background />;
   const frames = metas.map(sceneFrames);
   const audioDelay = Math.round(LEAD_SEC * FPS);
@@ -120,9 +121,9 @@ const EpisodeComp: React.FC<EpisodeProps> = ({ episodeId, episode, metas }) => {
       items.push(
         <TransitionSeries.Transition
           key={`t-${i}`}
-          timing={linearTiming({ durationInFrames: TRANSITION_FRAMES })}
+          timing={motionTiming}
           presentation={
-            scene.type === "outro" ? fade() : slide({ direction: "from-bottom" })
+            motionPresentation(scene.transition ?? { kind: scene.type === "outro" ? "finale" : "continuation" })
           }
         />
       );
@@ -140,7 +141,7 @@ const EpisodeComp: React.FC<EpisodeProps> = ({ episodeId, episode, metas }) => {
             <Audio src={staticFile(`sfx/${e.sound}.wav`)} volume={SFX_VOLUME} />
           </Sequence>
         ))}
-        <SceneContainer frames={frames[i]} impacts={sceneImpacts(scene, metas[i], frames[i])}>
+        <SceneContainer scene={scene} words={metas[i].words} frames={frames[i]} impacts={sceneImpacts(scene, metas[i], frames[i])}>
           <SceneRenderer scene={scene} meta={metas[i]} frames={frames[i]} />
         </SceneContainer>
         {scene.type !== "hook" ? (
@@ -160,29 +161,32 @@ const EpisodeComp: React.FC<EpisodeProps> = ({ episodeId, episode, metas }) => {
       <Audio loop src={staticFile("music/bed.wav")} volume={musicVolume} />
       <TransitionSeries>{items}</TransitionSeries>
       <OverlapProbe />
+      {motionProbe ? <MotionProbe /> : null}
     </AbsoluteFill>
   );
 };
 
 interface PreviewProps extends Record<string, unknown> {
   scene: Scene | null;
+  motionProbe?: boolean;
 }
 
 /** Кузница: рендер одной сцены с синтетическими таймингами — проверка визуала без TTS. */
-const PreviewComp: React.FC<PreviewProps> = ({ scene }) => {
+const PreviewComp: React.FC<PreviewProps> = ({ scene, motionProbe }) => {
   if (!scene) return <Background />;
   const meta = fakeMeta(scene.narration);
   const frames = sceneFrames(meta);
   return (
     <AbsoluteFill style={{ width: layout.width, height: layout.height }}>
       <Background />
-      <SceneContainer frames={frames} impacts={sceneImpacts(scene, meta, frames)}>
+      <SceneContainer scene={scene} words={meta.words} frames={frames} impacts={sceneImpacts(scene, meta, frames)}>
         <SceneRenderer scene={scene} meta={meta} frames={frames} />
       </SceneContainer>
       {scene.type !== "hook" ? (
         <Karaoke words={meta.words} sceneFrames={frames} cutoffFrames={0} />
       ) : null}
       <OverlapProbe />
+      {motionProbe ? <MotionProbe /> : null}
     </AbsoluteFill>
   );
 };
@@ -210,6 +214,10 @@ export const Root: React.FC = () => (
     durationInFrames={300}
     defaultProps={{ episodeId: "tcp-handshake", episode: null, metas: [] } as EpisodeProps}
     calculateMetadata={async ({ props }) => {
+      if (props.episode) {
+        if (props.metas.length !== props.episode.scenes.length) throw new Error("Episode/meta scene count mismatch");
+        return { durationInFrames: episodeFrames(props.metas), props };
+      }
       const [episode, metas] = await Promise.all([
         fetch(staticFile(`episodes/${props.episodeId}/script.json`)).then((r) => r.json()),
         fetch(staticFile(`episodes/${props.episodeId}/meta.json`)).then((r) => r.json()),

@@ -15,6 +15,8 @@
     }
   },
   "$defs": {
+    "motion": {"type": "object", "additionalProperties": false, "properties": {"intent": {"enum": ["establish", "focus", "follow", "compare", "reveal", "resolve"]}, "camera": {"type": "object", "additionalProperties": false, "properties": {"preset": {"enum": ["hold", "push-in", "pull-out", "track", "settle"]}, "onWord": {"type": "string", "minLength": 1}, "occurrence": {"type": "integer", "minimum": 1}, "target": {"type": "object", "additionalProperties": false, "required": ["x", "y"], "properties": {"x": {"type": "number", "minimum": 0, "maximum": 1}, "y": {"type": "number", "minimum": 0, "maximum": 1}}}, "strength": {"type": "number", "minimum": 0, "maximum": 1}}}, "entrance": {"enum": ["rise", "cascade", "materialize"]}, "cues": {"type": "array", "maxItems": 6, "items": {"type": "object", "additionalProperties": false, "required": ["id", "onWord"], "properties": {"id": {"type": "string", "pattern": "^[a-z][a-z0-9-]*$"}, "onWord": {"type": "string", "minLength": 1}, "occurrence": {"type": "integer", "minimum": 1}}}}}},
+    "motionTransition": {"type": "object", "additionalProperties": false, "required": ["kind"], "properties": {"kind": {"enum": ["continuation", "turn", "contrast", "finale"]}, "preset": {"enum": ["match", "push", "wipe", "dissolve"]}}},
     "narration": {
       "description": "Реплика диктора в устной форме. Разметка {SHOW|скажи}: на экране SHOW, голос произносит «скажи». Либо строка, либо {ru, en}.",
       "oneOf": [
@@ -44,6 +46,8 @@
       "additionalProperties": false,
       "properties": {
         "type": { "const": "hook" },
+        "motion": { "$ref": "#/$defs/motion" },
+        "transition": { "$ref": "#/$defs/motionTransition" },
         "title": { "type": "string", "maxLength": 60 },
         "subtitle": { "type": "string", "maxLength": 60 },
         "narration": { "$ref": "#/$defs/narration" }
@@ -55,6 +59,7 @@
       "additionalProperties": false,
       "properties": {
         "type": { "const": "story" },
+        "transition": { "$ref": "#/$defs/motionTransition" },
         "heading": { "type": "string", "maxLength": 40 },
         "narration": { "$ref": "#/$defs/narration" },
         "beats": {
@@ -68,6 +73,8 @@
             "properties": {
               "visual": { "enum": ["browser-click", "recommendation-loop", "origin-check", "devices-meet", "handshake", "title-slam", "nat-pat-translation", "storage-capacity", "power-reset-sequence", "sleep-to-ram", "rtc-alarm-wakeup", "reset-vector-launch", "nfc-card-coil", "nfc-field-response", "spell-distance", "inverted-index-merge", "password-leak", "unique-insert-race", "hash-table", "minimal-perfect-hash", "collision-compare", "heap-graph", "gc-sweep", "recursion-call", "stack-grow", "stack-compare", "medal-mint", "ancient-code", "verdict-scan", "paradox-box", "proof-sequence", "fft-wave", "audio-fingerprint", "echo-cancellation", "active-noise-cancel", "orbit-fft-groups", "qr-repair", "qr-phone-scan", "redundancy-note", "hll-estimate", "bloom-bitarray", "bloom-probe", "xor-filter", "coin-pair", "bit-extractor", "rule-110", "glider-collision", "debruijn-cycle", "hamming-word", "hamming-syndrome", "gps-relativity", "gps-pseudorange", "cuckoo-table", "cuckoo-cycle", "cuckoo-stash", "inverse-sqrt-bits", "merkle-tree", "stable-matching", "busy-beaver", "secret-sharing", "reservoir-sampling", "union-find", "shuffle-deck", "skip-list", "timsort-runs", "counter", "mincut-contract", "mt-recovery", "backtrack-tree", "thompson-parallel", "implication-graph", "scc-verdict", "power-of-two-choices", "pollard-rho", "count-min-sketch", "sudoku-exact-cover", "amdahl-speedup", "bbp-digit", "bbp-extract", "median-of-medians", "gray-code", "utf8-boundary", "consistent-hash-ring", "trie-growth", "suffix-automaton", "bwt-matrix", "bwt-invert", "quic-migration", "hilbert-curve", "elias-fano", "raft-quorum", "ariane-overflow", "token-sampler", "ai-hallucination", "password-hash", "polarizer-stack", "capacitive-touch", "tilt-weight", "mems-capacitor", "proximity-sensor", "digital-signature", "apk-update-signature", "bgp-reroute", "usb-pd-negotiation", "convolution-stencil", "gpu-data-center", "matrix-multiply", "quantization-loss", "progressive-image-scans", "segment-buffer-playback", "adaptive-bitrate-ladder", "wifi-airtime", "wifi-signal-vs-airtime", "wifi-login", "wifi-four-way", "bluetooth-hopping", "find-network", "rotating-key-lock", "file-delete-recovery", "photo-access-boundary", "tls-handshake", "block-chain", "mempool-rbf", "face-id-depth", "diffusion-denoise", "battery-sei-growth", "battery-charge-limit", "cold-battery-voltage-drop", "regenerative-braking", "incognito-session", "context-window", "attention-cost", "wallet-copy", "mnemonic-seed-derivation", "multi-frame-stack", "ois-stabilization", "mail-queue", "mail-server-handoff", "totp-window", "rolling-shutter", "operational-transform", "microwave-dielectric", "magnetron-cavity", "hotword-spotting", "halving-schedule", "traffic-segment", "reward-check", "double-ratchet"] },
               "onWord": { "type": "string" },
+              "motion": { "$ref": "#/$defs/motion" },
+              "transition": { "$ref": "#/$defs/motionTransition" },
               "params": { "type": "object" }
             }
           }
@@ -80,6 +87,8 @@
       "additionalProperties": false,
       "properties": {
         "type": { "const": "diagram" },
+        "motion": { "$ref": "#/$defs/motion" },
+        "transition": { "$ref": "#/$defs/motionTransition" },
         "heading": { "type": "string", "maxLength": 40 },
         "narration": { "$ref": "#/$defs/narration" },
         "nodes": {
@@ -137,6 +146,8 @@
       "additionalProperties": false,
       "properties": {
         "type": { "const": "terminal" },
+        "motion": { "$ref": "#/$defs/motion" },
+        "transition": { "$ref": "#/$defs/motionTransition" },
         "heading": { "type": "string", "maxLength": 40 },
         "narration": { "$ref": "#/$defs/narration" },
         "commands": {
@@ -165,6 +176,8 @@
       "additionalProperties": false,
       "properties": {
         "type": { "const": "code" },
+        "motion": { "$ref": "#/$defs/motion" },
+        "transition": { "$ref": "#/$defs/motionTransition" },
         "heading": { "type": "string", "maxLength": 40 },
         "narration": { "$ref": "#/$defs/narration" },
         "code": { "type": "string", "description": "≤14 строк, ≤46 символов в строке" },
@@ -178,6 +191,8 @@
       "additionalProperties": false,
       "properties": {
         "type": { "const": "outro" },
+        "motion": { "$ref": "#/$defs/motion" },
+        "transition": { "$ref": "#/$defs/motionTransition" },
         "title": { "type": "string", "maxLength": 30 },
         "bullets": { "type": "array", "maxItems": 4, "items": { "type": "string", "maxLength": 34 } },
         "cta": { "type": "string", "maxLength": 40 },

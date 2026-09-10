@@ -1,8 +1,11 @@
+import type { MotionPlan, MotionTransition } from "./motion/types";
 import type { Tone } from "./theme";
 
 export type Narration = string | Record<string, string>;
 
 export interface HookScene {
+  motion?: MotionPlan;
+  transition?: MotionTransition; // incoming scene boundary
   type: "hook";
   narration: Narration;
   title: string;
@@ -26,6 +29,8 @@ export interface DiagramPacket {
 }
 
 export interface DiagramScene {
+  motion?: MotionPlan;
+  transition?: MotionTransition; // incoming scene boundary
   type: "diagram";
   narration: Narration;
   heading?: string;
@@ -41,6 +46,8 @@ export interface TerminalCommand {
 }
 
 export interface TerminalScene {
+  motion?: MotionPlan;
+  transition?: MotionTransition; // incoming scene boundary
   type: "terminal";
   narration: Narration;
   heading?: string;
@@ -48,6 +55,8 @@ export interface TerminalScene {
 }
 
 export interface CodeScene {
+  motion?: MotionPlan;
+  transition?: MotionTransition; // incoming scene boundary
   type: "code";
   narration: Narration;
   heading?: string;
@@ -57,6 +66,8 @@ export interface CodeScene {
 }
 
 export interface OutroScene {
+  motion?: MotionPlan;
+  transition?: MotionTransition; // incoming scene boundary
   type: "outro";
   narration: Narration;
   title: string;
@@ -65,6 +76,8 @@ export interface OutroScene {
 }
 
 export interface StoryBeat {
+  motion?: MotionPlan;
+  transition?: MotionTransition; // incoming beat boundary
   visual:
     | "browser-click"
     | "recommendation-loop"
@@ -219,6 +232,7 @@ export interface StoryBeat {
 }
 
 export interface StoryScene {
+  transition?: MotionTransition; // incoming scene boundary
   type: "story";
   narration: Narration;
   heading?: string;

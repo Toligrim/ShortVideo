@@ -61,6 +61,25 @@ def main():
             token = re.sub(r"[^\w\d-]", "", a.lower())
             if token and token not in re.sub(r"[^\w\d\s-]", "", shows):
                 errors.append(f"сцена {i}: onWord «{a}» не найдено в реплике")
+        # Motion uses exact display tokens and explicit occurrence, unlike legacy fuzzy anchors.
+        display_tokens = [re.sub(r"[^\w]", "", t.lower()).replace("_", "")
+                          for t in re.findall(r"\{([^|{}]+)\|[^{}]+\}|(\S+)", narr)
+                          for t in [t[0] or t[1]]]
+        plans = [s.get("motion", {})] + [b.get("motion", {}) for b in s.get("beats", [])]
+        for plan in plans:
+            cues = plan.get("cues", [])
+            ids = [c.get("id") for c in cues]
+            if len(ids) != len(set(ids)):
+                errors.append(f"сцена {i}: повторный id motion cue")
+            for anchor in [plan.get("camera", {})] + cues:
+                if "onWord" not in anchor:
+                    if "occurrence" in anchor:
+                        errors.append(f"сцена {i}: occurrence без onWord")
+                    continue
+                token = re.sub(r"[^\w]", "", anchor["onWord"].lower()).replace("_", "")
+                occurrence = anchor.get("occurrence", 1)
+                if not isinstance(occurrence, int) or occurrence < 1 or display_tokens.count(token) < occurrence:
+                    errors.append(f"сцена {i}: motion onWord «{anchor['onWord']}» #{occurrence} не найдено (нужно точное слово)")
         # непрописанная латиница вне разметки {|}
         bare = re.sub(r"\{[^{}]+\}", "", narr)
         latin = re.findall(r"[A-Za-z]{2,}", bare)
