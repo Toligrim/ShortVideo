@@ -24,5 +24,13 @@ export const cueFrames = (plan: MotionPlan | undefined, words: Word[], start: nu
     if (Object.hasOwn(result, cue.id)) throw new Error(`Duplicate motion cue: ${cue.id}`);
     result[cue.id] = slotAnchor(words, cue, start, end);
   }
+  for (const [actor, action] of Object.entries(plan?.actors ?? {})) {
+    if (!Object.hasOwn(result, action.cue)) throw new Error(`Motion actor ${actor}: undeclared cue ${action.cue}`);
+  }
   return result;
 };
+
+/** Shared by object animation, SFX and shake; no independent timing fractions. */
+export const defaultCueFraction = (id: string): number => id === "act" ? 0.3 : id === "resolve" ? 0.7 : 0.5;
+export const resolveCue = (cues: Record<string, number>, id: string, start: number, end: number, fraction = defaultCueFraction(id)): number =>
+  cues[id] ?? Math.round(start + (end - start - 1) * fraction);

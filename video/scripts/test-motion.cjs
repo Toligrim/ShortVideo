@@ -57,3 +57,68 @@ test('scene lengths and all transitions preserve the ten-frame overlap', () => {
   assert.equal(beatBlendFrames(100, 100), 8);
   assert.equal(beatBlendFrames(1, 1), 1);
 });
+const { beatBlendProgress } = require('../src/lib/motion/transitions.tsx');
+const { resolveCue } = require('../src/lib/motion/anchors.ts');
+const { motionAudit } = require('../src/lib/motion/audit.ts');
+test('single-frame beats are fully visible; regular crossovers have two endpoints', () => {
+  assert.equal(beatBlendProgress(0, 1), 1);
+  assert.equal(beatBlendProgress(0, 8), 0);
+  assert.equal(beatBlendProgress(7, 8), 1);
+});
+test('sound and actor cues share defaults and explicit anchored overrides', () => {
+  const cues = cueFrames({ cues: [{ id: 'resolve', onWord: 'ключ', occurrence: 2 }] }, words, 0, 120);
+  assert.equal(resolveCue(cues, 'resolve', 0, 120), 51);
+  assert.equal(resolveCue({}, 'act', 0, 101), 30);
+  assert.equal(resolveCue({}, 'resolve', 0, 101), 70);
+});
+test('audit uses the render scene formula and rejects invalid anchored plans', () => {
+  const fs = require('node:fs'), path = require('node:path');
+  const episode = JSON.parse(fs.readFileSync(path.join(__dirname, '../../examples/motion-engine.json')));
+  const metas = JSON.parse(fs.readFileSync(path.join(__dirname, '../../examples/motion-engine.meta.json')));
+  const report = motionAudit(episode, metas);
+  assert.equal(report.durationInFrames, metas.reduce((n,m) => n + sceneFrames(m), 0) - 10 * (metas.length - 1));
+  assert.equal(report.scenes[3].slots[1].cues.act, 314);
+  assert.throws(() => motionAudit(episode, []), /count mismatch/);
+  episode.scenes[0].beats[1].motion.cues = [{ id: 'wrong', onWord: 'Ты' }];
+  assert.throws(() => motionAudit(episode, metas), /outside/);
+});
+test('camera/transition/entrance schema enums match the executable dictionaries', () => {
+  const schema = require('../../schema/scenes.schema.json');
+  const motion = schema.$defs.motion.properties;
+  assert.deepEqual([...motion.camera.properties.preset.enum].sort(), Object.keys(cameraPrimitives).sort());
+  const { entrancePrimitives } = require('../src/lib/motion/choreography.ts');
+  const { transitionPrimitives } = require('../src/lib/motion/transitions.tsx');
+  assert.deepEqual([...motion.entrance.enum].sort(), Object.keys(entrancePrimitives).sort());
+  assert.deepEqual([...schema.$defs.motionTransition.properties.preset.enum].sort(), Object.keys(transitionPrimitives).sort());
+});
+test('real story SFX and shake track the demo action cues', () => {
+  const fs = require('node:fs'), path = require('node:path');
+  const { storySchedule, storySfx, storyImpacts } = require('../src/scenes/StoryScene.tsx');
+  const episode = JSON.parse(fs.readFileSync(path.join(__dirname, '../../examples/motion-engine.json')));
+  const metas = JSON.parse(fs.readFileSync(path.join(__dirname, '../../examples/motion-engine.meta.json')));
+  for (const [sceneIndex, beatIndex, cue, sound] of [[0,0,'resolve','ding'], [1,0,'act','whoosh'], [2,0,'act','pop'], [3,0,'resolve','click'], [3,1,'act','slam']]) {
+    const scene = episode.scenes[sceneIndex], meta = metas[sceneIndex], frames = sceneFrames(meta);
+    const slot = storySchedule(scene, meta.words, frames)[beatIndex];
+    const expected = anchorFrame(meta.words, scene.beats[beatIndex].motion.cues.find(c => c.id === cue));
+    assert.equal(slot.impact, expected);
+    assert.ok(storySfx(scene, meta.words, frames).some(e => e.frame === expected && e.sound === sound));
+    assert.ok(storyImpacts(scene, meta.words, frames).includes(expected));
+  }
+});
+test('JSON actor actions are registered and must reference a declared cue', () => {
+  const schema = require('../../schema/scenes.schema.json');
+  assert.deepEqual([...schema.$defs.motion.properties.actors.additionalProperties.properties.preset.enum].sort(), Object.keys(actionPrimitives).sort());
+  const plan = { actors: { packet: { preset: 'depart', cue: 'act', to: {x: 0, y: 120} } } };
+  assert.throws(() => cueFrames(plan, words, 0, 120), /undeclared cue/);
+  plan.cues = [{ id: 'act', onWord: 'ключ' }];
+  assert.equal(cueFrames(plan, words, 0, 120).act, 21);
+});
+test('audit crossover samples stay in the intended short incoming beat', () => {
+  const episode = { scenes: [{ type: 'story', beats: Array.from({ length: 6 }, () => ({ visual: 'title-slam', onWord: 'ключ' })) }] };
+  const report = motionAudit(episode, [{ duration: 2, words }]);
+  for (const [i, samples] of report.scenes[0].boundaries.entries()) {
+    const slot = report.scenes[0].slots[i + 1];
+    assert.equal(samples[0], slot.start - 1);
+    for (const frame of samples.slice(1)) assert.ok(frame >= slot.start && frame < slot.end);
+  }
+});

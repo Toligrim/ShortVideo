@@ -30,3 +30,6 @@ export const motionTiming: TransitionTiming = {
 /** Beat changes retain only one outgoing visual, for at most 8 frames. */
 export const beatBlendFrames = (previousLength: number, nextLength: number): number =>
   Math.max(1, Math.min(8, Math.floor(previousLength / 3), Math.floor(nextLength / 3)));
+
+export const beatBlendProgress = (local: number, blendFrames: number): number =>
+  blendFrames <= 1 ? 1 : smooth(local / (blendFrames - 1));

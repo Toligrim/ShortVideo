@@ -19,7 +19,7 @@ export const cameraPrimitives: Record<CameraPreset, CameraPrimitive> = {
   hold: () => ({ ...CAMERA_HOME }),
   "push-in": (m, s) => ({ x: focus(m).x * s, y: -12 + focus(m).y * s, scale: 0.92 + 0.07 * s }),
   "pull-out": (m, s) => ({ x: focus(m).x * s, y: -12 + focus(m).y * s, scale: 0.92 - 0.03 * s }),
-  track: (m, s) => ({ x: (m.target ? focus(m).x : -28) * s, y: -12 + focus(m).y * s, scale: 0.95 }),
+  track: (m, s) => ({ x: (m.target ? focus(m).x : -28) * s, y: -12 + focus(m).y * s, scale: 0.92 + 0.03 * s }),
   settle: () => ({ ...CAMERA_HOME }),
 };
 const blend = (a: Pose, b: Pose, p: number): Pose => ({ x: mix(a.x, b.x, p), y: mix(a.y, b.y, p), scale: mix(a.scale, b.scale, p) });
@@ -36,7 +36,7 @@ export const cameraAt = (frame: number, slots: MotionSlot[], words: Word[]): Pos
   for (const [i, slot] of slots.entries()) {
     if (frame < slot.start) break;
     const move = slot.motion?.camera ?? {};
-    const preset = move.preset ?? intentCamera[slot.motion?.intent ?? (i === 0 ? "establish" : "focus")];
+    const preset = move.preset ?? intentCamera[slot.motion?.intent ?? (i === 0 ? "establish" : i % 2 ? "focus" : "reveal")];
     const target = cameraPrimitives[preset](move, clamp01(move.strength ?? 1));
     const window = cameraWindow(slot, words);
     pose = blend(pose, target, progress(Math.min(frame, slot.end - 1), window.start, window.end));

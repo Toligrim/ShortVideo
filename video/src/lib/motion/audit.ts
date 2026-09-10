@@ -18,7 +18,7 @@ export const motionAudit = (episode: Episode, metas: SceneMeta[]) => {
       const next = Math.min(s.end - 1, ...Object.values(s.cues).filter(n => n > f), f + 24);
       return { beat, cue, frames: [Math.max(s.start, f - 1), Math.round((f + next) / 2), next].map(n => n + offset) };
     }));
-    const boundaries = slots.slice(1).map(s => [s.start - 1, s.start + 3, Math.min(s.end - 1, s.start + 8)].map(f => f + offset));
+    const boundaries = slots.slice(1).map(s => [s.start - 1, Math.min(s.end - 1, s.start + 3), Math.min(s.end - 1, s.start + 8)].map(f => f + offset));
     const result = { scene: i, start: offset, frames, slots, triples, boundaries,
       overview: [0.35, 0.75].map(p => offset + Math.min(frames - 1, Math.round(frames * p))) };
     offset += frames - TRANSITION_FRAMES;

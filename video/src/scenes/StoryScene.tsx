@@ -7,8 +7,9 @@ import type { StoryScene as StoryProps, StoryBeat, Word } from "../lib/types";
 import { IconGlyph } from "../primitives/IconGlyph";
 import { PulseRing } from "../lib/Motion";
 import { cameraAt, CAMERA_ORIGIN } from "../lib/motion/camera";
+import { cueFrames, resolveCue } from "../lib/motion/anchors";
 import { MotionStage } from "../lib/motion/MotionStage";
-import { beatBlendFrames, transitionStyle } from "../lib/motion/transitions";
+import { beatBlendFrames, beatBlendProgress, transitionStyle } from "../lib/motion/transitions";
 import { SceneHeading } from "./SceneHeading";
 import { OrbitFftGroups } from "./OrbitFftGroups";
 import { GpsRelativity } from "./GpsRelativity";
@@ -222,7 +223,7 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
     if (beat.visual === "password-leak") impact = start + Math.round(dur * 0.4);
     if (beat.visual === "unique-insert-race") {
       const phase = beat.params?.phase as UniqueInsertRacePhase | undefined;
-      impact = start + Math.round(dur * (phase === "request" ? 0.62 : phase === "check" ? 0.64 : phase === "insert" ? 0.66 : phase === "wait" ? 0.68 : 0.7));
+      impact = resolveCue(cueFrames(beat.motion, words, start, end), phase === "request" || phase === "wait" ? "resolve" : "act", start, end);
     }
     if (beat.visual === "hash-table") impact = start + Math.round(dur * 0.62);
     if (beat.visual === "minimal-perfect-hash") {
@@ -13500,7 +13501,7 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
   if (!slot) return null;
   const previous = slots[idx - 1];
   const blendFrames = previous ? beatBlendFrames(previous.end - previous.start, slot.end - slot.start) : 1;
-  const blend = previous ? smooth(clamp01((frame - slot.start) / Math.max(1, blendFrames - 1))) : 1;
+  const blend = previous ? beatBlendProgress(frame - slot.start, blendFrames) : 1;
   const camera = cameraAt(frame, slots.map(s => ({ start: s.start, end: s.end, motion: s.beat.motion })), words);
   const hideSceneHeading = slot.beat.visual === "mnemonic-seed-derivation" && slot.beat.params?.phase === "restore";
   const layer = (s: BeatSlot, sampleFrame: number, entering: boolean, key: string) => (

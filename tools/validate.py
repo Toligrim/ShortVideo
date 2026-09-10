@@ -71,6 +71,9 @@ def main():
             ids = [c.get("id") for c in cues]
             if len(ids) != len(set(ids)):
                 errors.append(f"сцена {i}: повторный id motion cue")
+            for actor, action in plan.get("actors", {}).items():
+                if action.get("cue") not in ids:
+                    errors.append(f"сцена {i}: motion actor {actor}: неизвестный cue {action.get('cue')}")
             for anchor in [plan.get("camera", {})] + cues:
                 if "onWord" not in anchor:
                     if "occurrence" in anchor:

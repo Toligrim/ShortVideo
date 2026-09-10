@@ -16,11 +16,18 @@ export interface CameraMove {
   strength?: number;
 }
 export interface MotionTransition { kind: TransitionKind; preset?: TransitionPreset }
+export interface ActorAction {
+  preset: ActionPreset;
+  cue: string;
+  from?: Point;
+  to?: Point;
+}
 export interface MotionPlan {
   intent?: MotionIntent;
   camera?: CameraMove;
   entrance?: EntrancePreset;
   cues?: MotionCue[];
+  actors?: Record<string, ActorAction>; // override a visual's named MotionGroup action
 }
 export interface Point { x: number; y: number }
 export interface Pose extends Point { scale: number }

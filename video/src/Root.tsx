@@ -156,7 +156,7 @@ const EpisodeComp: React.FC<EpisodeProps> = ({ episodeId, episode, metas, motion
   });
 
   return (
-    <AbsoluteFill style={{ width: layout.width, height: layout.height }}>
+    <AbsoluteFill data-motion-composition style={{ width: layout.width, height: layout.height }}>
       <Background />
       <Audio loop src={staticFile("music/bed.wav")} volume={musicVolume} />
       <TransitionSeries>{items}</TransitionSeries>
@@ -177,7 +177,7 @@ const PreviewComp: React.FC<PreviewProps> = ({ scene, motionProbe }) => {
   const meta = fakeMeta(scene.narration);
   const frames = sceneFrames(meta);
   return (
-    <AbsoluteFill style={{ width: layout.width, height: layout.height }}>
+    <AbsoluteFill data-motion-composition style={{ width: layout.width, height: layout.height }}>
       <Background />
       <SceneContainer scene={scene} words={meta.words} frames={frames} impacts={sceneImpacts(scene, meta, frames)}>
         <SceneRenderer scene={scene} meta={meta} frames={frames} />

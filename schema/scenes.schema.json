@@ -15,7 +15,177 @@
     }
   },
   "$defs": {
-    "motion": {"type": "object", "additionalProperties": false, "properties": {"intent": {"enum": ["establish", "focus", "follow", "compare", "reveal", "resolve"]}, "camera": {"type": "object", "additionalProperties": false, "properties": {"preset": {"enum": ["hold", "push-in", "pull-out", "track", "settle"]}, "onWord": {"type": "string", "minLength": 1}, "occurrence": {"type": "integer", "minimum": 1}, "target": {"type": "object", "additionalProperties": false, "required": ["x", "y"], "properties": {"x": {"type": "number", "minimum": 0, "maximum": 1}, "y": {"type": "number", "minimum": 0, "maximum": 1}}}, "strength": {"type": "number", "minimum": 0, "maximum": 1}}}, "entrance": {"enum": ["rise", "cascade", "materialize"]}, "cues": {"type": "array", "maxItems": 6, "items": {"type": "object", "additionalProperties": false, "required": ["id", "onWord"], "properties": {"id": {"type": "string", "pattern": "^[a-z][a-z0-9-]*$"}, "onWord": {"type": "string", "minLength": 1}, "occurrence": {"type": "integer", "minimum": 1}}}}}},
+    "motion": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "intent": {
+          "enum": [
+            "establish",
+            "focus",
+            "follow",
+            "compare",
+            "reveal",
+            "resolve"
+          ]
+        },
+        "camera": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "preset": {
+              "enum": [
+                "hold",
+                "push-in",
+                "pull-out",
+                "track",
+                "settle"
+              ]
+            },
+            "onWord": {
+              "type": "string",
+              "minLength": 1
+            },
+            "occurrence": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "target": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "x",
+                "y"
+              ],
+              "properties": {
+                "x": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "y": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                }
+              }
+            },
+            "strength": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            }
+          },
+          "dependentRequired": {
+            "occurrence": [
+              "onWord"
+            ]
+          }
+        },
+        "entrance": {
+          "enum": [
+            "rise",
+            "cascade",
+            "materialize"
+          ]
+        },
+        "cues": {
+          "type": "array",
+          "maxItems": 6,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "onWord"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9-]*$"
+              },
+              "onWord": {
+                "type": "string",
+                "minLength": 1
+              },
+              "occurrence": {
+                "type": "integer",
+                "minimum": 1
+              }
+            }
+          }
+        },
+        "actors": {
+          "type": "object",
+          "maxProperties": 4,
+          "propertyNames": {
+            "pattern": "^[a-z][a-z0-9-]*$"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "preset",
+              "cue"
+            ],
+            "properties": {
+              "preset": {
+                "enum": [
+                  "transfer",
+                  "recoil",
+                  "pulse",
+                  "depart"
+                ]
+              },
+              "cue": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9-]*$"
+              },
+              "from": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "x",
+                  "y"
+                ],
+                "properties": {
+                  "x": {
+                    "type": "number",
+                    "minimum": -540,
+                    "maximum": 540
+                  },
+                  "y": {
+                    "type": "number",
+                    "minimum": -540,
+                    "maximum": 540
+                  }
+                }
+              },
+              "to": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "x",
+                  "y"
+                ],
+                "properties": {
+                  "x": {
+                    "type": "number",
+                    "minimum": -540,
+                    "maximum": 540
+                  },
+                  "y": {
+                    "type": "number",
+                    "minimum": -540,
+                    "maximum": 540
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "motionTransition": {"type": "object", "additionalProperties": false, "required": ["kind"], "properties": {"kind": {"enum": ["continuation", "turn", "contrast", "finale"]}, "preset": {"enum": ["match", "push", "wipe", "dissolve"]}}},
     "narration": {
       "description": "Реплика диктора в устной форме. Разметка {SHOW|скажи}: на экране SHOW, голос произносит «скажи». Либо строка, либо {ru, en}.",
