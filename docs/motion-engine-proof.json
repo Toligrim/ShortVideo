@@ -1,0 +1,494 @@
+{
+  "checked_at_utc": "2026-09-10T21:18:56.462932+00:00",
+  "branch": "feature/motion-engine",
+  "implementation_commit": "1743ce2",
+  "baseline_commit": "2017c801475d3652c6a4181085b4f7af845cfe2f",
+  "hardware": "Raspberry Pi 5 Model B Rev 1.1 / aarch64",
+  "checks": {
+    "tsc_no_emit": "pass",
+    "motion_tests": {
+      "passed": 13,
+      "failed": 0
+    },
+    "python_validation_tests": {
+      "passed": 2,
+      "failed": 0
+    },
+    "example_schema": "pass",
+    "alignment_audit": "pass",
+    "independent_read_only_review": "No findings after fixes"
+  },
+  "still": {
+    "composition": "Episode",
+    "frame": 1547,
+    "path": "/tmp/motion-engine-final.png",
+    "sha256": "6a5b596701fa437d7f5f9457ed7e335dcb47f9f86a0fbb39fb811e9e4589889a"
+  },
+  "smoke": {
+    "frames": [
+      331,
+      344,
+      356,
+      625,
+      638,
+      650,
+      941,
+      954,
+      966,
+      1438,
+      1448,
+      1456,
+      1535,
+      1547,
+      1559,
+      1534,
+      1538,
+      1543,
+      878,
+      882,
+      887,
+      1619,
+      1624,
+      2070
+    ],
+    "deterministic": true,
+    "repeated_frame": 331,
+    "first_sha256": "609f04169da841102ef592fcec18a6ccfedecc38d9543bfbadf2b105ac1729ab",
+    "repeat_sha256": "609f04169da841102ef592fcec18a6ccfedecc38d9543bfbadf2b105ac1729ab",
+    "artifacts_equal": true,
+    "median_isolated_still_ms": 1534.2
+  },
+  "actor_override_test": {
+    "frame": 1559,
+    "actor": "request-b",
+    "requested_and_rendered": {
+      "x": 40,
+      "y": -65
+    }
+  },
+  "invalid_binding_test": {
+    "frame": 638,
+    "id": "probe-0",
+    "result": "missingActors; expected exit 1"
+  },
+  "benchmark": {
+    "jpeg_quality": 90,
+    "concurrency": 3,
+    "episodeId": "auto-20260910-052001",
+    "results": [
+      {
+        "frames": [
+          600,
+          659
+        ],
+        "count": 60,
+        "before_ms_per_frame": 426.886,
+        "after_ms_per_frame": 402.651,
+        "ratio": 0.943
+      },
+      {
+        "frames": [
+          1530,
+          1569
+        ],
+        "count": 40,
+        "before_ms_per_frame": 498.905,
+        "after_ms_per_frame": 426.655,
+        "ratio": 0.855
+      }
+    ],
+    "cleanup_note": "Final benchmark completed 100 JPEG frames and exited 0; Chromium logged Page.bringToFront Target closed during browser teardown."
+  },
+  "preview": {
+    "path": "/tmp/motion-engine-preview.mp4",
+    "frame_range": [
+      1370,
+      1609
+    ],
+    "video_frames": 240,
+    "fps": 30,
+    "width": 1080,
+    "height": 1920,
+    "video_seconds": 8,
+    "container_seconds": 8.064,
+    "codecs": [
+      "h264",
+      "aac"
+    ],
+    "bytes": 2509075,
+    "sha256": "1f24cdd0f7be21cc9bc81c5b91a26c225d8153d3bea2509251062a0b601498eb"
+  },
+  "actor_traces": [
+    {
+      "frame": 625,
+      "actors": [
+        {
+          "id": "index",
+          "layer": "beat-0",
+          "x": 0,
+          "y": 0,
+          "scale": 1,
+          "opacity": 1
+        },
+        {
+          "id": "request-a",
+          "layer": "beat-0",
+          "x": 0,
+          "y": 0,
+          "scale": 1,
+          "opacity": 1
+        },
+        {
+          "id": "request-b",
+          "layer": "beat-0",
+          "x": 0,
+          "y": 0,
+          "scale": 1,
+          "opacity": 1
+        },
+        {
+          "id": "probe-0",
+          "layer": "beat-0",
+          "x": 260,
+          "y": 572,
+          "scale": 1,
+          "opacity": 0
+        },
+        {
+          "id": "probe-1",
+          "layer": "beat-0",
+          "x": 820,
+          "y": 572,
+          "scale": 1,
+          "opacity": 0
+        }
+      ]
+    },
+    {
+      "frame": 638,
+      "actors": [
+        {
+          "id": "index",
+          "layer": "beat-0",
+          "x": 0,
+          "y": 0,
+          "scale": 1,
+          "opacity": 1
+        },
+        {
+          "id": "request-a",
+          "layer": "beat-0",
+          "x": 0,
+          "y": 0,
+          "scale": 1,
+          "opacity": 1
+        },
+        {
+          "id": "request-b",
+          "layer": "beat-0",
+          "x": 0,
+          "y": 0,
+          "scale": 1,
+          "opacity": 1
+        },
+        {
+          "id": "probe-0",
+          "layer": "beat-0",
+          "x": 342.5,
+          "y": 606,
+          "scale": 1,
+          "opacity": 0.5
+        },
+        {
+          "id": "probe-1",
+          "layer": "beat-0",
+          "x": 737.5,
+          "y": 606,
+          "scale": 1,
+          "opacity": 0.5
+        }
+      ]
+    },
+    {
+      "frame": 650,
+      "actors": [
+        {
+          "id": "index",
+          "layer": "beat-0",
+          "x": 0,
+          "y": 0,
+          "scale": 1,
+          "opacity": 1
+        },
+        {
+          "id": "request-a",
+          "layer": "beat-0",
+          "x": 0,
+          "y": 0,
+          "scale": 1,
+          "opacity": 1
+        },
+        {
+          "id": "request-b",
+          "layer": "beat-0",
+          "x": 0,
+          "y": 0,
+          "scale": 1,
+          "opacity": 1
+        },
+        {
+          "id": "probe-0",
+          "layer": "beat-0",
+          "x": 425,
+          "y": 640,
+          "scale": 1,
+          "opacity": 1
+        },
+        {
+          "id": "probe-1",
+          "layer": "beat-0",
+          "x": 655,
+          "y": 640,
+          "scale": 1,
+          "opacity": 1
+        }
+      ]
+    },
+    {
+      "frame": 941,
+      "actors": [
+        {
+          "id": "index",
+          "layer": "beat-0",
+          "x": 0,
+          "y": 0,
+          "scale": 1,
+          "opacity": 1
+        },
+        {
+          "id": "request-a",
+          "layer": "beat-0",
+          "x": 0,
+          "y": 0,
+          "scale": 1,
+          "opacity": 1
+        },
+        {
+          "id": "request-b",
+          "layer": "beat-0",
+          "x": 0,
+          "y": 0,
+          "scale": 1,
+          "opacity": 1
+        }
+      ]
+    },
+    {
+      "frame": 954,
+      "actors": [
+        {
+          "id": "index",
+          "layer": "beat-0",
+          "x": 0,
+          "y": 0,
+          "scale": 1,
+          "opacity": 1
+        },
+        {
+          "id": "request-a",
+          "layer": "beat-0",
+          "x": 100,
+          "y": 97.5,
+          "scale": 1,
+          "opacity": 0.5
+        },
+        {
+          "id": "request-b",
+          "layer": "beat-0",
+          "x": -100,
+          "y": 97.5,
+          "scale": 1,
+          "opacity": 0.5
+        }
+      ]
+    },
+    {
+      "frame": 966,
+      "actors": [
+        {
+          "id": "index",
+          "layer": "beat-0",
+          "x": 0,
+          "y": 0,
+          "scale": 1,
+          "opacity": 1
+        },
+        {
+          "id": "request-a",
+          "layer": "beat-0",
+          "x": 200,
+          "y": 195,
+          "scale": 1,
+          "opacity": 0
+        },
+        {
+          "id": "request-b",
+          "layer": "beat-0",
+          "x": -200,
+          "y": 195,
+          "scale": 1,
+          "opacity": 0
+        }
+      ]
+    },
+    {
+      "frame": 1535,
+      "actors": [
+        {
+          "id": "index",
+          "layer": "beat-0",
+          "x": 0,
+          "y": 0,
+          "scale": 1,
+          "opacity": 1
+        },
+        {
+          "id": "request-a",
+          "layer": "beat-0",
+          "x": 0,
+          "y": 0,
+          "scale": 1,
+          "opacity": 1
+        },
+        {
+          "id": "request-b",
+          "layer": "beat-0",
+          "x": -65,
+          "y": 0,
+          "scale": 1,
+          "opacity": 1
+        },
+        {
+          "id": "wait-lock",
+          "layer": "beat-0",
+          "x": 0,
+          "y": 0,
+          "scale": 1,
+          "opacity": 1
+        },
+        {
+          "id": "index",
+          "layer": "beat-1",
+          "x": 0,
+          "y": 0,
+          "scale": 1,
+          "opacity": 0
+        },
+        {
+          "id": "request-a",
+          "layer": "beat-1",
+          "x": 0,
+          "y": 0,
+          "scale": 1,
+          "opacity": 0
+        },
+        {
+          "id": "request-b",
+          "layer": "beat-1",
+          "x": 0,
+          "y": 0,
+          "scale": 1,
+          "opacity": 0
+        },
+        {
+          "id": "rejection",
+          "layer": "beat-1",
+          "x": 0,
+          "y": 0,
+          "scale": 1,
+          "opacity": 0
+        }
+      ]
+    },
+    {
+      "frame": 1547,
+      "actors": [
+        {
+          "id": "index",
+          "layer": "beat-1",
+          "x": 0,
+          "y": 0,
+          "scale": 1,
+          "opacity": 1
+        },
+        {
+          "id": "request-a",
+          "layer": "beat-1",
+          "x": 0,
+          "y": 0,
+          "scale": 1,
+          "opacity": 0.740741
+        },
+        {
+          "id": "request-b",
+          "layer": "beat-1",
+          "x": 37.5,
+          "y": -47.5,
+          "scale": 1,
+          "opacity": 0.213889
+        },
+        {
+          "id": "rejection",
+          "layer": "beat-1",
+          "x": 0,
+          "y": 0,
+          "scale": 1,
+          "opacity": 0
+        }
+      ]
+    },
+    {
+      "frame": 1559,
+      "actors": [
+        {
+          "id": "index",
+          "layer": "beat-1",
+          "x": 0,
+          "y": 0,
+          "scale": 1,
+          "opacity": 1
+        },
+        {
+          "id": "request-a",
+          "layer": "beat-1",
+          "x": 0,
+          "y": 0,
+          "scale": 1,
+          "opacity": 1
+        },
+        {
+          "id": "request-b",
+          "layer": "beat-1",
+          "x": 75,
+          "y": -55,
+          "scale": 1,
+          "opacity": 0.65
+        },
+        {
+          "id": "rejection",
+          "layer": "beat-1",
+          "x": 0,
+          "y": 0,
+          "scale": 1,
+          "opacity": 1
+        }
+      ]
+    }
+  ],
+  "limitations": [
+    "No full episode render or rollout across all legacy visuals.",
+    "Benchmark is two short samples, not a per-episode time guarantee.",
+    "Pixel/DOM changes do not automatically prove semantic quality.",
+    "Overlap diagnostics at scene crossovers include expected geometry intersections; stable sampled frames have zero overlaps."
+  ]
+}
