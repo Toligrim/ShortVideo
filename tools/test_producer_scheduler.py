@@ -112,7 +112,7 @@ class ConstantInvariantTests(unittest.TestCase):
             self.assertEqual(sched.MODEL, "gpt-5.6-luna")
             self.assertEqual(sched.EFFORT, "max")
             self.assertEqual(sched.RUNNER, "codex")
-            self.assertEqual(sched.TIMEOUT_MIN, 180)
+            self.assertEqual(sched.TIMEOUT_MIN, 210)
         finally:
             for k, v in old.items():
                 if v is None:
@@ -357,7 +357,7 @@ class PromptTests(unittest.TestCase):
         self.assertIn("--model gpt-5.6-luna", joined)
         self.assertIn("--effort max", joined)
         self.assertIn("--prompt-file /tmp/prompt.md", joined)
-        self.assertIn("--timeout-min 180", joined)
+        self.assertIn("--timeout-min 210", joined)
         self.assertIn("--slug auto-x", joined)
 
 

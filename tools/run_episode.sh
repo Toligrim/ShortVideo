@@ -13,7 +13,7 @@ RUNNER=""
 MODEL=""
 EFFORT="max"
 PROMPT_FILE=""
-TIMEOUT_MIN=180
+TIMEOUT_MIN=210  # default; producer_scheduler.py passes --timeout-min explicitly. 180->210 on 2026-09-10 (runs blew the wall in the overlap-fix round).
 
 while [[ $# -gt 0 ]]; do
   case "$1" in

@@ -71,7 +71,12 @@ MODEL = "gpt-5.6-luna"
 EFFORT = "max"
 RUNNER = "codex"
 INTERVAL_SECONDS = 300  # 5 min floor - see module docstring; SchedulerLock is the real gate
-TIMEOUT_MIN = 180
+# 180 -> 210 on 2026-09-10: three consecutive runs blew the wall clock in the
+# director's second overlap-fix round (auto-20260909-052001 barely made it at
+# 2h03m; auto-20260910-052001 hit exit 124 mid-round). See the overlap-round
+# cap added to build_prompt() the same day - the timeout bump is the safety
+# margin, the cap is the actual fix.
+TIMEOUT_MIN = 210
 PROMPT_TOPIC_LABEL = "тему выбирает агент (инструкции в промпте)"
 
 # Test-only seam: when set to a truthy value a "real" (non-dry) launch is
@@ -436,6 +441,14 @@ def build_prompt(root: Path, slug: str, topic_label: str) -> str:
    ОБЯЗАТЕЛЬНО прогони `cd video && node scripts/check-overlaps.cjs {slug}` —
    это не LLM, а измерение реальных прямоугольников текста в DOM; ненулевой
    код выхода = вернуть режиссёру, рендер и review запрещены до зелёного чека.
+   БЮДЖЕТ КРУГОВ ПРАВОК: не более ОДНОГО отдельного круга режиссёра ради
+   overlap-дефектов и не более ДВУХ кругов ради вердикта критика. Если после
+   этого чек всё ещё красный или критик не принял — ОСТАНОВИСЬ и отдай
+   оператору (сводка + список оставшихся дефектов), НЕ круги до таймаута.
+   Прецедент auto-20260910-052001 (10.09.2026): второй overlap-круг стартовал
+   на 2 ч 40 мин прогона и был убит 180-минутной стеной (exit 124), ролик не
+   выпущен. Раунды правок — самый дорогой участок; закладывай их в бюджет
+   времени, а не гоняй, пока хватает.
 3. ОЗВУЧКА: только Gemini TTS (venv/bin/python tools/tts_scenes.py), без фолбэка.
    Недоступность Gemini — СТОП с явной причиной, не подменяй другим провайдером.
 4. ПУБЛИКАЦИЯ — ТОЛЬКО approval-gated раздел скилла (section «Approval-gated
