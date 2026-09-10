@@ -70,6 +70,7 @@ import { TlsHandshakeVisual, type TlsHandshakePhase } from "./TlsHandshakeVisual
 import { BatterySeiGrowthVisual, type SeiPhase } from "./BatterySeiGrowth";
 import { BatteryChargeLimitVisual, type ChargeLimitPhase } from "./BatteryChargeLimitVisual";
 import { ColdBatteryVoltageDropVisual, type ColdBatteryPhase } from "./ColdBatteryVoltageDropVisual";
+import { RegenerativeBrakingVisual, type RegenerativeBrakingPhase } from "./RegenerativeBrakingVisual";
 import { IncognitoSessionVisual, type IncognitoSessionPhase } from "./IncognitoSessionVisual";
 import { ContextWindowVisual, type ContextWindowPhase } from "./ContextWindowVisual";
 import { AttentionCostVisual, type AttentionCostPhase } from "./AttentionCostVisual";
@@ -565,6 +566,17 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
     if (beat.visual === "cold-battery-voltage-drop") {
       const phase = beat.params?.phase as ColdBatteryPhase | undefined;
       impact = start + Math.round(dur * (phase === "drop" ? 0.68 : phase === "shutdown" ? 0.52 : phase === "resistance" ? 0.62 : 0.55));
+    }
+    if (beat.visual === "regenerative-braking") {
+      const phase = beat.params?.phase as RegenerativeBrakingPhase | undefined;
+      impact = start + Math.round(dur * (
+        phase === "friction" ? 0.64
+          : phase === "generator" ? 0.68
+          : phase === "inverter" ? 0.72
+          : phase === "dynamo" ? 0.66
+          : phase === "blend" ? 0.7
+          : 0.58
+      ));
     }
     if (beat.visual === "incognito-session") {
       const phase = beat.params?.phase;
@@ -1152,6 +1164,11 @@ export const storySfx = (
     if (s.beat.visual === "cold-battery-voltage-drop") {
       const ph = s.beat.params?.phase as ColdBatteryPhase | undefined;
       const sound = ph === "shutdown" ? "slam" : ph === "drop" ? "ding" : ph === "resistance" ? "pop" : "click";
+      events.push({ frame: s.impact, sound });
+    }
+    if (s.beat.visual === "regenerative-braking") {
+      const ph = s.beat.params?.phase as RegenerativeBrakingPhase | undefined;
+      const sound = ph === "friction" || ph === "blend" ? "slam" : ph === "inverter" || ph === "dynamo" ? "ding" : ph === "generator" ? "pop" : "click";
       events.push({ frame: s.impact, sound });
     }
     if (s.beat.visual === "context-window") {
@@ -12219,6 +12236,7 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     "diffusion-denoise": { scale: 0.92, y: -20 },
     "tls-handshake": { scale: 0.92, y: -20 },
     "cold-battery-voltage-drop": { scale: 0.9, y: -20 },
+    "regenerative-braking": { scale: 0.9, y: -20 },
     "incognito-session": { scale: 0.92, y: -20 },
     "context-window": { scale: 0.9, y: -20 },
     "attention-cost": { scale: 0.9, y: -20 },
@@ -13410,6 +13428,15 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
             fps={fps}
             impactLocal={impactLocal}
             phase={(slot.beat.params?.phase as ColdBatteryPhase | undefined) ?? "cold"}
+          />
+        );
+      case "regenerative-braking":
+        return (
+          <RegenerativeBrakingVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as RegenerativeBrakingPhase | undefined) ?? "symptom"}
           />
         );
       case "incognito-session":

@@ -194,6 +194,7 @@ export interface StoryBeat {
     | "battery-sei-growth"
     | "battery-charge-limit"
     | "cold-battery-voltage-drop"
+    | "regenerative-braking"
    | "incognito-session"
   | "context-window"
   | "attention-cost"
