@@ -68,7 +68,7 @@
           "transition": { "kind": "continuation", "preset": "match" },
           "motion": {
             "intent": "establish",
-            "camera": { "onWord": "устройства", "target": { "x": 0.5, "y": 0.46 } },
+            "camera": { "onWord": "След", "target": { "x": 0.5, "y": 0.46 } },
             "entrance": "cascade",
             "cues": [
               { "id": "follow", "onWord": "След" },
