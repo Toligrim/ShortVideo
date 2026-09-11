@@ -106,6 +106,7 @@ import { ResetVectorVisual, type ResetVectorPhase } from "./ResetVectorVisual";
 import { AudioFingerprintVisual, type AudioFingerprintPhase } from "./AudioFingerprintVisual";
 import { EchoCancellationVisual, type EchoCancellationPhase } from "./EchoCancellationVisual";
 import { ActiveNoiseCancelVisual, type ActiveNoiseCancelPhase } from "./ActiveNoiseCancelVisual";
+import { AudioTimeStretchVisual, type AudioTimeStretchPhase } from "./AudioTimeStretchVisual";
 import { InvertedIndexVisual, type InvertedIndexPhase } from "./InvertedIndexMergeVisual";
 import { ApkUpdateSignatureVisual, type ApkUpdateSignaturePhase } from "./ApkUpdateSignatureVisual";
 import { OriginCheckVisual, type OriginCheckPhase } from "./OriginCheckVisual";
@@ -265,6 +266,16 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
     if (beat.visual === "active-noise-cancel") {
       const phase = beat.params?.phase as ActiveNoiseCancelPhase | undefined;
       impact = start + Math.round(dur * (phase === "antiphase" ? 0.68 : phase === "ear-zone" ? 0.72 : phase === "speech" ? 0.68 : phase === "swing" ? 0.64 : phase === "listen" ? 0.6 : 0.58));
+    }
+    if (beat.visual === "audio-time-stretch") {
+      const phase = beat.params?.phase as AudioTimeStretchPhase | undefined;
+      const cue = phase === "symptom" ? "short"
+        : phase === "wave" ? "accelerate"
+        : phase === "filmstrip" ? "compress"
+        : phase === "windows" ? "windows"
+        : phase === "preserve" ? "overlap"
+        : "falls";
+      impact = resolveCue(cueFrames(beat.motion, words, start, end), cue, start, end);
     }
     if (beat.visual === "qr-repair") impact = start + Math.round(dur * 0.6);
     if (beat.visual === "qr-phone-scan") impact = start + Math.round(dur * 0.68);
@@ -871,6 +882,11 @@ export const storySfx = (
     if (s.beat.visual === "active-noise-cancel") {
       const phase = s.beat.params?.phase as ActiveNoiseCancelPhase | undefined;
       const sound = phase === "ear-zone" ? "ding" : phase === "antiphase" ? "whoosh" : phase === "speech" ? "click" : phase === "swing" ? "pop" : "click";
+      events.push({ frame: s.impact, sound });
+    }
+    if (s.beat.visual === "audio-time-stretch") {
+      const phase = s.beat.params?.phase as AudioTimeStretchPhase | undefined;
+      const sound = phase === "result" ? "ding" : phase === "preserve" ? "whoosh" : phase === "filmstrip" ? "click" : phase === "windows" ? "pop" : phase === "wave" ? "slam" : "pop";
       events.push({ frame: s.impact, sound });
     }
     if (s.beat.visual === "qr-repair") {
@@ -12486,6 +12502,16 @@ const StoryVisual: React.FC<{ slot: BeatSlot; sampleFrame: number }> = ({ slot, 
             fps={fps}
             impactLocal={impactLocal}
             phase={(slot.beat.params?.phase as ActiveNoiseCancelPhase | undefined) ?? "life"}
+          />
+        );
+      case "audio-time-stretch":
+        return (
+          <AudioTimeStretchVisual
+            local={local}
+            dur={dur}
+            fps={fps}
+            impactFrame={slot.impact ?? slot.start}
+            phase={(slot.beat.params?.phase as AudioTimeStretchPhase | undefined) ?? "symptom"}
           />
         );
       case "qr-repair":

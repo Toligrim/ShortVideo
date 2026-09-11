@@ -115,6 +115,7 @@ export interface StoryBeat {
     | "audio-fingerprint"
     | "echo-cancellation"
     | "active-noise-cancel"
+    | "audio-time-stretch"
     | "orbit-fft-groups"
     | "qr-repair"
     | "qr-phone-scan"

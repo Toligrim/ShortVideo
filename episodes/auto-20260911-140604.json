@@ -1,0 +1,246 @@
+{
+  "id": "auto-20260911-140604",
+  "title": "Почему голосовые на скорости два раза не звучат голосом бурундука?",
+  "scenes": [
+    {
+      "type": "story",
+      "heading": "Почему не бурундук?",
+      "narration": "Включаешь скорость два раза: голосовое стало вдвое короче — почему голос не запищал, будто бурундук? Миф: плеер просто крутит звук быстрее.",
+      "beats": [
+        {
+          "visual": "audio-time-stretch",
+          "onWord": "Включаешь",
+          "params": { "phase": "symptom" },
+          "motion": {
+            "intent": "establish",
+            "camera": { "onWord": "скорость", "target": { "x": 0.5, "y": 0.46 }, "strength": 0.45 },
+            "entrance": "cascade",
+            "cues": [
+              { "id": "speed", "onWord": "скорость" },
+              { "id": "short", "onWord": "короче" }
+            ],
+            "actors": {
+              "phone": { "preset": "pulse", "cue": "speed" },
+              "myth": { "preset": "recoil", "cue": "short", "to": { "x": 28, "y": 0 } }
+            }
+          }
+        },
+        {
+          "visual": "title-slam",
+          "onWord": "Миф",
+          "transition": { "kind": "contrast", "preset": "wipe" },
+          "params": { "text": "НЕ БУРУНДУК", "sub": "2× ≠ ВЫШЕ" },
+          "motion": {
+            "intent": "focus",
+            "camera": { "onWord": "Миф", "target": { "x": 0.5, "y": 0.42 }, "strength": 0.35 },
+            "entrance": "materialize",
+            "cues": [
+              { "id": "myth", "onWord": "Миф" },
+              { "id": "faster", "onWord": "быстрее" }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "type": "story",
+      "heading": "Тон и время — разные вещи",
+      "transition": { "kind": "turn", "preset": "push" },
+      "narration": "Если ускорить саму волну, её колебания участятся: голос станет выше. Но здесь меняют не тон, а плотность времени — как монтажёр сжимает ленту.",
+      "beats": [
+        {
+          "visual": "audio-time-stretch",
+          "onWord": "Если",
+          "params": { "phase": "wave" },
+          "motion": {
+            "intent": "compare",
+            "camera": { "onWord": "волну", "target": { "x": 0.67, "y": 0.48 }, "strength": 0.5 },
+            "entrance": "cascade",
+            "cues": [
+              { "id": "accelerate", "onWord": "ускорить" },
+              { "id": "wave", "onWord": "волну" },
+              { "id": "higher", "onWord": "выше" }
+            ],
+            "actors": {
+              "fast-wave": { "preset": "pulse", "cue": "accelerate" },
+              "higher": { "preset": "pulse", "cue": "higher" }
+            }
+          }
+        },
+        {
+          "visual": "title-slam",
+          "onWord": "Но",
+          "transition": { "kind": "contrast", "preset": "wipe" },
+          "params": { "text": "ВРЕМЯ, НЕ ТОН", "sub": "ПЛОТНОСТЬ ВРЕМЕНИ" },
+          "motion": {
+            "intent": "focus",
+            "camera": { "onWord": "плотность", "target": { "x": 0.5, "y": 0.42 }, "strength": 0.35 },
+            "entrance": "materialize",
+            "cues": [
+              { "id": "tone", "onWord": "тон" },
+              { "id": "density", "onWord": "плотность" },
+              { "id": "compress", "onWord": "сжимает" }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "type": "story",
+      "heading": "Сожми монтаж, не растягивай",
+      "transition": { "kind": "continuation", "preset": "match" },
+      "narration": "Это {time-stretch|тайм-стретч}: изменение длительности без изменения высоты тона. Представь монтажёра: он придвигает фрагменты киноплёнки и склеивает их плотнее, но каждый кадр не растягивает.",
+      "beats": [
+        {
+          "visual": "audio-time-stretch",
+          "onWord": "Это",
+          "params": { "phase": "filmstrip" },
+          "motion": {
+            "intent": "reveal",
+            "camera": { "onWord": "time-stretch", "target": { "x": 0.5, "y": 0.5 }, "strength": 0.45 },
+            "entrance": "cascade",
+            "cues": [
+              { "id": "term", "onWord": "time-stretch" },
+              { "id": "compress", "onWord": "изменение" },
+              { "id": "tone", "onWord": "тона" }
+            ],
+            "actors": {
+              "strip": { "preset": "transfer", "cue": "compress", "from": { "x": -70, "y": 0 }, "to": { "x": 0, "y": 0 } },
+              "editor": { "preset": "pulse", "cue": "compress" }
+            }
+          }
+        },
+        {
+          "visual": "title-slam",
+          "onWord": "Представь",
+          "transition": { "kind": "contrast", "preset": "wipe" },
+          "params": { "text": "ФРАГМЕНТЫ БЛИЖЕ", "sub": "КАДР НЕ ТЯНЕМ" },
+          "motion": {
+            "intent": "focus",
+            "camera": { "onWord": "фрагменты", "target": { "x": 0.5, "y": 0.44 }, "strength": 0.35 },
+            "entrance": "materialize",
+            "cues": [
+              { "id": "editor", "onWord": "монтажёра" },
+              { "id": "move", "onWord": "придвигает" },
+              { "id": "join", "onWord": "склеивает" },
+              { "id": "shot", "onWord": "кадр" }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "type": "story",
+      "heading": "Окна перекрываются",
+      "transition": { "kind": "continuation", "preset": "match" },
+      "narration": "В типичной реализации речь режут на короткие перекрывающиеся окна: соседний фрагмент выбирают по похожей форме волны, сдвигают ближе и смешивают внахлёст.",
+      "beats": [
+        {
+          "visual": "audio-time-stretch",
+          "onWord": "В",
+          "params": { "phase": "windows" },
+          "motion": {
+            "intent": "focus",
+            "camera": { "onWord": "окна", "target": { "x": 0.55, "y": 0.48 }, "strength": 0.5 },
+            "entrance": "cascade",
+            "cues": [
+              { "id": "cut", "onWord": "режут" },
+              { "id": "windows", "onWord": "окна" },
+              { "id": "similar", "onWord": "похожей" }
+            ],
+            "actors": {
+              "window-set": { "preset": "transfer", "cue": "windows", "to": { "x": 24, "y": 0 } },
+              "match": { "preset": "pulse", "cue": "similar" }
+            }
+          }
+        },
+        {
+          "visual": "title-slam",
+          "onWord": "сдвигают",
+          "transition": { "kind": "continuation", "preset": "match" },
+          "params": { "text": "ОКНА ВНАХЛЁСТ", "sub": "ФОРМА СОВПАДАЕТ" },
+          "motion": {
+            "intent": "resolve",
+            "camera": { "onWord": "смешивают", "target": { "x": 0.5, "y": 0.46 }, "strength": 0.3 },
+            "entrance": "materialize",
+            "cues": [
+              { "id": "shift", "onWord": "сдвигают" },
+              { "id": "mix", "onWord": "смешивают" }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "type": "story",
+      "heading": "Период остаётся",
+      "transition": { "kind": "continuation", "preset": "match" },
+      "narration": "Поэтому внутри окна волна не проигрывается вдвое быстрее: её локальные колебания остаются прежними, а окна сдвигаются с меньшим шагом и сильнее накладываются. Длина сообщения падает, высота голоса — нет.",
+      "beats": [
+        {
+          "visual": "audio-time-stretch",
+          "onWord": "Поэтому",
+          "params": { "phase": "preserve" },
+          "motion": {
+            "intent": "compare",
+            "camera": { "onWord": "внутри", "target": { "x": 0.28, "y": 0.5 }, "strength": 0.5 },
+            "entrance": "cascade",
+            "cues": [
+              { "id": "unchanged", "onWord": "прежними" },
+              { "id": "shift", "onWord": "сдвигаются" },
+              { "id": "overlap", "onWord": "накладываются" }
+            ],
+            "actors": {
+              "local-window": { "preset": "pulse", "cue": "unchanged" },
+              "window-step": { "preset": "transfer", "cue": "shift", "from": { "x": -40, "y": 0 }, "to": { "x": 0, "y": 0 } },
+              "overlap-zone": { "preset": "pulse", "cue": "overlap" }
+            }
+          }
+        },
+        {
+          "visual": "audio-time-stretch",
+          "onWord": "Длина",
+          "transition": { "kind": "continuation", "preset": "match" },
+          "params": { "phase": "result" },
+          "motion": {
+            "intent": "resolve",
+            "camera": { "onWord": "падает", "target": { "x": 0.62, "y": 0.48 }, "strength": 0.5 },
+            "entrance": "materialize",
+            "cues": [
+              { "id": "falls", "onWord": "падает" },
+              { "id": "pitch", "onWord": "высота" },
+              { "id": "tone", "onWord": "нет" }
+            ],
+            "actors": {
+              "message": { "preset": "transfer", "cue": "falls", "from": { "x": 0, "y": 24 }, "to": { "x": 0, "y": 0 } }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "outro",
+      "title": "Время сжалось, тон остался",
+      "transition": { "kind": "finale", "preset": "dissolve" },
+      "bullets": [
+        "2× = короче по времени",
+        "Окна перекрываются",
+        "Локальный тон сохраняется"
+      ],
+      "cta": "Подпишись: дальше — артефакты",
+      "narration": "Вывод: два раза — это не писк, а {time-stretch|тайм-стретч}: монтаж фрагментов с сохранённым тоном. Дальше — почему на сильном ускорении появляются артефакты. Подпишись.",
+      "motion": {
+        "intent": "resolve",
+        "camera": { "onWord": "Вывод", "target": { "x": 0.5, "y": 0.46 }, "strength": 0.35 },
+        "entrance": "rise",
+        "cues": [
+          { "id": "double", "onWord": "два" },
+          { "id": "stretch", "onWord": "time-stretch" },
+          { "id": "tone", "onWord": "тоном" },
+          { "id": "artifacts", "onWord": "артефакты" },
+          { "id": "subscribe", "onWord": "Подпишись" }
+        ]
+      }
+    }
+  ]
+}
