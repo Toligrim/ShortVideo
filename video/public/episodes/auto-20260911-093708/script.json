@@ -1,0 +1,178 @@
+{
+  "id": "auto-20260911-093708",
+  "title": "Почему пауэрбанк на двадцать тысяч мА·ч не заряжает телефон на двадцать тысяч?",
+  "scenes": [
+    {
+      "type": "story",
+      "heading": "Цифра на коробке",
+      "narration": "На коробке пауэрбанка обещают двадцать тысяч {мА·ч|миллиампе́р-ча́с}, а телефон получает заметно меньше. Цифра врёт? Нет — она измеряет не тот участок пути.",
+      "beats": [
+        {
+          "visual": "charge-energy-path",
+          "onWord": "коробке",
+          "params": { "phase": "paradox", "capacity": "20 000 мА·ч", "realOutput": "≈12 600 мА·ч" },
+          "motion": {
+            "intent": "focus",
+            "camera": { "onWord": "меньше", "target": { "x": 0.74, "y": 0.44 }, "strength": 0.65 },
+            "entrance": "cascade",
+            "cues": [
+              { "id": "show", "onWord": "коробке" },
+              { "id": "shortfall", "onWord": "меньше" }
+            ],
+            "actors": {
+              "package": { "preset": "pulse", "cue": "show" },
+              "phone": { "preset": "recoil", "cue": "shortfall", "to": { "x": 18, "y": 0 } }
+            }
+          }
+        },
+        {
+          "visual": "title-slam",
+          "onWord": "врёт",
+          "params": { "text": "ЦИФРА НЕ ВРЁТ", "sub": "ДРУГОЙ УЧАСТОК" },
+          "motion": {
+            "intent": "resolve",
+            "camera": { "onWord": "Нет", "target": { "x": 0.5, "y": 0.44 }, "strength": 0.35 },
+            "entrance": "materialize",
+            "cues": [
+              { "id": "question", "onWord": "врёт" },
+              { "id": "answer", "onWord": "Нет" }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "type": "diagram",
+      "heading": "Заряд и давление",
+      "transition": { "kind": "turn", "preset": "push" },
+      "narration": "Представь бак: {мА·ч|миллиампе́р-ча́с} — сколько электрического заряда в нём, а напряжение — давление. Энергия — запас работы: заряд, умноженный на напряжение, в {Вт·ч|ва́тт-ча́с}.",
+      "nodes": [
+        { "id": "charge", "label": "мА·ч · заряд", "icon": "droplets", "tone": "accent2" },
+        { "id": "pressure", "label": "В · давление", "icon": "gauge", "tone": "warning" },
+        { "id": "work", "label": "Вт·ч · работа", "icon": "battery-charging", "tone": "success" }
+      ],
+      "packets": [
+        { "label": "Q", "from": "charge", "to": "work", "tone": "accent2", "onWord": "заряда" },
+        { "label": "V", "from": "pressure", "to": "work", "tone": "warning", "onWord": "напряжение" }
+      ],
+      "state": { "label": "Q × V = Вт·ч", "tone": "success", "onWord": "Вт·ч" },
+      "motion": {
+        "intent": "compare",
+        "camera": { "onWord": "Энергия", "target": { "x": 0.5, "y": 0.52 }, "strength": 0.5 },
+        "entrance": "cascade",
+        "cues": [
+          { "id": "charge", "onWord": "заряда" },
+          { "id": "pressure", "onWord": "напряжение" },
+          { "id": "multiply", "onWord": "умноженный" }
+        ]
+      }
+    },
+    {
+      "type": "story",
+      "heading": "Рейтинг внутри корпуса",
+      "transition": { "kind": "continuation", "preset": "match" },
+      "narration": "На коробке эта ёмкость относится к внутренним литий-ионным ячейкам при номинальном напряжении. Возьмём три целых семь десятых вольта: двадцать тысяч {мА·ч|миллиампе́р-ча́с} — примерно семьдесят четыре {Вт·ч|ва́тт-ча́с}. У модели напряжение может отличаться.",
+      "beats": [
+        {
+          "visual": "charge-energy-path",
+          "onWord": "коробке",
+          "params": { "phase": "cell-rating", "capacity": "20 000 мА·ч", "voltage": "3,7 В", "energy": "74 Вт·ч" },
+          "motion": {
+            "intent": "focus",
+            "camera": { "onWord": "семьдесят", "target": { "x": 0.73, "y": 0.52 }, "strength": 0.6 },
+            "entrance": "cascade",
+            "cues": [
+              { "id": "rate", "onWord": "ячейкам" },
+              { "id": "energy", "onWord": "семьдесят" }
+            ],
+            "actors": {
+              "cells": { "preset": "transfer", "cue": "rate", "from": { "x": -100, "y": 0 }, "to": { "x": 0, "y": 0 } },
+              "formula": { "preset": "pulse", "cue": "energy" }
+            }
+          }
+        },
+        {
+          "visual": "title-slam",
+          "onWord": "Вт·ч",
+          "params": { "text": "74 Вт·ч", "sub": "Q × V" },
+          "motion": {
+            "intent": "resolve",
+            "camera": { "onWord": "Вт·ч", "target": { "x": 0.72, "y": 0.5 }, "strength": 0.35 },
+            "entrance": "materialize",
+            "cues": [
+              { "id": "energy", "onWord": "Вт·ч" }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "type": "story",
+      "heading": "До USB и после потерь",
+      "transition": { "kind": "continuation", "preset": "match" },
+      "narration": "Повышающий преобразователь поднимает напряжение до пяти вольт на {USB|ю эс би}. В идеале семьдесят четыре {Вт·ч|ва́тт-ча́с} дадут четырнадцать тысяч восемьсот {мА·ч|миллиампе́р-ча́с}; при условных потерях энергии в пятнадцать процентов останется около двенадцати тысяч шестьсот {мА·ч|миллиампе́р-ча́с}.",
+      "beats": [
+        {
+          "visual": "charge-energy-path",
+          "onWord": "поднимает",
+          "params": { "phase": "boost-loss", "voltage": "3,7 В", "outputVoltage": "5 В" },
+          "motion": {
+            "intent": "follow",
+            "camera": { "onWord": "пяти", "target": { "x": 0.78, "y": 0.48 }, "strength": 0.55 },
+            "entrance": "cascade",
+            "cues": [
+              { "id": "boost", "onWord": "поднимает" },
+              { "id": "usb", "onWord": "USB" }
+            ],
+            "actors": {
+              "converter": { "preset": "pulse", "cue": "boost" },
+              "flow": { "preset": "transfer", "cue": "usb", "from": { "x": -30, "y": 0 }, "to": { "x": 30, "y": 0 } }
+            }
+          }
+        },
+        {
+          "visual": "charge-energy-path",
+          "onWord": "идеале",
+          "transition": { "kind": "contrast", "preset": "wipe" },
+          "params": { "phase": "result", "energy": "74 Вт·ч", "idealOutput": "14 800 мА·ч", "realOutput": "≈12 600 мА·ч" },
+          "motion": {
+            "intent": "resolve",
+            "camera": { "onWord": "потерях", "target": { "x": 0.76, "y": 0.5 }, "strength": 0.55 },
+            "entrance": "materialize",
+            "cues": [
+              { "id": "ideal", "onWord": "идеале" },
+              { "id": "loss", "onWord": "потерях" }
+            ],
+            "actors": {
+              "ideal": { "preset": "pulse", "cue": "ideal" },
+              "real": { "preset": "transfer", "cue": "loss", "from": { "x": 80, "y": 0 }, "to": { "x": 0, "y": 0 } },
+              "loss": { "preset": "depart", "cue": "loss", "to": { "x": 0, "y": 105 } }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "outro",
+      "title": "Запомни шкалу",
+      "transition": { "kind": "finale", "preset": "dissolve" },
+      "bullets": [
+        "мА·ч — заряд ячеек",
+        "Q × V = Вт·ч",
+        "USB-выход теряет энергию"
+      ],
+      "cta": "Подпишись: дальше — реальная ёмкость",
+      "narration": "Итак, двадцать тысяч {мА·ч|миллиампе́р-ча́с} — заряд внутренних ячеек, не гарантия выхода. Восемьдесят пять процентов — лишь пример: ток, температура и модель меняют результат. Дальше — как измеряют реальную ёмкость. Подпишись.",
+      "motion": {
+        "intent": "resolve",
+        "camera": { "onWord": "результат", "target": { "x": 0.5, "y": 0.48 }, "strength": 0.35 },
+        "entrance": "rise",
+        "cues": [
+          { "id": "rating", "onWord": "двадцать" },
+          { "id": "example", "onWord": "пример" },
+          { "id": "next", "onWord": "Дальше" }
+        ]
+      }
+    }
+  ]
+}
