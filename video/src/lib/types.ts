@@ -200,6 +200,7 @@ export interface StoryBeat {
   | "file-delete-recovery"
   | "photo-access-boundary"
   | "tls-handshake"
+  | "packet-encapsulation"
 | "block-chain"
     | "mempool-rbf"
     | "face-id-depth"

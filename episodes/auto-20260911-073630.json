@@ -1,0 +1,278 @@
+{
+  "id": "auto-20260911-073630",
+  "title": "Почему VPN прячет твой IP, но не делает тебя анонимным?",
+  "scenes": [
+    {
+      "type": "story",
+      "heading": "Снаружи — другой адрес",
+      "narration": "Включаешь {VPN|ви пи эн}, сайт показывает другую страну. Но сервис проверки {IP|ай пи}-адреса видит адрес {VPN|ви пи эн}-сервера. Ты исчез или сменил адрес?",
+      "transition": { "kind": "turn", "preset": "push" },
+      "beats": [
+        {
+          "visual": "browser-click",
+          "onWord": "Включаешь",
+          "params": { "url": "example.com" },
+          "transition": { "kind": "continuation", "preset": "match" },
+          "motion": {
+            "intent": "focus",
+            "camera": { "onWord": "сайт", "target": { "x": 0.72, "y": 0.42 } },
+            "entrance": "cascade",
+            "cues": [
+              { "id": "open", "onWord": "Включаешь" },
+              { "id": "country", "onWord": "другую" }
+            ]
+          }
+        },
+        {
+          "visual": "title-slam",
+          "onWord": "другую",
+          "params": { "text": "ДРУГАЯ СТРАНА", "sub": "видимый адрес изменился" },
+          "transition": { "kind": "turn", "preset": "push" },
+          "motion": {
+            "intent": "focus",
+            "camera": { "onWord": "другую", "target": { "x": 0.5, "y": 0.42 } },
+            "entrance": "materialize",
+            "cues": [
+              { "id": "country", "onWord": "другую" },
+              { "id": "service", "onWord": "сервис" }
+            ]
+          }
+        },
+        {
+          "visual": "packet-encapsulation",
+          "onWord": "адрес",
+          "params": { "phase": "exit", "clientIp": "198.51.100.24", "vpnIp": "203.0.113.9", "siteLabel": "САЙТ" },
+          "transition": { "kind": "contrast", "preset": "wipe" },
+          "motion": {
+            "intent": "resolve",
+            "camera": { "onWord": "адрес", "target": { "x": 0.78, "y": 0.42 } },
+            "entrance": "cascade",
+            "cues": [
+              { "id": "source", "onWord": "адрес" },
+              { "id": "question", "onWord": "исчез" },
+              { "id": "return", "onWord": "адрес", "occurrence": 2 }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "type": "story",
+      "heading": "След запроса",
+      "narration": "След ведёт по дороге запроса: сначала он идёт от устройства к {VPN|ви пи эн}-серверу, потом сервер обращается к сайту своим адресом. Как запрос доезжает?",
+      "transition": { "kind": "continuation", "preset": "match" },
+      "beats": [
+        {
+          "visual": "devices-meet",
+          "onWord": "След",
+          "transition": { "kind": "continuation", "preset": "match" },
+          "motion": {
+            "intent": "establish",
+            "camera": { "onWord": "устройства", "target": { "x": 0.5, "y": 0.46 } },
+            "entrance": "cascade",
+            "cues": [
+              { "id": "follow", "onWord": "След" },
+              { "id": "device", "onWord": "устройства" }
+            ]
+          }
+        },
+        {
+          "visual": "packet-encapsulation",
+          "onWord": "сначала",
+          "params": { "phase": "route", "clientIp": "198.51.100.24", "vpnIp": "203.0.113.9", "siteLabel": "САЙТ" },
+          "transition": { "kind": "continuation", "preset": "match" },
+          "motion": {
+            "intent": "follow",
+            "camera": { "onWord": "сначала", "target": { "x": 0.37, "y": 0.48 } },
+            "entrance": "cascade",
+            "cues": [
+              { "id": "route", "onWord": "сначала" },
+              { "id": "vpn", "onWord": "VPN" }
+            ]
+          }
+        },
+        {
+          "visual": "packet-encapsulation",
+          "onWord": "потом",
+          "params": { "phase": "exit", "clientIp": "198.51.100.24", "vpnIp": "203.0.113.9", "siteLabel": "САЙТ" },
+          "transition": { "kind": "turn", "preset": "push" },
+          "motion": {
+            "intent": "resolve",
+            "camera": { "onWord": "потом", "target": { "x": 0.7, "y": 0.45 } },
+            "entrance": "cascade",
+            "cues": [
+              { "id": "server", "onWord": "сервер" },
+              { "id": "site", "onWord": "сайту" },
+              { "id": "return", "onWord": "сайту" }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "type": "story",
+      "heading": "Пакет в пакете",
+      "narration": "Главный механизм — {туннелирование|туннели́рование}, как письмо в конверте курьера: пакет кладут внутрь внешнего пакета. Внешний заголовок ведёт его к {VPN|ви пи эн}-серверу, внутренний заголовок остаётся внутри до сервера.",
+      "transition": { "kind": "turn", "preset": "push" },
+      "beats": [
+        {
+          "visual": "title-slam",
+          "onWord": "туннелирование",
+          "params": { "text": "ПАКЕТ В ПАКЕТЕ", "sub": "IP-in-IP" },
+          "transition": { "kind": "contrast", "preset": "wipe" },
+          "motion": {
+            "intent": "focus",
+            "camera": { "onWord": "туннелирование", "target": { "x": 0.5, "y": 0.5 } },
+            "entrance": "materialize",
+            "cues": [
+              { "id": "mechanism", "onWord": "туннелирование" }
+            ]
+          }
+        },
+        {
+          "visual": "packet-encapsulation",
+          "onWord": "пакет",
+          "params": { "phase": "pack", "clientIp": "198.51.100.24", "vpnIp": "203.0.113.9", "siteLabel": "САЙТ" },
+          "transition": { "kind": "continuation", "preset": "match" },
+          "motion": {
+            "intent": "reveal",
+            "camera": { "onWord": "пакет", "target": { "x": 0.5, "y": 0.48 } },
+            "entrance": "cascade",
+            "cues": [
+              { "id": "pack", "onWord": "пакет" },
+              { "id": "seal", "onWord": "внешнего" }
+            ]
+          }
+        },
+        {
+          "visual": "packet-encapsulation",
+          "onWord": "Внешний",
+          "params": { "phase": "transit", "clientIp": "198.51.100.24", "vpnIp": "203.0.113.9", "siteLabel": "САЙТ" },
+          "transition": { "kind": "continuation", "preset": "match" },
+          "motion": {
+            "intent": "follow",
+            "camera": { "onWord": "Внешний", "target": { "x": 0.45, "y": 0.5 } },
+            "entrance": "cascade",
+            "cues": [
+              { "id": "arrive", "onWord": "Внешний" },
+              { "id": "inside", "onWord": "внутри" }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "type": "story",
+      "heading": "Оболочка снимается",
+      "narration": "На сервере внешний заголовок снимают, пакет достают и отправляют на сайт. Для сайта отправитель — адрес {VPN|ви пи эн}-сервера; ответ возвращается через туннель к тебе.",
+      "transition": { "kind": "continuation", "preset": "match" },
+      "beats": [
+        {
+          "visual": "packet-encapsulation",
+          "onWord": "снимают",
+          "params": { "phase": "unwrap", "clientIp": "198.51.100.24", "vpnIp": "203.0.113.9", "siteLabel": "САЙТ" },
+          "transition": { "kind": "continuation", "preset": "match" },
+          "motion": {
+            "intent": "resolve",
+            "camera": { "onWord": "снимают", "target": { "x": 0.48, "y": 0.48 } },
+            "entrance": "cascade",
+            "cues": [
+              { "id": "open", "onWord": "снимают" },
+              { "id": "forward", "onWord": "отправляют" }
+            ]
+          }
+        },
+        {
+          "visual": "packet-encapsulation",
+          "onWord": "отправитель",
+          "params": { "phase": "exit", "clientIp": "198.51.100.24", "vpnIp": "203.0.113.9", "siteLabel": "САЙТ" },
+          "transition": { "kind": "turn", "preset": "push" },
+          "motion": {
+            "intent": "focus",
+            "camera": { "onWord": "отправитель", "target": { "x": 0.78, "y": 0.44 } },
+            "entrance": "cascade",
+            "cues": [
+              { "id": "source", "onWord": "отправитель" },
+              { "id": "return", "onWord": "возвращается" }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "type": "story",
+      "heading": "Граница анонимности",
+      "narration": "Граница: {VPN|ви пи эн} меняет видимый сетевой адрес и скрывает маршрут от локальной сети, но анонимным тебя не делает. {VPN|ви пи эн}-сервис и сайты могут связать действия по аккаунтам и кукам. Дальше — следы; подпишись.",
+      "transition": { "kind": "contrast", "preset": "wipe" },
+      "beats": [
+        {
+          "visual": "incognito-session",
+          "onWord": "Граница",
+          "params": { "phase": "request" },
+          "transition": { "kind": "continuation", "preset": "match" },
+          "motion": {
+            "intent": "establish",
+            "camera": { "onWord": "Граница", "target": { "x": 0.55, "y": 0.46 } },
+            "entrance": "cascade",
+            "cues": [
+              { "id": "boundary", "onWord": "Граница" },
+              { "id": "address", "onWord": "адрес" }
+            ]
+          }
+        },
+        {
+          "visual": "incognito-session",
+          "onWord": "анонимным",
+          "params": { "phase": "no-signal" },
+          "transition": { "kind": "contrast", "preset": "wipe" },
+          "motion": {
+            "intent": "resolve",
+            "camera": { "onWord": "анонимным", "target": { "x": 0.52, "y": 0.48 } },
+            "entrance": "materialize",
+            "cues": [
+              { "id": "mask", "onWord": "анонимным" },
+              { "id": "limit", "onWord": "делает" }
+            ]
+          }
+        },
+        {
+          "visual": "title-slam",
+          "onWord": "связать",
+          "params": { "text": "АККАУНТ + COOKIE", "sub": "след можно связать" },
+          "transition": { "kind": "turn", "preset": "push" },
+          "motion": {
+            "intent": "focus",
+            "camera": { "onWord": "связать", "target": { "x": 0.5, "y": 0.46 } },
+            "entrance": "materialize",
+            "cues": [
+              { "id": "bind", "onWord": "связать" },
+              { "id": "trace", "onWord": "кукам" }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "type": "outro",
+      "title": "Адрес — не анонимность",
+      "bullets": [
+        "IP → адрес VPN",
+        "Пакет внутри пакета",
+        "Аккаунт + куки связывают"
+      ],
+      "cta": "Подпишись: дальше — следы",
+      "narration": "{VPN|ви пи эн} меняет адрес. Сайт видит сервер, а аккаунты и куки связывают тебя. Подпишись.",
+      "transition": { "kind": "finale", "preset": "dissolve" },
+      "motion": {
+        "intent": "resolve",
+        "camera": { "onWord": "VPN", "target": { "x": 0.5, "y": 0.48 } },
+        "entrance": "materialize",
+        "cues": [
+          { "id": "summary", "onWord": "меняет" },
+          { "id": "boundary", "onWord": "адрес" },
+          { "id": "trace", "onWord": "связывают" }
+        ]
+      }
+    }
+  ]
+}

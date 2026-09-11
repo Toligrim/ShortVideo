@@ -71,6 +71,7 @@ import { BlockChainVisual, type BlockChainPhase } from "./BlockChainVisual";
 import { MempoolRbfVisual, type MempoolRbfPhase } from "./MempoolRbfVisual";
 import { DiffusionDenoiseVisual, type DiffusionDenoisePhase } from "./DiffusionDenoiseVisual";
 import { TlsHandshakeVisual, type TlsHandshakePhase } from "./TlsHandshakeVisual";
+import { PacketEncapsulationVisual, type PacketEncapsulationPhase } from "./PacketEncapsulationVisual";
 import { BatterySeiGrowthVisual, type SeiPhase } from "./BatterySeiGrowth";
 import { BatteryChargeLimitVisual, type ChargeLimitPhase } from "./BatteryChargeLimitVisual";
 import { ColdBatteryVoltageDropVisual, type ColdBatteryPhase } from "./ColdBatteryVoltageDropVisual";
@@ -548,6 +549,16 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
       impact = start + Math.round(dur * (phase === "glass" ? 0.58 : phase === "latent" ? 0.62 : phase === "ddim" ? 0.68 : phase === "prompt" ? 0.62 : 0.58));
     }
     if (beat.visual === "tls-handshake") impact = start + Math.round(dur * 0.62);
+    if (beat.visual === "packet-encapsulation") {
+      const phase = beat.params?.phase as PacketEncapsulationPhase | undefined;
+      impact = start + Math.round(dur * (
+        phase === "pack" ? 0.62
+          : phase === "transit" ? 0.64
+          : phase === "unwrap" ? 0.62
+          : phase === "exit" ? 0.72
+          : 0.58
+      ));
+    }
     if (beat.visual === "battery-sei-growth") {
       const phase = beat.params?.phase;
       impact = start + Math.round(dur * (phase === "sei-growth" ? 0.62 : phase === "resistance" ? 0.68 : phase === "high-voltage" ? 0.58 : 0.55));
@@ -1142,6 +1153,11 @@ export const storySfx = (
     if (s.beat.visual === "tls-handshake") {
       const ph = s.beat.params?.phase;
       const sound = ph === "certificate" ? "pop" : ph === "derive" ? "ding" : "click";
+      events.push({ frame: s.impact, sound });
+    }
+    if (s.beat.visual === "packet-encapsulation") {
+      const ph = s.beat.params?.phase as PacketEncapsulationPhase | undefined;
+      const sound = ph === "pack" ? "slam" : ph === "unwrap" ? "whoosh" : ph === "exit" ? "ding" : "pop";
       events.push({ frame: s.impact, sound });
     }
     if (s.beat.visual === "battery-sei-growth") {
@@ -13242,6 +13258,18 @@ const StoryVisual: React.FC<{ slot: BeatSlot; sampleFrame: number }> = ({ slot, 
             fps={fps}
             impactLocal={impactLocal}
             phase={(slot.beat.params?.phase as TlsHandshakePhase | undefined) ?? "certificate"}
+          />
+        );
+      case "packet-encapsulation":
+        return (
+          <PacketEncapsulationVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as PacketEncapsulationPhase | undefined) ?? "route"}
+            clientIp={slot.beat.params?.clientIp as string | undefined}
+            vpnIp={slot.beat.params?.vpnIp as string | undefined}
+            siteLabel={slot.beat.params?.siteLabel as string | undefined}
           />
         );
       case "battery-sei-growth":
