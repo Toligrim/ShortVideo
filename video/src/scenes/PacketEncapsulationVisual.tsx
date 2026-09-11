@@ -74,7 +74,9 @@ const Header: React.FC<{ phase: PacketEncapsulationPhase; opacity: number }> = (
     style={{
       position: "absolute",
       left: W / 2,
-      top: 245,
+      // Keep the phase label below the shared SceneHeading (y=195..~265)
+      // while leaving a clear gap before the diagram starts at y=430+.
+      top: 320,
       transform: "translateX(-50%)",
       display: "flex",
       alignItems: "center",
