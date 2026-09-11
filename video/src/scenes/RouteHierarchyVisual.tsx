@@ -24,7 +24,10 @@ const smooth = (n: number) => {
 };
 
 const Header: React.FC<{ icon: string; text: string; color: string }> = ({ icon, text, color }) => (
-  <div style={{ position: "absolute", left: CX, top: 280, transform: "translateX(-50%)", display: "flex", alignItems: "center", gap: 12, color, fontSize: 25, whiteSpace: "nowrap", ...mono }}>
+  // Keep the phase label below the shared SceneHeading (y=195..~265), same
+  // convention as PacketEncapsulationVisual — 280 was too close and produced
+  // a 25% overlap with a two-word heading ("Стрелки до запроса").
+  <div style={{ position: "absolute", left: CX, top: 320, transform: "translateX(-50%)", display: "flex", alignItems: "center", gap: 12, color, fontSize: 25, whiteSpace: "nowrap", ...mono }}>
     <IconGlyph name={icon} size={31} color={color} strokeWidth={1.8} />
     <span>{text}</span>
   </div>
