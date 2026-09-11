@@ -121,7 +121,10 @@ const Graph: React.FC<{ shortcut?: boolean; waves?: boolean; expanded?: boolean 
       {shortcut ? <g opacity={shortcutP}>
         <path d="M 180 690 Q 535 230 900 690" fill="none" stroke={theme.success} strokeWidth={13} strokeDasharray="22 18" />
         <path d="M 860 678 l 34 12 -27 23" fill={theme.success} />
-        <text x="535" y="345" textAnchor="middle" fill={theme.success} fontFamily={theme.mono} fontSize="25" fontWeight="800">A → E · 16</text>
+        {/* y=345 used to collide with the Header (now at top:320); check-overlaps.cjs
+            can't see this because it only scans div/span, not SVG text — moved down
+            into the clear band between the Header and the arc's peak (~y=460). */}
+        <text x="535" y="410" textAnchor="middle" fill={theme.success} fontFamily={theme.mono} fontSize="25" fontWeight="800">A → E · 16</text>
       </g> : null}
       {waves ? <g opacity={waveP}>
         <circle cx={180 + 355 * waveP} cy={690 - 130 * waveP} r="17" fill={theme.accent2} />
