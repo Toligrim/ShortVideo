@@ -55,17 +55,12 @@
           "params": { "phase": "snapshot" },
           "motion": {
             "intent": "reveal",
-            "camera": { "onWord": "снимок", "target": { "x": 0.68, "y": 0.5 }, "strength": 0.5 },
             "entrance": "cascade",
             "cues": [
-              { "id": "save", "onWord": "сохраняет" },
-              { "id": "snapshot", "onWord": "снимок" },
-              { "id": "heap", "onWord": "JavaScript" }
+              { "id": "save", "onWord": "сохраняет" }
             ],
             "actors": {
-              "document": { "preset": "transfer", "cue": "save", "to": { "x": -55, "y": 0 } },
-              "snapshot": { "preset": "pulse", "cue": "snapshot" },
-              "heap": { "preset": "pulse", "cue": "heap" }
+              "document": { "preset": "transfer", "cue": "save", "to": { "x": -55, "y": 0 } }
             }
           }
         },
@@ -76,12 +71,18 @@
           "params": { "text": "ПОЛНЫЙ СНИМОК", "sub": "DOM + STATE + JS HEAP" },
           "motion": {
             "intent": "focus",
-            "camera": { "onWord": "полный", "target": { "x": 0.5, "y": 0.46 }, "strength": 0.35 },
+            "camera": { "onWord": "снимок", "target": { "x": 0.5, "y": 0.46 }, "strength": 0.35 },
             "entrance": "materialize",
             "cues": [
               { "id": "full", "onWord": "полный" },
-              { "id": "memory", "onWord": "памяти" }
-            ]
+              { "id": "snapshot", "onWord": "снимок" },
+              { "id": "memory", "onWord": "памяти" },
+              { "id": "heap", "onWord": "JavaScript" }
+            ],
+            "actors": {
+              "snapshot": { "preset": "pulse", "cue": "snapshot" },
+              "heap": { "preset": "pulse", "cue": "heap" }
+            }
           }
         }
       ]
