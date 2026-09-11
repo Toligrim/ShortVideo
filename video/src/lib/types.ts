@@ -229,6 +229,7 @@ export interface StoryBeat {
   | "halving-schedule"
   | "traffic-segment"
   | "reward-check"
+  | "route-hierarchy"
   | "double-ratchet";
   onWord?: string; // бит начинается на этом слове реплики
   params?: Record<string, unknown>;

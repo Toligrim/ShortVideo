@@ -95,6 +95,7 @@ import { HalvingScheduleVisual, type HalvingSchedulePhase } from "./HalvingSched
 import { TrafficSegmentVisual, type TrafficSegmentPhase } from "./TrafficSegmentVisual";
 import { RewardCheckVisual, type RewardCheckPhase } from "./RewardCheckVisual";
 import { DoubleRatchetVisual, type DoubleRatchetPhase } from "./DoubleRatchetVisual";
+import { RouteHierarchyVisual, type RouteHierarchyPhase } from "./RouteHierarchyVisual";
 import { NfcCardCoilVisual, type NfcCardCoilPhase } from "./NfcCardCoilVisual";
 import { NfcFieldResponseVisual, type NfcFieldResponsePhase } from "./NfcFieldResponseVisual";
 import { PowerResetSequenceVisual, type PowerResetPhase } from "./PowerResetSequenceVisual";
@@ -741,6 +742,18 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
           : 0.58
       ));
     }
+    if (beat.visual === "route-hierarchy") {
+      const phase = beat.params?.phase as RouteHierarchyPhase | undefined;
+      impact = start + Math.round(dur * (
+        phase === "map" ? 0.62
+          : phase === "graph" ? 0.66
+          : phase === "shortcuts" ? 0.7
+          : phase === "express" ? 0.68
+          : phase === "query" ? 0.72
+          : phase === "expand" ? 0.7
+          : 0.62
+      ));
+    }
     return { beat, start, end, impact };
   });
 };
@@ -1324,6 +1337,11 @@ export const storySfx = (
     if (s.beat.visual === "double-ratchet") {
       const ph = s.beat.params?.phase as DoubleRatchetPhase | undefined;
       const sound = ph === "ciphertext" || ph === "server" ? "slam" : ph === "decrypt" || ph === "metadata" ? "ding" : ph === "advance" || ph === "encrypt" ? "pop" : "click";
+      events.push({ frame: s.impact, sound });
+    }
+    if (s.beat.visual === "route-hierarchy") {
+      const ph = s.beat.params?.phase as RouteHierarchyPhase | undefined;
+      const sound = ph === "shortcuts" || ph === "expand" ? "ding" : ph === "query" ? "whoosh" : ph === "express" ? "pop" : "click";
       events.push({ frame: s.impact, sound });
     }
     if (s.beat.visual === "mnemonic-seed-derivation") {
@@ -13566,6 +13584,15 @@ const StoryVisual: React.FC<{ slot: BeatSlot; sampleFrame: number }> = ({ slot, 
             fps={fps}
             impactLocal={impactLocal}
             phase={(slot.beat.params?.phase as DoubleRatchetPhase | undefined) ?? "message"}
+          />
+        );
+      case "route-hierarchy":
+        return (
+          <RouteHierarchyVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as RouteHierarchyPhase | undefined) ?? "graph"}
           />
         );
       default:
