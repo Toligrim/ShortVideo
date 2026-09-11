@@ -19,7 +19,7 @@
             "entrance": "cascade",
             "cues": [
               { "id": "open", "onWord": "Включаешь" },
-              { "id": "country", "onWord": "другую" }
+              { "id": "country", "onWord": "показывает" }
             ]
           }
         },
