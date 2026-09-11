@@ -19,7 +19,7 @@
             "entrance": "cascade",
             "cues": [
               { "id": "open", "onWord": "Включаешь" },
-              { "id": "country", "onWord": "другую" }
+              { "id": "country", "onWord": "показывает" }
             ]
           }
         },
@@ -68,11 +68,11 @@
           "transition": { "kind": "continuation", "preset": "match" },
           "motion": {
             "intent": "establish",
-            "camera": { "onWord": "устройства", "target": { "x": 0.5, "y": 0.46 } },
+            "camera": { "onWord": "След", "target": { "x": 0.5, "y": 0.46 } },
             "entrance": "cascade",
             "cues": [
               { "id": "follow", "onWord": "След" },
-              { "id": "device", "onWord": "устройства" }
+              { "id": "device", "onWord": "ведёт" }
             ]
           }
         },
