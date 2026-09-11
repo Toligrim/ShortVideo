@@ -24,7 +24,7 @@ const smooth = (n: number) => {
 };
 
 const Header: React.FC<{ icon: string; text: string; color: string }> = ({ icon, text, color }) => (
-  <div style={{ position: "absolute", left: CX, top: 224, transform: "translateX(-50%)", display: "flex", alignItems: "center", gap: 12, color, fontSize: 25, whiteSpace: "nowrap", ...mono }}>
+  <div style={{ position: "absolute", left: CX, top: 280, transform: "translateX(-50%)", display: "flex", alignItems: "center", gap: 12, color, fontSize: 25, whiteSpace: "nowrap", ...mono }}>
     <IconGlyph name={icon} size={31} color={color} strokeWidth={1.8} />
     <span>{text}</span>
   </div>
