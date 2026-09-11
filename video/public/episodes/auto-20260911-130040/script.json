@@ -1,0 +1,195 @@
+{
+  "id": "auto-20260911-130040",
+  "title": "Почему карты находят маршрут за секунду, хотя дорог миллионы?",
+  "scenes": [
+    {
+      "type": "story",
+      "heading": "Маршрут уже готов",
+      "narration": "Миллионы дорог — а маршрут от дома до кафе готов за секунду. Приложение правда перебирает каждую? Нет: главный трюк спрятан ещё до запроса.",
+      "beats": [
+        {
+          "visual": "route-hierarchy",
+          "onWord": "Миллионы",
+          "params": { "phase": "map" },
+          "motion": {
+            "intent": "establish",
+            "camera": { "onWord": "маршрут", "target": { "x": 0.5, "y": 0.43 }, "strength": 0.7 },
+            "entrance": "cascade",
+            "cues": [
+              { "id": "route", "onWord": "готов" },
+              { "id": "speed", "onWord": "секунду" }
+            ]
+          }
+        },
+        {
+          "visual": "title-slam",
+          "onWord": "Нет",
+          "params": { "text": "НЕ ПЕРЕБИРАЕТ", "sub": "трюк до запроса" },
+          "motion": {
+            "intent": "focus",
+            "camera": { "onWord": "Нет", "target": { "x": 0.5, "y": 0.38 } },
+            "entrance": "materialize",
+            "cues": [
+              { "id": "answer", "onWord": "Нет" },
+              { "id": "hidden", "onWord": "спрятан" }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "type": "story",
+      "heading": "Дороги становятся графом",
+      "narration": "Карта внутри — это {взвешенный граф|взвешенный граф}: перекрёстки становятся вершинами, дороги — рёбрами, а весом каждого ребра служит время или длина поездки.",
+      "beats": [
+        {
+          "visual": "route-hierarchy",
+          "onWord": "Карта",
+          "params": { "phase": "graph" },
+          "motion": {
+            "intent": "reveal",
+            "camera": { "onWord": "взвешенный граф", "target": { "x": 0.5, "y": 0.47 } },
+            "entrance": "cascade",
+            "cues": [
+              { "id": "graph", "onWord": "взвешенный граф" },
+              { "id": "edges", "onWord": "рёбрами" },
+              { "id": "weight", "onWord": "весом" }
+            ]
+          }
+        },
+        {
+          "visual": "title-slam",
+          "onWord": "служит",
+          "params": { "text": "ЦЕНА РЕБРА", "sub": "время или длина" },
+          "motion": {
+            "intent": "focus",
+            "camera": { "onWord": "время", "target": { "x": 0.5, "y": 0.44 } },
+            "entrance": "materialize",
+            "cues": [ { "id": "meaning", "onWord": "служит" } ]
+          }
+        }
+      ],
+      "transition": { "kind": "turn", "preset": "push" }
+    },
+    {
+      "type": "story",
+      "heading": "Стрелки до запроса",
+      "narration": "Заранее движок строит {иерархию сокращений|иерархию сокращений}: сворачивая перекрёстки, он для нужных соседей добавляет короткую стрелку с уже посчитанной стоимостью пути через свёрнутый узел.",
+      "beats": [
+        {
+          "visual": "route-hierarchy",
+          "onWord": "Заранее",
+          "params": { "phase": "shortcuts" },
+          "motion": {
+            "intent": "focus",
+            "camera": { "onWord": "сворачивая", "target": { "x": 0.5, "y": 0.39 } },
+            "entrance": "cascade",
+            "cues": [
+              { "id": "collapse", "onWord": "сворачивая" },
+              { "id": "shortcut", "onWord": "добавляет" }
+            ]
+          }
+        },
+        {
+          "visual": "title-slam",
+          "onWord": "стоимостью",
+          "params": { "text": "ГОТОВАЯ СТОИМОСТЬ", "sub": "через свёрнутый узел" },
+          "motion": {
+            "intent": "resolve",
+            "camera": { "onWord": "стоимостью", "target": { "x": 0.5, "y": 0.42 } },
+            "entrance": "materialize",
+            "cues": [ { "id": "result", "onWord": "стоимостью" } ]
+          }
+        }
+      ],
+      "transition": { "kind": "continuation", "preset": "match" }
+    },
+    {
+      "type": "story",
+      "heading": "Экспресс без остановок",
+      "narration": "Это как заранее соединить на схеме дальние станции экспрессом и подписать время: в поездке ты не проверяешь каждую остановку между ними.",
+      "beats": [
+        {
+          "visual": "route-hierarchy",
+          "onWord": "Это",
+          "params": { "phase": "express" },
+          "motion": {
+            "intent": "compare",
+            "camera": { "onWord": "схеме", "target": { "x": 0.5, "y": 0.43 }, "strength": 0.65 },
+            "entrance": "cascade",
+            "cues": [
+              { "id": "express", "onWord": "экспрессом" },
+              { "id": "time", "onWord": "время" }
+            ]
+          }
+        },
+        {
+          "visual": "title-slam",
+          "onWord": "проверяешь",
+          "params": { "text": "БЕЗ ОСТАНОВОК", "sub": "готовая стрелка" },
+          "motion": {
+            "intent": "resolve",
+            "camera": { "onWord": "проверяешь", "target": { "x": 0.5, "y": 0.43 } },
+            "entrance": "materialize",
+            "cues": [ { "id": "skip", "onWord": "проверяешь" } ]
+          }
+        }
+      ],
+      "transition": { "kind": "contrast", "preset": "wipe" }
+    },
+    {
+      "type": "story",
+      "heading": "Встреча волн",
+      "narration": "Запрос запускает две волны по этим уровням навстречу: они сходятся в промежуточном узле, а короткие стрелки раскрываются обратно в настоящие улицы.",
+      "beats": [
+        {
+          "visual": "route-hierarchy",
+          "onWord": "Запрос",
+          "params": { "phase": "query" },
+          "motion": {
+            "intent": "follow",
+            "camera": { "onWord": "уровням", "target": { "x": 0.5, "y": 0.42 } },
+            "entrance": "cascade",
+            "cues": [
+              { "id": "search", "onWord": "навстречу" },
+              { "id": "meet", "onWord": "сходятся" }
+            ]
+          }
+        },
+        {
+          "visual": "route-hierarchy",
+          "onWord": "короткие",
+          "params": { "phase": "expand" },
+          "motion": {
+            "intent": "reveal",
+            "camera": { "onWord": "раскрываются", "target": { "x": 0.5, "y": 0.46 } },
+            "entrance": "materialize",
+            "cues": [
+              { "id": "expand", "onWord": "раскрываются" }
+            ]
+          },
+          "transition": { "kind": "continuation", "preset": "match" }
+        }
+      ],
+      "transition": { "kind": "continuation", "preset": "match" }
+    },
+    {
+      "type": "outro",
+      "title": "Скорость до запроса",
+      "bullets": ["взвешенный граф", "предрасчёт стрелок", "поиск по уровням"],
+      "cta": "Следующий скрытый трюк — дальше",
+      "narration": "Итог: маршрут быстрый, потому что в сети заранее проложены короткие стрелки, а не потому, что сервер мгновенно просмотрел все дороги. Сервисы выбирают разные варианты. Дальше — ещё один скрытый трюк. Подпишись.",
+      "motion": {
+        "intent": "resolve",
+        "camera": { "onWord": "Итог", "target": { "x": 0.5, "y": 0.44 }, "strength": 0.6 },
+        "entrance": "rise",
+        "cues": [
+          { "id": "speed", "onWord": "быстрый" },
+          { "id": "variants", "onWord": "варианты" },
+          { "id": "next", "onWord": "дальше" }
+        ]
+      },
+      "transition": { "kind": "finale", "preset": "dissolve" }
+    }
+  ]
+}
