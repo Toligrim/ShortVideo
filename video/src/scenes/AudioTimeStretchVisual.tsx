@@ -228,8 +228,10 @@ const SymptomPhase: React.FC<{ impactFrame: number; motionFrame: number; fps: nu
       </MotionGroup>
       <MotionGroup id="myth" index={1} action={{ preset: "recoil", cue: "short", to: { x: 28, y: 0 } }}>
         <Panel x={580} y={420} width={430} height={470} color={theme.danger}>
-          <IconGlyph name="bird" size={68} color={theme.danger} strokeWidth={1.6} />
-          <div style={{ position: "absolute", left: 40, top: 28, color: theme.danger, ...mono, fontSize: 20 }}>ГИПОТЕЗА</div>
+          <div style={{ position: "absolute", left: 34, top: 22 }}>
+            <IconGlyph name="bird" size={68} color={theme.danger} strokeWidth={1.6} />
+          </div>
+          <div style={{ position: "absolute", left: 122, top: 39, color: theme.danger, ...mono, fontSize: 20 }}>ГИПОТЕЗА</div>
           <div style={{ position: "absolute", left: 0, right: 0, top: 124, textAlign: "center", color: theme.text, ...mono, fontSize: 46 }}>ПИСК?</div>
           <Waveform x={42} y={270} width={346} height={72} color={theme.danger} scaleX={0.68} phaseShift={phaseShift + 0.7} />
           <Label x={42} y={378} text="ТОН ВЫШЕ?" color={theme.danger} />
