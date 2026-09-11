@@ -64,7 +64,7 @@ const Header: React.FC<{ phase: AudioTimeStretchPhase }> = ({ phase }) => (
       position: "absolute",
       left: 32,
       right: 32,
-      top: 224,
+      top: 340,
       display: "flex",
       alignItems: "center",
       justifyContent: "center",

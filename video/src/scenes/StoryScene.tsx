@@ -13640,9 +13640,13 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
   const blend = previous ? beatBlendProgress(frame - slot.start, blendFrames) : 1;
   const camera = cameraAt(frame, slots.map(s => ({ start: s.start, end: s.end, motion: s.beat.motion })), words);
   const hideSceneHeading = slot.beat.visual === "mnemonic-seed-derivation" && slot.beat.params?.phase === "restore";
+  const skipAudioPhaseBlend = previous?.beat.visual === "audio-time-stretch"
+    && slot.beat.visual === "audio-time-stretch"
+    && previous.beat.params?.phase === "preserve"
+    && slot.beat.params?.phase === "result";
   const layer = (s: BeatSlot, sampleFrame: number, entering: boolean, key: string) => (
     <div key={key} data-motion-layer={key} style={{ position: "absolute", inset: 0,
-      ...transitionStyle(slot.beat.transition, blend, entering) }}>
+      ...(skipAudioPhaseBlend ? {} : transitionStyle(slot.beat.transition, blend, entering)) }}>
       <MotionStage start={s.start} end={s.end} words={words} plan={s.beat.motion} sampleFrame={sampleFrame}>
         <StoryVisual slot={s} sampleFrame={sampleFrame} />
       </MotionStage>
@@ -13653,7 +13657,7 @@ export const StoryScene: React.FC<{ scene: StoryProps; words: Word[]; frames: nu
     <div data-motion-camera style={{ position: "absolute", inset: 0,
       transform: `translate(${camera.x}px, ${camera.y}px) scale(${camera.scale})`,
       transformOrigin: `${CAMERA_ORIGIN.x}px ${CAMERA_ORIGIN.y}px` }}>
-      {previous && blend < 1 ? layer(previous, previous.end - 1, false, `beat-${idx - 1}`) : null}
+      {previous && blend < 1 && !skipAudioPhaseBlend ? layer(previous, previous.end - 1, false, `beat-${idx - 1}`) : null}
       {layer(slot, frame, true, `beat-${idx}`)}
     </div>
   </>;
