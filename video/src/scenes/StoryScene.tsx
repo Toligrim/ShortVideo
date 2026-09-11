@@ -99,6 +99,7 @@ import { NfcCardCoilVisual, type NfcCardCoilPhase } from "./NfcCardCoilVisual";
 import { NfcFieldResponseVisual, type NfcFieldResponsePhase } from "./NfcFieldResponseVisual";
 import { PowerResetSequenceVisual, type PowerResetPhase } from "./PowerResetSequenceVisual";
 import { SleepToRamVisual, type SleepToRamPhase } from "./SleepToRamVisual";
+import { BfcacheRestoreVisual, type BfcacheRestorePhase } from "./BfcacheRestoreVisual";
 import { RtcAlarmWakeupVisual, type RtcAlarmWakeupPhase } from "./RtcAlarmWakeupVisual";
 import { ResetVectorVisual, type ResetVectorPhase } from "./ResetVectorVisual";
 import { AudioFingerprintVisual, type AudioFingerprintPhase } from "./AudioFingerprintVisual";
@@ -189,6 +190,16 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
           : phase === "hibernate" ? 0.66
           : 0.6
       ));
+    }
+    if (beat.visual === "bfcache-restore") {
+      const phase = beat.params?.phase as BfcacheRestorePhase | undefined;
+      const cue = phase === "visit" ? "restore"
+        : phase === "snapshot" ? "snapshot"
+        : phase === "freeze" ? "freeze"
+        : phase === "book" ? "book"
+        : phase === "restore" ? "resume"
+        : "again";
+      impact = resolveCue(cueFrames(beat.motion, words, start, end), cue, start, end);
     }
     if (beat.visual === "rtc-alarm-wakeup") {
       const phase = beat.params?.phase as RtcAlarmWakeupPhase | undefined;
@@ -778,6 +789,11 @@ export const storySfx = (
     if (s.beat.visual === "sleep-to-ram") {
       const phase = s.beat.params?.phase as SleepToRamPhase | undefined;
       const sound = phase === "lid" ? "slam" : phase === "refresh" ? "click" : phase === "wake" ? "pop" : phase === "resume" ? "ding" : phase === "hibernate" ? "whoosh" : "pop";
+      events.push({ frame: s.impact, sound });
+    }
+    if (s.beat.visual === "bfcache-restore") {
+      const phase = s.beat.params?.phase as BfcacheRestorePhase | undefined;
+      const sound = phase === "ordinary-load" ? "slam" : phase === "restore" ? "ding" : phase === "freeze" ? "click" : phase === "book" ? "whoosh" : "pop";
       events.push({ frame: s.impact, sound });
     }
     if (s.beat.visual === "rtc-alarm-wakeup") {
@@ -12226,6 +12242,15 @@ const StoryVisual: React.FC<{ slot: BeatSlot; sampleFrame: number }> = ({ slot, 
             dur={dur}
             impactLocal={impactLocal}
             phase={(slot.beat.params?.phase as SleepToRamPhase | undefined) ?? "sleep"}
+          />
+        );
+      case "bfcache-restore":
+        return (
+          <BfcacheRestoreVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as BfcacheRestorePhase | undefined) ?? "visit"}
           />
         );
       case "rtc-alarm-wakeup":

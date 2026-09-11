@@ -89,6 +89,7 @@ export interface StoryBeat {
     | "storage-capacity"
     | "power-reset-sequence"
     | "sleep-to-ram"
+    | "bfcache-restore"
     | "rtc-alarm-wakeup"
     | "reset-vector-launch"
     | "nfc-card-coil"
