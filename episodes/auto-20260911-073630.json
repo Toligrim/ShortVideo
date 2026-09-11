@@ -72,7 +72,7 @@
             "entrance": "cascade",
             "cues": [
               { "id": "follow", "onWord": "След" },
-              { "id": "device", "onWord": "устройства" }
+              { "id": "device", "onWord": "ведёт" }
             ]
           }
         },
