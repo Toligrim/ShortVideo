@@ -1,0 +1,207 @@
+{
+  "id": "auto-20260911-111830",
+  "title": "Почему кнопка «назад» иногда возвращает страницу мгновенно?",
+  "scenes": [
+    {
+      "type": "story",
+      "heading": "Состояние вернулось",
+      "narration": "Открыл статью, пролистал вниз, вписал пару слов, ушёл по ссылке — нажал «назад», и всё вернулось сразу: тот же экран, прокрутка, текст в поле.",
+      "beats": [
+        {
+          "visual": "browser-click",
+          "onWord": "Открыл",
+          "params": { "url": "article.example" },
+          "motion": {
+            "intent": "establish",
+            "camera": { "onWord": "статью", "target": { "x": 0.5, "y": 0.44 } },
+            "entrance": "cascade",
+            "cues": [
+              { "id": "open", "onWord": "Открыл" },
+              { "id": "leave", "onWord": "ушёл" }
+            ]
+          }
+        },
+        {
+          "visual": "bfcache-restore",
+          "onWord": "назад",
+          "transition": { "kind": "continuation", "preset": "match" },
+          "params": { "phase": "visit" },
+          "motion": {
+            "intent": "resolve",
+            "camera": { "onWord": "назад", "target": { "x": 0.68, "y": 0.5 }, "strength": 0.55 },
+            "entrance": "materialize",
+            "cues": [
+              { "id": "back", "onWord": "назад" },
+              { "id": "restore", "onWord": "вернулось" },
+              { "id": "state", "onWord": "прокрутка" }
+            ],
+            "actors": {
+              "history": { "preset": "transfer", "cue": "back", "from": { "x": -90, "y": 0 }, "to": { "x": 0, "y": 0 } },
+              "field": { "preset": "pulse", "cue": "state" }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "story",
+      "heading": "Сохраняется не ответ",
+      "transition": { "kind": "turn", "preset": "push" },
+      "narration": "Это {bfcache|би́-эф-кэш}: браузер сохраняет не ответ {HTTP|эйч ти ти пи}, а полный живой снимок документа в памяти — вместе с прокруткой, полем и {JavaScript|джаваскри́пт}-кучей.",
+      "beats": [
+        {
+          "visual": "bfcache-restore",
+          "onWord": "Это",
+          "params": { "phase": "snapshot" },
+          "motion": {
+            "intent": "reveal",
+            "camera": { "onWord": "снимок", "target": { "x": 0.68, "y": 0.5 }, "strength": 0.5 },
+            "entrance": "cascade",
+            "cues": [
+              { "id": "save", "onWord": "сохраняет" },
+              { "id": "snapshot", "onWord": "снимок" },
+              { "id": "heap", "onWord": "JavaScript" }
+            ],
+            "actors": {
+              "document": { "preset": "transfer", "cue": "save", "to": { "x": -55, "y": 0 } },
+              "snapshot": { "preset": "pulse", "cue": "snapshot" },
+              "heap": { "preset": "pulse", "cue": "heap" }
+            }
+          }
+        },
+        {
+          "visual": "title-slam",
+          "onWord": "полный",
+          "transition": { "kind": "contrast", "preset": "wipe" },
+          "params": { "text": "ПОЛНЫЙ СНИМОК", "sub": "DOM + STATE + JS HEAP" },
+          "motion": {
+            "intent": "focus",
+            "camera": { "onWord": "полный", "target": { "x": 0.5, "y": 0.46 }, "strength": 0.35 },
+            "entrance": "materialize",
+            "cues": [
+              { "id": "full", "onWord": "полный" },
+              { "id": "memory", "onWord": "памяти" }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "type": "story",
+      "heading": "Пауза перед уходом",
+      "transition": { "kind": "continuation", "preset": "match" },
+      "narration": "Перед уходом браузер замораживает полный снимок: выполнение скриптов ставится на паузу. Это как не перечитывать книгу, а вернуть на стол уже раскрытую страницу.",
+      "beats": [
+        {
+          "visual": "bfcache-restore",
+          "onWord": "Перед",
+          "params": { "phase": "freeze" },
+          "motion": {
+            "intent": "focus",
+            "camera": { "onWord": "замораживает", "target": { "x": 0.58, "y": 0.5 }, "strength": 0.5 },
+            "entrance": "cascade",
+            "cues": [
+              { "id": "freeze", "onWord": "замораживает" },
+              { "id": "pause", "onWord": "паузу" }
+            ],
+            "actors": {
+              "document": { "preset": "depart", "cue": "freeze", "to": { "x": -120, "y": 0 } },
+              "snapshot": { "preset": "pulse", "cue": "freeze" },
+              "execution": { "preset": "pulse", "cue": "pause" }
+            }
+          }
+        },
+        {
+          "visual": "bfcache-restore",
+          "onWord": "как",
+          "transition": { "kind": "continuation", "preset": "match" },
+          "params": { "phase": "book" },
+          "motion": {
+            "intent": "reveal",
+            "camera": { "onWord": "книгу", "target": { "x": 0.5, "y": 0.52 }, "strength": 0.4 },
+            "entrance": "rise",
+            "cues": [
+              { "id": "book", "onWord": "книгу" },
+              { "id": "table", "onWord": "стол" }
+            ],
+            "actors": {
+              "book": { "preset": "pulse", "cue": "book" },
+              "return": { "preset": "transfer", "cue": "table", "from": { "x": -100, "y": -40 }, "to": { "x": 0, "y": 0 } }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "story",
+      "heading": "Возврат без пересборки",
+      "transition": { "kind": "continuation", "preset": "match" },
+      "narration": "При возврате браузер достаёт именно этот снимок и размораживает выполнение. Поэтому страница продолжает с той же прокрутки и тем же полем, а не строится заново.",
+      "beats": [
+        {
+          "visual": "bfcache-restore",
+          "onWord": "При",
+          "params": { "phase": "restore" },
+          "motion": {
+            "intent": "resolve",
+            "camera": { "onWord": "достаёт", "target": { "x": 0.72, "y": 0.5 }, "strength": 0.55 },
+            "entrance": "cascade",
+            "cues": [
+              { "id": "restore", "onWord": "достаёт" },
+              { "id": "resume", "onWord": "размораживает" },
+              { "id": "continue", "onWord": "продолжает" }
+            ],
+            "actors": {
+              "snapshot": { "preset": "depart", "cue": "restore", "to": { "x": -100, "y": 0 } },
+              "document": { "preset": "transfer", "cue": "restore", "from": { "x": -160, "y": 0 }, "to": { "x": 0, "y": 0 } },
+              "return": { "preset": "pulse", "cue": "resume" }
+            }
+          }
+        },
+        {
+          "visual": "bfcache-restore",
+          "onWord": "строится",
+          "transition": { "kind": "contrast", "preset": "wipe" },
+          "params": { "phase": "ordinary-load" },
+          "motion": {
+            "intent": "compare",
+            "camera": { "onWord": "заново", "target": { "x": 0.75, "y": 0.5 }, "strength": 0.45 },
+            "entrance": "cascade",
+            "cues": [
+              { "id": "rebuild", "onWord": "строится" },
+              { "id": "again", "onWord": "заново" }
+            ],
+            "actors": {
+              "blockers": { "preset": "pulse", "cue": "rebuild" },
+              "request": { "preset": "transfer", "cue": "rebuild", "from": { "x": -110, "y": 0 }, "to": { "x": 0, "y": 0 } },
+              "page": { "preset": "pulse", "cue": "again" }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "outro",
+      "title": "Назад возвращает живое",
+      "transition": { "kind": "finale", "preset": "dissolve" },
+      "bullets": [
+        "bfcache = снимок в памяти",
+        "Пауза → возврат → продолжение",
+        "unload / соединение → загрузка"
+      ],
+      "cta": "Подпишись: дальше — жизнь страницы",
+      "narration": "Если мешает обработчик {unload|анло́уд}, открытое соединение или другое ограничение, снимок не используют — получается обычная загрузка. Вывод: {bfcache|би́-эф-кэш} возвращает живую страницу. Дальше — что браузер делает после возврата. Подпишись.",
+      "motion": {
+        "intent": "resolve",
+        "camera": { "onWord": "Вывод", "target": { "x": 0.5, "y": 0.48 }, "strength": 0.35 },
+        "entrance": "rise",
+        "cues": [
+          { "id": "limit", "onWord": "unload" },
+          { "id": "load", "onWord": "загрузка" },
+          { "id": "summary", "onWord": "возвращает" },
+          { "id": "cta", "onWord": "Подпишись" }
+        ]
+      }
+    }
+  ]
+}
