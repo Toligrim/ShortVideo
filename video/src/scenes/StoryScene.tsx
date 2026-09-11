@@ -76,6 +76,7 @@ import { BatterySeiGrowthVisual, type SeiPhase } from "./BatterySeiGrowth";
 import { BatteryChargeLimitVisual, type ChargeLimitPhase } from "./BatteryChargeLimitVisual";
 import { ColdBatteryVoltageDropVisual, type ColdBatteryPhase } from "./ColdBatteryVoltageDropVisual";
 import { RegenerativeBrakingVisual, type RegenerativeBrakingPhase } from "./RegenerativeBrakingVisual";
+import { ChargeEnergyPathVisual, type ChargeEnergyPathPhase } from "./ChargeEnergyPathVisual";
 import { IncognitoSessionVisual, type IncognitoSessionPhase } from "./IncognitoSessionVisual";
 import { ContextWindowVisual, type ContextWindowPhase } from "./ContextWindowVisual";
 import { AttentionCostVisual, type AttentionCostPhase } from "./AttentionCostVisual";
@@ -581,6 +582,15 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
           : phase === "blend" ? 0.7
           : 0.58
       ));
+    }
+    if (beat.visual === "charge-energy-path") {
+      const phase = beat.params?.phase as ChargeEnergyPathPhase | undefined;
+      impact = resolveCue(
+        cueFrames(beat.motion, words, start, end),
+        phase === "paradox" ? "shortfall" : phase === "cell-rating" ? "energy" : phase === "boost-loss" ? "usb" : "loss",
+        start,
+        end,
+      );
     }
     if (beat.visual === "incognito-session") {
       const phase = beat.params?.phase;
@@ -1178,6 +1188,11 @@ export const storySfx = (
     if (s.beat.visual === "regenerative-braking") {
       const ph = s.beat.params?.phase as RegenerativeBrakingPhase | undefined;
       const sound = ph === "friction" || ph === "blend" ? "slam" : ph === "inverter" || ph === "dynamo" ? "ding" : ph === "generator" ? "pop" : "click";
+      events.push({ frame: s.impact, sound });
+    }
+    if (s.beat.visual === "charge-energy-path") {
+      const ph = s.beat.params?.phase as ChargeEnergyPathPhase | undefined;
+      const sound = ph === "result" ? "ding" : ph === "boost-loss" ? "whoosh" : ph === "cell-rating" ? "pop" : "slam";
       events.push({ frame: s.impact, sound });
     }
     if (s.beat.visual === "context-window") {
@@ -13306,6 +13321,21 @@ const StoryVisual: React.FC<{ slot: BeatSlot; sampleFrame: number }> = ({ slot, 
             fps={fps}
             impactLocal={impactLocal}
             phase={(slot.beat.params?.phase as RegenerativeBrakingPhase | undefined) ?? "symptom"}
+          />
+        );
+      case "charge-energy-path":
+        return (
+          <ChargeEnergyPathVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as ChargeEnergyPathPhase | undefined) ?? "paradox"}
+            capacity={slot.beat.params?.capacity as string | undefined}
+            voltage={slot.beat.params?.voltage as string | undefined}
+            energy={slot.beat.params?.energy as string | undefined}
+            idealOutput={slot.beat.params?.idealOutput as string | undefined}
+            realOutput={slot.beat.params?.realOutput as string | undefined}
+            outputVoltage={slot.beat.params?.outputVoltage as string | undefined}
           />
         );
       case "incognito-session":

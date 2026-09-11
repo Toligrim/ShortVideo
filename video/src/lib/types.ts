@@ -209,6 +209,7 @@ export interface StoryBeat {
     | "battery-charge-limit"
     | "cold-battery-voltage-drop"
     | "regenerative-braking"
+    | "charge-energy-path"
    | "incognito-session"
   | "context-window"
   | "attention-cost"
