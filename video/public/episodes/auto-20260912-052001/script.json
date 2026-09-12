@@ -1,0 +1,196 @@
+{
+  "id": "auto-20260912-052001",
+  "title": "Почему сайт помнит твою корзину, хотя ты ничего не сохранял?",
+  "scenes": [
+    {
+      "type": "story",
+      "heading": "Корзина после возврата",
+      "narration": "Закрыл вкладку, а иногда и браузер, вернулся в магазин — корзина на месте. Ты ничего не сохранял. Сайт что, помнит тебя?",
+      "beats": [
+        {
+          "visual": "title-slam",
+          "onWord": "Закрыл",
+          "params": { "text": "КОРЗИНА?", "sub": "после возврата" }
+        },
+        {
+          "visual": "cookie-ticket",
+          "onWord": "вернулся",
+          "params": {
+            "phase": "symptom",
+            "ticket": "7F3A",
+            "siteLabel": "МАГАЗИН",
+            "basketLabel": "КОРЗИНА"
+          },
+          "motion": {
+            "intent": "establish",
+            "entrance": "cascade",
+            "cues": [
+              { "id": "return", "onWord": "вернулся" },
+              { "id": "place", "onWord": "месте" }
+            ],
+            "actors": {
+              "browser": { "preset": "pulse", "cue": "return" },
+              "record": { "preset": "pulse", "cue": "place" }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "story",
+      "transition": { "kind": "contrast", "preset": "wipe" },
+      "heading": "Два запроса",
+      "narration": "Версус: один запрос приходит без ключа — магазин начинает пустую корзину. Другой приходит с ключом — сервер находит прежнюю запись. Два пути одного сайта.",
+      "beats": [
+        {
+          "visual": "title-slam",
+          "onWord": "Версус",
+          "params": { "text": "ДВА ПУТИ", "sub": "один сайт" }
+        },
+        {
+          "visual": "cookie-ticket",
+          "onWord": "без",
+          "params": {
+            "phase": "versus",
+            "ticket": "7F3A",
+            "siteLabel": "МАГАЗИН",
+            "basketLabel": "КОРЗИНА"
+          },
+          "motion": {
+            "intent": "compare",
+            "entrance": "cascade",
+            "cues": [
+              { "id": "without", "onWord": "без" },
+              { "id": "with", "onWord": "ключом" },
+              { "id": "found", "onWord": "находит" }
+            ],
+            "actors": {
+              "request-a": { "preset": "recoil", "cue": "without", "to": { "x": -24, "y": 0 } },
+              "request-b": { "preset": "transfer", "cue": "with", "to": { "x": 24, "y": 0 } },
+              "result": { "preset": "pulse", "cue": "found" }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "story",
+      "transition": { "kind": "turn", "preset": "push" },
+      "heading": "Ключ, не корзина",
+      "narration": "Механизм называется {ку́ки|ку́ки}: сервер присылает ответ с заголовком «сет-куки». Браузер сохраняет маленький {айди|айди}, как номерок гардероба, а не саму корзину.",
+      "beats": [
+        {
+          "visual": "cookie-ticket",
+          "onWord": "Механизм",
+          "params": {
+            "phase": "set",
+            "ticket": "7F3A",
+            "siteLabel": "МАГАЗИН",
+            "basketLabel": "КОРЗИНА"
+          },
+          "motion": {
+            "intent": "reveal",
+            "entrance": "materialize",
+            "cues": [
+              { "id": "respond", "onWord": "ответ" },
+              { "id": "save", "onWord": "сохраняет" }
+            ],
+            "actors": {
+              "response": { "preset": "transfer", "cue": "respond", "from": { "x": -315, "y": 0 }, "to": { "x": 315, "y": 0 } },
+              "key": { "preset": "pulse", "cue": "save" }
+            }
+          }
+        },
+        {
+          "visual": "title-slam",
+          "onWord": "гардероба",
+          "params": { "text": "НОМЕРОК", "sub": "не корзина" }
+        }
+      ]
+    },
+    {
+      "type": "story",
+      "transition": { "kind": "continuation", "preset": "match" },
+      "heading": "Подходящий запрос",
+      "narration": "Когда ты возвращаешься, браузер сам добавляет этот ключ в запрос заголовком «куки» — только для подходящего домена и пути. Сервер берёт айди и открывает запись корзины.",
+      "beats": [
+        {
+          "visual": "cookie-ticket",
+          "onWord": "возвращаешься",
+          "params": {
+            "phase": "return",
+            "ticket": "7F3A",
+            "siteLabel": "МАГАЗИН",
+            "basketLabel": "КОРЗИНА"
+          },
+          "motion": {
+            "intent": "follow",
+            "entrance": "cascade",
+            "cues": [
+              { "id": "add", "onWord": "добавляет" },
+              { "id": "suitable", "onWord": "подходящего" },
+              { "id": "lookup", "onWord": "берёт" }
+            ],
+            "actors": {
+              "key": { "preset": "transfer", "cue": "add", "from": { "x": -355, "y": 0 }, "to": { "x": 355, "y": 0 } },
+              "gate": { "preset": "pulse", "cue": "suitable" },
+              "record": { "preset": "pulse", "cue": "lookup" }
+            }
+          }
+        },
+        {
+          "visual": "title-slam",
+          "onWord": "открывает",
+          "params": { "text": "ЗАПИСЬ", "sub": "по ключу" }
+        }
+      ]
+    },
+    {
+      "type": "story",
+      "transition": { "kind": "continuation", "preset": "match" },
+      "heading": "Где живёт память",
+      "narration": "Вот трофей: сайт «помнит» не мозгом телефона, а возвращённым ключом, который связывает новый запрос со старой серверной записью. Дальше — ещё один скрытый механизм. Подпишись.",
+      "beats": [
+        {
+          "visual": "cookie-ticket",
+          "onWord": "трофей",
+          "params": {
+            "phase": "lookup",
+            "ticket": "7F3A",
+            "siteLabel": "МАГАЗИН",
+            "basketLabel": "КОРЗИНА"
+          },
+          "motion": {
+            "intent": "resolve",
+            "entrance": "materialize",
+            "cues": [
+              { "id": "bind", "onWord": "связывает" },
+              { "id": "found", "onWord": "серверной" }
+            ],
+            "actors": {
+              "key": { "preset": "transfer", "cue": "bind", "from": { "x": -110, "y": 50 }, "to": { "x": 300, "y": 150 } },
+              "record": { "preset": "pulse", "cue": "found" }
+            }
+          }
+        },
+        {
+          "visual": "title-slam",
+          "onWord": "Подпишись",
+          "params": { "text": "КЛЮЧ → ЗАПИСЬ", "sub": "память сервера" }
+        }
+      ]
+    },
+    {
+      "type": "outro",
+      "transition": { "kind": "finale", "preset": "dissolve" },
+      "title": "Ключ связывает запись",
+      "bullets": [
+        "Сервер ставит ключ",
+        "Браузер возвращает ключ",
+        "Корзина живёт на сервере"
+      ],
+      "cta": "Подпишись: дальше — скрытый механизм",
+      "narration": "Вот трофей: сайт «помнит» не мозгом телефона, а возвращённым ключом, который связывает новый запрос со старой серверной записью. Дальше — ещё один скрытый механизм. Подпишись."
+    }
+  ]
+}
