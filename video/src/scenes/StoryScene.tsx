@@ -120,6 +120,7 @@ import {
 import { TokenSamplerVisual, type TokenSamplerPhase } from "./TokenSamplerVisual";
 import { MnemonicSeedDerivationVisual, type MnemonicSeedDerivationPhase } from "./MnemonicSeedDerivationVisual";
 import { NatPatTranslationVisual, type NatPatPhase } from "./NatPatTranslationVisual";
+import { CookieTicketVisual, type CookieTicketPhase } from "./CookieTicketVisual";
 import { UniqueInsertRaceVisual, type UniqueInsertRacePhase } from "./UniqueInsertRaceVisual";
 
 /* ──────────────────────────── расписание битов ──────────────────────────── */
@@ -166,6 +167,11 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
     if (beat.visual === "nat-pat-translation") {
       const phase = beat.params?.phase as NatPatPhase | undefined;
       impact = start + Math.round(dur * (phase === "return" ? 0.72 : phase === "ticket" ? 0.66 : phase === "translate" ? 0.64 : 0.62));
+    }
+    if (beat.visual === "cookie-ticket") {
+      const phase = beat.params?.phase as CookieTicketPhase | undefined;
+      const cue = phase === "symptom" ? "place" : phase === "versus" ? "found" : phase === "set" ? "save" : phase === "return" ? "lookup" : "found";
+      impact = resolveCue(cueFrames(beat.motion, words, start, end), cue, start, end);
     }
     if (beat.visual === "storage-capacity") {
       const phase = beat.params?.phase as StorageCapacityPhase | undefined;
@@ -798,6 +804,11 @@ export const storySfx = (
     if (s.beat.visual === "nat-pat-translation") {
       const phase = s.beat.params?.phase as NatPatPhase | undefined;
       const sound = phase === "return" ? "ding" : phase === "ticket" ? "whoosh" : phase === "translate" ? "pop" : "click";
+      events.push({ frame: s.impact, sound });
+    }
+    if (s.beat.visual === "cookie-ticket") {
+      const phase = s.beat.params?.phase as CookieTicketPhase | undefined;
+      const sound = phase === "lookup" ? "ding" : phase === "return" ? "whoosh" : phase === "set" ? "pop" : phase === "versus" ? "slam" : "click";
       events.push({ frame: s.impact, sound });
     }
     if (s.beat.visual === "storage-capacity") {
@@ -12248,6 +12259,18 @@ const StoryVisual: React.FC<{ slot: BeatSlot; sampleFrame: number }> = ({ slot, 
             publicPort={slot.beat.params?.publicPort as string | undefined}
             deviceLabel={slot.beat.params?.deviceLabel as string | undefined}
             siteLabel={slot.beat.params?.siteLabel as string | undefined}
+          />
+        );
+      case "cookie-ticket":
+        return (
+          <CookieTicketVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as CookieTicketPhase | undefined) ?? "symptom"}
+            ticket={slot.beat.params?.ticket as string | undefined}
+            siteLabel={slot.beat.params?.siteLabel as string | undefined}
+            basketLabel={slot.beat.params?.basketLabel as string | undefined}
           />
         );
       case "storage-capacity":

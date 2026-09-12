@@ -86,6 +86,7 @@ export interface StoryBeat {
     | "handshake"
     | "title-slam"
     | "nat-pat-translation"
+    | "cookie-ticket"
     | "storage-capacity"
     | "power-reset-sequence"
     | "sleep-to-ram"
