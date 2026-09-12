@@ -207,7 +207,7 @@ export const CookieTicketVisual: React.FC<Props> = ({
           <Panel left={50} top={390} width={460} height={590} color={theme.danger}>
             <PanelTitle icon="circle-x" text="БЕЗ КЛЮЧА" color={theme.danger} />
             <div style={{ position: "absolute", left: 30, top: 138, color: theme.subtext, fontSize: 17, ...mono }}>НОВЫЙ ЗАПРОС</div>
-            <Token x={240} y={530} label="ПУСТО" color={theme.danger} icon="shopping-basket" />
+            <Token x={240} y={560} label="ПУСТО" color={theme.danger} icon="shopping-basket" />
             <div style={{ position: "absolute", left: 30, right: 30, top: 465, height: 2, background: `${theme.danger}55` }} />
             <div style={{ position: "absolute", left: 30, right: 30, top: 505, textAlign: "center", color: theme.danger, fontSize: 18, ...mono }}>КОРЗИНА НЕ НАЙДЕНА</div>
           </Panel>
@@ -250,7 +250,7 @@ export const CookieTicketVisual: React.FC<Props> = ({
           <Token x={540} y={680} label="Set-Cookie" color={theme.warning} icon="arrow-right" opacity={0.45 + 0.55 * response} />
         </MotionGroup>
         <MotionGroup id="key" index={3} action={{ preset: "pulse", cue: "save" }}>
-          <KeyRow left={697} top={635} width={300} ticket={ticket} color={theme.warning} opacity={0.35 + 0.65 * saved} />
+          <KeyRow left={697} top={755} width={300} ticket={ticket} color={theme.warning} opacity={0.35 + 0.65 * saved} />
         </MotionGroup>
         <Caption text="КЛЮЧ, НЕ КОРЗИНА" color={theme.warning} />
         <PulseRing x={847} y={680} triggerFrame={impactLocal} tone="warning" size={220} />
@@ -277,7 +277,7 @@ export const CookieTicketVisual: React.FC<Props> = ({
           </Panel>
         </MotionGroup>
         <MotionGroup id="key" index={2} action={{ preset: "transfer", cue: "add", from: { x: -355, y: 0 }, to: { x: 355, y: 0 } }}>
-          <Token x={540} y={685} label="Cookie" color={theme.accent} icon="key-round" />
+          <Token x={540} y={585} label="Cookie" color={theme.accent} icon="key-round" />
         </MotionGroup>
         <MotionGroup id="record" index={3} action={{ preset: "pulse", cue: "lookup" }}>
           <ServerPanel left={755} top={445} width={285} height={405}>
@@ -285,9 +285,9 @@ export const CookieTicketVisual: React.FC<Props> = ({
             <CartRow left={24} top={205} width={237} color={theme.accent2} label={`${ticket} → ${basketLabel}`} glow={0.3 + 0.7 * lookup} />
           </ServerPanel>
         </MotionGroup>
-        <Arrow x1={323} x2={755} y={685} color={theme.accent} opacity={enter} />
+        <Arrow x1={323} x2={755} y={585} color={theme.accent} opacity={enter} />
         <Caption text="ТОЛЬКО ПОДХОДЯЩИЙ ПУТЬ" color={theme.success} />
-        <PulseRing x={900} y={685} triggerFrame={impactLocal} tone="success" size={190} />
+        <PulseRing x={900} y={585} triggerFrame={impactLocal} tone="success" size={190} />
       </>
     );
   }
@@ -305,7 +305,7 @@ export const CookieTicketVisual: React.FC<Props> = ({
         </BrowserPanel>
       </MotionGroup>
       <MotionGroup id="key" index={1} action={{ preset: "transfer", cue: "bind", from: { x: -110, y: 50 }, to: { x: 300, y: 150 } }}>
-        <Token x={420} y={requestY + 45} label={ticket} color={theme.warning} icon="key-round" />
+        <Token x={420} y={requestY - 75} label={ticket} color={theme.warning} icon="key-round" />
       </MotionGroup>
       <MotionGroup id="record" index={2} action={{ preset: "pulse", cue: "found" }}>
         <ServerPanel left={620} top={390} width={405} height={570}>
