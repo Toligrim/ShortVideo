@@ -1,0 +1,161 @@
+{
+  "id": "auto-20260913-173910",
+  "title": "Почему двойное нажатие «Оплатить» обычно не списывает деньги дважды?",
+  "scenes": [
+    {
+      "type": "story",
+      "heading": "Двойной запрос",
+      "narration": "Платёж завис. Ты нажал «Оплатить» ещё раз — ждёшь два списания. Но выписка часто показывает одно. Кто остановил дубль?",
+      "beats": [
+        {
+          "visual": "idempotency-flow",
+          "params": { "phase": "symptom", "key": "K-7", "amount": "1 290 ₽" },
+          "motion": {
+            "intent": "focus",
+            "camera": { "onWord": "два", "target": { "x": 0.54, "y": 0.46 } },
+            "entrance": "cascade",
+            "cues": [
+              { "id": "tap", "onWord": "нажал" },
+              { "id": "duplicate", "onWord": "два" }
+            ]
+          }
+        },
+        {
+          "visual": "title-slam",
+          "onWord": "дубль",
+          "params": { "text": "ОДНО СПИСАНИЕ?", "sub": "ГДЕ ДУБЛЬ?" },
+          "motion": {
+            "intent": "resolve",
+            "camera": { "onWord": "дубль", "target": { "x": 0.5, "y": 0.45 } }
+          }
+        }
+      ]
+    },
+    {
+      "type": "diagram",
+      "heading": "Номерок заявки",
+      "transition": { "kind": "continuation" },
+      "narration": "Расследование начинается с первой заявки. Приложение прикрепляет {идемпоте́нтный ключ|идемпоте́нтный ключ} — номерок, как талон в гардеробе. Повтор отправляет тот же номер.",
+      "nodes": [
+        { "id": "app", "label": "ПРИЛОЖЕНИЕ", "icon": "smartphone", "tone": "accent" },
+        { "id": "api", "label": "API", "icon": "server", "tone": "accent2" }
+      ],
+      "packets": [
+        { "label": "K-7 / A", "from": "app", "to": "api", "tone": "accent", "onWord": "прикрепляет" },
+        { "label": "K-7 / B", "from": "app", "to": "api", "tone": "warning", "onWord": "Повтор" }
+      ],
+      "state": { "label": "ОДИН КЛЮЧ", "tone": "success", "onWord": "номер" },
+      "motion": {
+        "intent": "compare",
+        "camera": { "onWord": "прикрепляет", "target": { "x": 0.62, "y": 0.48 } },
+        "cues": [
+          { "id": "attach", "onWord": "прикрепляет" },
+          { "id": "repeat", "onWord": "Повтор" },
+          { "id": "state", "onWord": "номер" }
+        ]
+      }
+    },
+    {
+      "type": "story",
+      "heading": "Одна операция",
+      "transition": { "kind": "continuation" },
+      "narration": "Сервер видит этот ключ, проводит одно списание и сохраняет результат рядом с ним. Так повтор привязывается к той же операции.",
+      "beats": [
+        {
+          "visual": "idempotency-flow",
+          "params": { "phase": "process", "key": "K-7", "amount": "1 290 ₽" },
+          "motion": {
+            "intent": "focus",
+            "camera": { "onWord": "проводит", "target": { "x": 0.76, "y": 0.48 } },
+            "entrance": "cascade",
+            "cues": [ { "id": "charge", "onWord": "одно" } ]
+          }
+        },
+        {
+          "visual": "idempotency-flow",
+          "onWord": "сохраняет",
+          "params": { "phase": "store", "key": "K-7", "amount": "1 290 ₽" },
+          "motion": {
+            "intent": "reveal",
+            "camera": { "onWord": "результат", "target": { "x": 0.78, "y": 0.5 } },
+            "entrance": "materialize",
+            "cues": [ { "id": "save", "onWord": "сохраняет" } ]
+          }
+        }
+      ]
+    },
+    {
+      "type": "story",
+      "heading": "Ответ уже сохранён",
+      "transition": { "kind": "continuation" },
+      "narration": "Вау: хранится не отметка «уже было», а весь первый ответ — код результата и его содержание. Повтор с тем же ключом получает его обратно: новое списание не запускается.",
+      "beats": [
+        {
+          "visual": "idempotency-flow",
+          "params": { "phase": "replay", "key": "K-7", "amount": "1 290 ₽" },
+          "motion": {
+            "intent": "resolve",
+            "camera": { "onWord": "получает", "target": { "x": 0.76, "y": 0.5 } },
+            "entrance": "cascade",
+            "cues": [
+              { "id": "lookup", "onWord": "Повтор" },
+              { "id": "return", "onWord": "получает" }
+            ]
+          }
+        },
+        {
+          "visual": "title-slam",
+          "onWord": "запускается",
+          "params": { "text": "ПОВТОР ≠ СПИСАНИЕ", "sub": "ОТВЕТ ВЕРНУЛСЯ" },
+          "motion": {
+            "intent": "resolve",
+            "camera": { "onWord": "запускается", "target": { "x": 0.5, "y": 0.45 } }
+          }
+        }
+      ]
+    },
+    {
+      "type": "diagram",
+      "heading": "Новый ключ — новая покупка",
+      "transition": { "kind": "turn" },
+      "narration": "Повтор той же заявки несёт тот же ключ. Новая покупка, даже на ту же сумму, получает новый: это отдельная операция. Изменённую сумму под старым ключом апи обычно отклоняет.",
+      "nodes": [
+        { "id": "app", "label": "ПРИЛОЖЕНИЕ", "icon": "smartphone", "tone": "accent" },
+        { "id": "api", "label": "API", "icon": "server", "tone": "accent2" },
+        { "id": "ledger", "label": "РЕЕСТР ОПЕРАЦИЙ", "icon": "database", "tone": "success" }
+      ],
+      "packets": [
+        { "label": "K-7 / retry", "from": "app", "to": "api", "tone": "accent2", "onWord": "тот" },
+        { "label": "K-8 / new", "from": "app", "to": "ledger", "tone": "success", "onWord": "новый" },
+        { "label": "K-7 / ≠ сумма", "from": "app", "to": "api", "tone": "danger", "onWord": "отклоняет" }
+      ],
+      "state": { "label": "ОТДЕЛЬНАЯ ОПЕРАЦИЯ", "tone": "success", "onWord": "отдельная" },
+      "motion": {
+        "intent": "compare",
+        "camera": { "onWord": "новый", "target": { "x": 0.72, "y": 0.48 } },
+        "cues": [
+          { "id": "same", "onWord": "тот" },
+          { "id": "new", "onWord": "новый" },
+          { "id": "reject", "onWord": "отклоняет" }
+        ]
+      }
+    },
+    {
+      "type": "outro",
+      "title": "Запомни ключ",
+      "transition": { "kind": "finale" },
+      "bullets": [
+        "Один ключ — одна операция",
+        "Повтор получает ответ",
+        "Новая покупка — новый ключ",
+        "Окно хранения бывает разным"
+      ],
+      "cta": "Подпишись: дальше — зависший платёж",
+      "narration": "Итог: одинаковый ключ — одна операция, второй раз приходит сохранённый ответ. Срок хранения у разных платёжных апи различается. Подпишись — дальше проверим зависший платёж.",
+      "motion": {
+        "intent": "resolve",
+        "camera": { "onWord": "Итог", "target": { "x": 0.5, "y": 0.45 } }
+      }
+    }
+  ]
+}

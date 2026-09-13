@@ -122,6 +122,7 @@ import { MnemonicSeedDerivationVisual, type MnemonicSeedDerivationPhase } from "
 import { NatPatTranslationVisual, type NatPatPhase } from "./NatPatTranslationVisual";
 import { CookieTicketVisual, type CookieTicketPhase } from "./CookieTicketVisual";
 import { UniqueInsertRaceVisual, type UniqueInsertRacePhase } from "./UniqueInsertRaceVisual";
+import { IdempotencyFlowVisual, type IdempotencyFlowPhase } from "./IdempotencyFlowVisual";
 
 /* ──────────────────────────── расписание битов ──────────────────────────── */
 
@@ -245,6 +246,16 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
     if (beat.visual === "unique-insert-race") {
       const phase = beat.params?.phase as UniqueInsertRacePhase | undefined;
       impact = resolveCue(cueFrames(beat.motion, words, start, end), phase === "request" || phase === "wait" ? "resolve" : "act", start, end);
+    }
+    if (beat.visual === "idempotency-flow") {
+      const phase = beat.params?.phase as IdempotencyFlowPhase | undefined;
+      const cue = phase === "symptom" ? "duplicate"
+        : phase === "key" ? "attach"
+        : phase === "process" ? "charge"
+        : phase === "store" ? "save"
+        : phase === "replay" ? "return"
+        : "new";
+      impact = resolveCue(cueFrames(beat.motion, words, start, end), cue, start, end);
     }
     if (beat.visual === "hash-table") impact = start + Math.round(dur * 0.62);
     if (beat.visual === "minimal-perfect-hash") {
@@ -862,6 +873,11 @@ export const storySfx = (
     if (s.beat.visual === "unique-insert-race") {
       const phase = s.beat.params?.phase as UniqueInsertRacePhase | undefined;
       const sound = phase === "conflict" ? "slam" : phase === "wait" ? "click" : phase === "insert" ? "pop" : phase === "check" ? "whoosh" : "ding";
+      events.push({ frame: s.impact, sound });
+    }
+    if (s.beat.visual === "idempotency-flow") {
+      const phase = s.beat.params?.phase as IdempotencyFlowPhase | undefined;
+      const sound = phase === "symptom" ? "click" : phase === "key" ? "whoosh" : phase === "process" ? "pop" : phase === "store" ? "ding" : phase === "replay" ? "ding" : "slam";
       events.push({ frame: s.impact, sound });
     }
     if (s.beat.visual === "hash-table") events.push({ frame: s.impact, sound: "click" });
@@ -12388,6 +12404,17 @@ const StoryVisual: React.FC<{ slot: BeatSlot; sampleFrame: number }> = ({ slot, 
             phase={(slot.beat.params?.phase as UniqueInsertRacePhase | undefined) ?? "check"}
             keyLabel={slot.beat.params?.key as string | undefined}
             indexLabel={slot.beat.params?.index as string | undefined}
+          />
+        );
+      case "idempotency-flow":
+        return (
+          <IdempotencyFlowVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as IdempotencyFlowPhase | undefined) ?? "symptom"}
+            keyLabel={slot.beat.params?.key as string | undefined}
+            amount={slot.beat.params?.amount as string | undefined}
           />
         );
       case "hash-table":

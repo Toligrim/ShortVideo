@@ -99,6 +99,7 @@ export interface StoryBeat {
     | "inverted-index-merge"
     | "password-leak"
     | "unique-insert-race"
+    | "idempotency-flow"
     | "hash-table"
     | "minimal-perfect-hash"
     | "collision-compare"
