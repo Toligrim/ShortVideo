@@ -1,0 +1,101 @@
+{
+  "id": "auto-20260913-214640",
+  "title": "Почему сообщение не превращается в кашу, если пакеты приходят не по порядку?",
+  "scenes": [
+    {
+      "type": "story",
+      "narration": "Длинное сообщение, фото или файл всё равно собираются целиком, хотя части дороги задержались и приехали не по порядку. Почему приложение не получает сетевую кашу?",
+      "beats": [
+        {
+          "visual": "segment-buffer-playback",
+          "params": { "phase": "split" },
+          "motion": { "intent": "establish", "entrance": "cascade" }
+        },
+        {
+          "visual": "segment-buffer-playback",
+          "onWord": "Почему",
+          "params": { "phase": "queue" },
+          "transition": { "kind": "continuation", "preset": "match" },
+          "motion": {
+            "intent": "focus",
+            "camera": { "onWord": "Почему", "target": { "x": 0.58, "y": 0.48 } },
+            "entrance": "materialize"
+          }
+        }
+      ]
+    },
+    {
+      "type": "diagram",
+      "heading": "Номер важнее очереди",
+      "transition": { "kind": "turn", "preset": "push" },
+      "narration": "Сегмент с байтами двести—триста кричит: «Я первый!» Принимающая сторона отвечает: «Сначала пропуск». Внутри {TCP|ти си пи} байты получают порядковые номера — как строки в пронумерованных конвертах.",
+      "nodes": [
+        { "id": "network", "label": "Сеть", "icon": "cloud", "tone": "accent" },
+        { "id": "receiver", "label": "Приёмник", "icon": "server", "tone": "accent2" }
+      ],
+      "packets": [
+        { "label": "200–300", "from": "network", "to": "receiver", "tone": "warning", "onWord": "байтами" },
+        { "label": "100–199", "from": "network", "to": "receiver", "tone": "accent", "onWord": "пропуск" }
+      ],
+      "state": { "label": "Ждём 100–199", "tone": "warning", "onWord": "Сначала" },
+      "motion": {
+        "intent": "focus",
+        "camera": { "onWord": "байтами", "target": { "x": 0.5, "y": 0.42 } },
+        "entrance": "cascade"
+      }
+    },
+    {
+      "type": "diagram",
+      "heading": "Хвост ждёт разрыв",
+      "transition": { "kind": "continuation", "preset": "match" },
+      "narration": "Принимающая сторона говорит: «Сто—сто девяносто девять отсутствуют». Она раскладывает поздний сегмент по смещению в буфере сборки: тот лежит после разрыва, а не слипается с началом.",
+      "nodes": [
+        { "id": "network", "label": "Сеть", "icon": "cloud", "tone": "accent" },
+        { "id": "buffer", "label": "Буфер", "icon": "database", "tone": "warning" },
+        { "id": "receiver", "label": "Приёмник", "icon": "server", "tone": "accent2" }
+      ],
+      "packets": [
+        { "label": "200–300", "from": "network", "to": "buffer", "tone": "warning", "onWord": "поздний" }
+      ],
+      "state": { "label": "Ждём 100–199", "tone": "warning", "onWord": "отсутствуют" },
+      "motion": {
+        "intent": "focus",
+        "camera": { "onWord": "буфере", "target": { "x": 0.5, "y": 0.5 } },
+        "entrance": "cascade"
+      }
+    },
+    {
+      "type": "diagram",
+      "heading": "Выдача только потока",
+      "transition": { "kind": "continuation", "preset": "match" },
+      "narration": "Хвост говорит: «Я здесь!» Приёмник отвечает: «Приложению пока нельзя». Он удерживает хвост после пропуска; когда диапазон приходит, разрыв закрывается, и непрерывный кусок уходит дальше.",
+      "nodes": [
+        { "id": "buffer", "label": "Буфер", "icon": "database", "tone": "accent2" },
+        { "id": "receiver", "label": "Приёмник", "icon": "server", "tone": "accent" },
+        { "id": "app", "label": "Приложение", "icon": "monitor", "tone": "success" }
+      ],
+      "packets": [
+        { "label": "200–300", "from": "buffer", "to": "receiver", "tone": "warning", "onWord": "Хвост" },
+        { "label": "100–199", "from": "buffer", "to": "receiver", "tone": "accent", "onWord": "диапазон" },
+        { "label": "100–300", "from": "receiver", "to": "app", "tone": "success", "onWord": "непрерывный" }
+      ],
+      "motion": {
+        "intent": "resolve",
+        "camera": { "onWord": "непрерывный", "target": { "x": 0.5, "y": 0.7 } },
+        "entrance": "cascade"
+      }
+    },
+    {
+      "type": "outro",
+      "transition": { "kind": "finale", "preset": "dissolve" },
+      "title": "Каша не проходит",
+      "bullets": [
+        "Номер ведёт каждый байт",
+        "Разрыв ждёт в буфере",
+        "Приложение видит поток"
+      ],
+      "cta": "Подпишись: дальше — потеря части",
+      "narration": "Итак, {TCP|ти си пи} не сортирует готовый текст: номера ведут каждый байт, буфер ждёт разрыв, а приложение видит только непрерывный поток. Дальше — что происходит при потере части. Подпишись."
+    }
+  ]
+}
