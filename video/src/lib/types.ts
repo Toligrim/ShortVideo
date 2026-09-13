@@ -215,6 +215,7 @@ export interface StoryBeat {
     | "regenerative-braking"
     | "charge-energy-path"
    | "incognito-session"
+  | "page-fault-flow"
   | "context-window"
   | "attention-cost"
   | "wallet-copy"

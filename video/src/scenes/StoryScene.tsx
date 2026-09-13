@@ -78,6 +78,7 @@ import { ColdBatteryVoltageDropVisual, type ColdBatteryPhase } from "./ColdBatte
 import { RegenerativeBrakingVisual, type RegenerativeBrakingPhase } from "./RegenerativeBrakingVisual";
 import { ChargeEnergyPathVisual, type ChargeEnergyPathPhase } from "./ChargeEnergyPathVisual";
 import { IncognitoSessionVisual, type IncognitoSessionPhase } from "./IncognitoSessionVisual";
+import { PageFaultFlowVisual, type PageFaultFlowPhase } from "./PageFaultFlowVisual";
 import { ContextWindowVisual, type ContextWindowPhase } from "./ContextWindowVisual";
 import { AttentionCostVisual, type AttentionCostPhase } from "./AttentionCostVisual";
 import { MultiFrameStackVisual, type MultiFrameStackPhase } from "./MultiFrameStackVisual";
@@ -636,6 +637,10 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
       const phase = beat.params?.phase;
       impact = start + Math.round(dur * (phase === "request" ? 0.55 : phase === "separate" ? 0.58 : phase === "storage" ? 0.62 : phase === "erase" ? 0.68 : phase === "no-signal" ? 0.65 : 0.58));
     }
+    if (beat.visual === "page-fault-flow") {
+      const phase = beat.params?.phase as PageFaultFlowPhase | undefined;
+      impact = start + Math.round(dur * (phase === "evict" ? 0.7 : phase === "fault" ? 0.68 : phase === "monitor" ? 0.66 : phase === "desk" ? 0.62 : 0.58));
+    }
     if (beat.visual === "context-window") {
       const phase = beat.params?.phase;
       impact =
@@ -835,6 +840,11 @@ export const storySfx = (
     if (s.beat.visual === "sleep-to-ram") {
       const phase = s.beat.params?.phase as SleepToRamPhase | undefined;
       const sound = phase === "lid" ? "slam" : phase === "refresh" ? "click" : phase === "wake" ? "pop" : phase === "resume" ? "ding" : phase === "hibernate" ? "whoosh" : "pop";
+      events.push({ frame: s.impact, sound });
+    }
+    if (s.beat.visual === "page-fault-flow") {
+      const phase = s.beat.params?.phase as PageFaultFlowPhase | undefined;
+      const sound = phase === "fault" ? "slam" : phase === "evict" ? "whoosh" : phase === "monitor" ? "ding" : "pop";
       events.push({ frame: s.impact, sound });
     }
     if (s.beat.visual === "bfcache-restore") {
@@ -13464,6 +13474,15 @@ const StoryVisual: React.FC<{ slot: BeatSlot; sampleFrame: number }> = ({ slot, 
             fps={fps}
             impactLocal={impactLocal}
             phase={(slot.beat.params?.phase as IncognitoSessionPhase | undefined) ?? "request"}
+          />
+        );
+      case "page-fault-flow":
+        return (
+          <PageFaultFlowVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as PageFaultFlowPhase | undefined) ?? "symptom"}
           />
         );
       case "context-window":
