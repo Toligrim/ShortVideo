@@ -66,7 +66,9 @@ const Header: React.FC<{ phase: PageFaultFlowPhase; opacity: number }> = ({ phas
     style={{
       position: "absolute",
       left: W / 2,
-      top: 305,
+      // StoryScene headings can wrap to two lines; keep the phase label below
+      // their bottom edge even after the story camera's bounded transform.
+      top: 360,
       transform: "translateX(-50%)",
       display: "flex",
       alignItems: "center",
