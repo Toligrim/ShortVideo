@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "slug": "auto-20260913-193135",
+  "targets": {
+    "youtube": {
+      "title": "Почему ноутбук тормозит, хотя процессор почти свободен?",
+      "description": "Ноутбук может тормозить не из-за вычислений: отдельная страница памяти уезжает в pagefile, а при возврате возникает page fault и чтение с диска.",
+      "tags": ["ноутбук", "оперативная память", "page fault", "компьютер", "как работает компьютер"],
+      "category_id": "28",
+      "privacy_status": "public",
+      "made_for_kids": false,
+      "contains_synthetic_media": true,
+      "notify_subscribers": false
+    },
+    "instagram": {
+      "caption": "Почему ноутбук тормозит, хотя процессор почти свободен? Отдельная страница памяти может уехать в pagefile, а возврат вызвать page fault и чтение с диска. #ноутбук #компьютер #оперативнаяпамять",
+      "share_to_feed": true
+    }
+  }
+}
