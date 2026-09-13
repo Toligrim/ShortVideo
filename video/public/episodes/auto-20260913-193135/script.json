@@ -1,0 +1,217 @@
+{
+  "id": "auto-20260913-193135",
+  "title": "Почему ноутбук тормозит, хотя процессор почти свободен?",
+  "scenes": [
+    {
+      "type": "story",
+      "heading": "Ноутбук тормозит?",
+      "narration": "Много вкладок открыто, процессор почти свободен, а ноутбук тормозит рывками. Щёлкаешь старую вкладку — ждёшь. Кто именно тормозит?",
+      "beats": [
+        {
+          "visual": "page-fault-flow",
+          "onWord": "Много",
+          "params": { "phase": "symptom" },
+          "motion": {
+            "intent": "establish",
+            "camera": { "onWord": "свободен", "target": { "x": 0.52, "y": 0.42 } },
+            "entrance": "cascade",
+            "cues": [
+              { "id": "open", "onWord": "открыто" },
+              { "id": "wait", "onWord": "ждёшь" }
+            ],
+            "actors": {
+              "laptop": { "preset": "pulse", "cue": "open" },
+              "cpu": { "preset": "pulse", "cue": "wait" },
+              "stall": { "preset": "pulse", "cue": "wait" }
+            }
+          }
+        },
+        {
+          "visual": "title-slam",
+          "onWord": "Кто",
+          "params": { "text": "КТО ТОРМОЗИТ?", "sub": "ПРОЦЕССОР ИЛИ ПАМЯТЬ?" },
+          "transition": { "kind": "continuation" },
+          "motion": {
+            "intent": "focus",
+            "camera": { "onWord": "Кто", "target": { "x": 0.52, "y": 0.42 } },
+            "entrance": "materialize"
+          }
+        }
+      ]
+    },
+    {
+      "type": "story",
+      "heading": "RAM как рабочий стол",
+      "narration": "Представь стол: оперативная память — место перед руками, а вкладки раскладывают на нём листы. Чем их больше, тем теснее.",
+      "transition": { "kind": "turn" },
+      "beats": [
+        {
+          "visual": "page-fault-flow",
+          "onWord": "Представь",
+          "params": { "phase": "desk" },
+          "motion": {
+            "intent": "establish",
+            "camera": { "onWord": "стол", "target": { "x": 0.5, "y": 0.48 } },
+            "entrance": "cascade",
+            "cues": [
+              { "id": "spread", "onWord": "раскладывают" },
+              { "id": "tighten", "onWord": "листы." }
+            ],
+            "actors": {
+              "pages": { "preset": "transfer", "cue": "spread", "from": { "x": -150, "y": -40 }, "to": { "x": 0, "y": 0 } },
+              "desk": { "preset": "pulse", "cue": "tighten" },
+              "space": { "preset": "pulse", "cue": "tighten" }
+            }
+          }
+        },
+        {
+          "visual": "title-slam",
+          "onWord": "больше",
+          "params": { "text": "БОЛЬШЕ ЛИСТОВ", "sub": "МЕНЬШЕ МЕСТА" },
+          "transition": { "kind": "continuation" },
+          "motion": {
+            "intent": "focus",
+            "camera": { "onWord": "больше", "target": { "x": 0.5, "y": 0.48 } },
+            "entrance": "materialize"
+          }
+        }
+      ]
+    },
+    {
+      "type": "story",
+      "heading": "Уезжает не вкладка",
+      "narration": "Когда места мало, система может убрать редко нужную изменённую страницу виртуальной памяти на диск — в {swap|свап}, то есть файл подкачки. Вкладка целиком не уезжает.",
+      "transition": { "kind": "continuation" },
+      "beats": [
+        {
+          "visual": "page-fault-flow",
+          "onWord": "система",
+          "params": { "phase": "evict" },
+          "motion": {
+            "intent": "focus",
+            "camera": { "onWord": "убрать", "target": { "x": 0.72, "y": 0.5 } },
+            "entrance": "cascade",
+            "cues": [
+              { "id": "dirty", "onWord": "изменённую" },
+              { "id": "swap", "onWord": "swap" },
+              { "id": "keep", "onWord": "Вкладка" }
+            ],
+            "actors": {
+              "ram": { "preset": "pulse", "cue": "dirty" },
+              "page": { "preset": "transfer", "cue": "swap", "to": { "x": 304, "y": 0 } },
+              "disk": { "preset": "pulse", "cue": "swap" },
+              "tab": { "preset": "pulse", "cue": "keep" }
+            }
+          }
+        },
+        {
+          "visual": "title-slam",
+          "onWord": "целиком",
+          "params": { "text": "PAGE → SWAP", "sub": "ВКЛАДКА ОСТАЁТСЯ" },
+          "transition": { "kind": "contrast" },
+          "motion": {
+            "intent": "focus",
+            "camera": { "onWord": "целиком", "target": { "x": 0.72, "y": 0.5 } },
+            "entrance": "materialize"
+          }
+        }
+      ]
+    },
+    {
+      "type": "story",
+      "heading": "Возвращение одной страницы",
+      "narration": "Возвращаешься к ней: процессор просит страницу, но её нет среди листов на столе. Возникает {page fault|пэйдж-фо́лт}; если страницу вытеснили на диск, система читает её обратно.",
+      "transition": { "kind": "continuation" },
+      "beats": [
+        {
+          "visual": "page-fault-flow",
+          "onWord": "Возвращаешься",
+          "params": { "phase": "fault" },
+          "motion": {
+            "intent": "follow",
+            "camera": { "onWord": "page fault", "target": { "x": 0.5, "y": 0.48 } },
+            "entrance": "cascade",
+            "cues": [
+              { "id": "ask", "onWord": "просит" },
+              { "id": "fault", "onWord": "page fault" },
+              { "id": "read", "onWord": "читает" },
+              { "id": "returned", "onWord": "читает" }
+            ],
+            "actors": {
+              "cpu": { "preset": "pulse", "cue": "ask" },
+              "memory": { "preset": "pulse", "cue": "fault" },
+              "disk": { "preset": "pulse", "cue": "read" },
+              "page": { "preset": "transfer", "cue": "read", "to": { "x": -360, "y": 0 } }
+            }
+          }
+        },
+        {
+          "visual": "title-slam",
+          "onWord": "обратно",
+          "params": { "text": "PAGE FAULT", "sub": "ЧТЕНИЕ С ДИСКА" },
+          "transition": { "kind": "continuation" },
+          "motion": {
+            "intent": "focus",
+            "camera": { "onWord": "обратно", "target": { "x": 0.5, "y": 0.48 } },
+            "entrance": "materialize"
+          }
+        }
+      ]
+    },
+    {
+      "type": "story",
+      "heading": "Проверь два сигнала",
+      "narration": "Покажи шаг: открой Монитор ресурсов, вернись к старой вкладке и проверь показатель «жёсткие ошибки страниц» рядом с активностью диска.",
+      "transition": { "kind": "turn" },
+      "beats": [
+        {
+          "visual": "page-fault-flow",
+          "onWord": "Покажи",
+          "params": { "phase": "monitor" },
+          "motion": {
+            "intent": "focus",
+            "camera": { "onWord": "Монитор", "target": { "x": 0.67, "y": 0.45 } },
+            "entrance": "cascade",
+            "cues": [
+              { "id": "select", "onWord": "вернись" },
+              { "id": "faults", "onWord": "жёсткие" },
+              { "id": "disk", "onWord": "рядом" }
+            ],
+            "actors": {
+              "tab": { "preset": "pulse", "cue": "select" },
+              "hard-faults": { "preset": "pulse", "cue": "faults" },
+              "disk": { "preset": "pulse", "cue": "disk" }
+            }
+          }
+        },
+        {
+          "visual": "title-slam",
+          "onWord": "активностью",
+          "params": { "text": "СМОТРИ РЯДОМ", "sub": "ОШИБКИ + ДИСК" },
+          "transition": { "kind": "continuation" },
+          "motion": {
+            "intent": "focus",
+            "camera": { "onWord": "активностью", "target": { "x": 0.67, "y": 0.45 } },
+            "entrance": "materialize"
+          }
+        }
+      ]
+    },
+    {
+      "type": "outro",
+      "title": "Тормозит не всегда CPU",
+      "bullets": [
+        "Страница может ждать диск",
+        "Вкладка не свопится целиком",
+        "Ошибки страниц рядом с диском"
+      ],
+      "cta": "Подпишись: дальше — ещё рывок",
+      "narration": "Процессор здесь не считает — он ждёт дисковый ввод-вывод. Не каждая вкладка свопится: возвраты страниц превращают память в очередь. Вот почему вкладки тормозят ноутбук. Подпишись — дальше разберём ещё один скрытый рывок.",
+      "transition": { "kind": "finale" },
+      "motion": {
+        "intent": "resolve",
+        "camera": { "onWord": "Процессор", "target": { "x": 0.5, "y": 0.46 } }
+      }
+    }
+  ]
+}
