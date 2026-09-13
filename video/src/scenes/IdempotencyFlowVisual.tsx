@@ -287,7 +287,7 @@ export const IdempotencyFlowVisual: React.FC<Props> = ({
         <MotionGroup id="charge" index={0} action={{ preset: "pulse", cue: "save" }}>
           <PaymentCard left={45} top={510} number="#1" amount={amount} />
         </MotionGroup>
-        <MotionGroup id="key" index={1} action={{ preset: "transfer", cue: "save", from: { x: -220, y: 0 }, to: { x: 175, y: 0 } }}>
+        <MotionGroup id="key" index={1} action={{ preset: "transfer", cue: "save", from: { x: -220, y: 0 }, to: { x: 90, y: 0 } }}>
           <KeyToken left={440} top={655} label={keyLabel} />
         </MotionGroup>
         <MotionGroup id="record" index={2} action={{ preset: "pulse", cue: "save" }}>
@@ -306,13 +306,13 @@ export const IdempotencyFlowVisual: React.FC<Props> = ({
     return (
         <>
           <PhaseHeader text="ПОВТОР" color={theme.success} />
-          <MotionGroup id="request-b" index={0} action={{ preset: "transfer", cue: "lookup", from: { x: -90, y: 0 }, to: { x: 0, y: 0 } }}>
+          <MotionGroup id="request-b" index={0} entrance="materialize" action={{ preset: "transfer", cue: "lookup", from: { x: -30, y: 0 }, to: { x: 0, y: 0 } }}>
             <RequestCard left={35} top={575} label="ПОВТОР B" keyLabel={keyLabel} amount={amount} color={theme.accent2} />
           </MotionGroup>
           <MotionGroup id="record" index={1} action={{ preset: "pulse", cue: "return" }}>
             <RecordCard left={365} top={440} keyLabel={keyLabel} />
           </MotionGroup>
-          <MotionGroup id="response" index={2} action={{ preset: "transfer", cue: "return", from: { x: -230, y: 0 }, to: { x: 220, y: 0 } }}>
+          <MotionGroup id="response" index={2} action={{ preset: "transfer", cue: "return", from: { x: -30, y: 0 }, to: { x: 0, y: 0 } }}>
             <ResponseCard left={785} top={585} />
           </MotionGroup>
           <Arrow x1={385} y1={665} x2={470} y2={665} color={theme.accent2} opacity={enter * lookup} />
