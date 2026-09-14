@@ -124,7 +124,7 @@ const DirectPath: React.FC<{ opacity: number; color?: string; thick?: boolean; l
       />
       <path d="M 666 683 L 705 700 L 666 717" fill="none" stroke={color} strokeWidth="7" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
-    <div style={{ position: "absolute", left: CX, top: 565, transform: "translateX(-50%)", color, fontSize: 19, ...mono }}>
+    <div style={{ position: "absolute", left: CX, top: 525, transform: "translateX(-50%)", color, fontSize: 19, ...mono }}>
       {label}
     </div>
   </>
@@ -157,6 +157,8 @@ const ByteChip: React.FC<{ x: number; y: number; color: string; opacity: number;
   </svg>
 );
 
+const PATH_INSET = 0.1;
+
 const pathPoint = (progress: number) => ({
   x: interpolate(progress, [0, 1], [385, 695]),
   y: 700 - Math.sin(progress * Math.PI) * 110,
@@ -171,8 +173,12 @@ const Payload: React.FC<{
   const duration = Math.max(motion.end - motion.start - 1, 1);
   const flowStart = motion.cue("flow") - motion.start;
   const run = smooth((local - flowStart) / duration);
-  const count = phase === "channel" ? 3 : phase === "stream" || phase === "handoff" ? 16 : 14;
-  const spacing = phase === "channel" ? 0.11 : 0.065;
+  const count = phase === "channel" ? 3 : 4;
+  const spacing = 1 / count;
+  // Keep the payload as a moving stream. A finite run must not pin every chip
+  // to the receiver once the flow cue has completed.
+  const flowProgress = (run * 1.35) % 1;
+  const transferX = motion.action("flow") * (motion.plan?.actors?.payload?.to?.x ?? 120);
   return (
     <MotionGroup
       id="payload"
@@ -181,17 +187,17 @@ const Payload: React.FC<{
     >
       <div style={{ position: "absolute", inset: 0, opacity }}>
         {Array.from({ length: count }).map((_, index) => {
-          const p = clamp01(run * 1.08 + index * spacing);
+          const p = PATH_INSET + ((flowProgress + index * spacing) % 1) * (1 - PATH_INSET * 2);
           const point = pathPoint(p);
           const isStream = count > 3;
           return (
             <ByteChip
               key={index}
-              x={point.x}
-              y={point.y + (isStream ? Math.sin(index * 2.4) * 18 : 0)}
+              x={point.x - transferX}
+              y={point.y + (isStream ? Math.sin(index * 2.4) * 10 : 0)}
               color={phase === "handoff" ? theme.success : theme.accent}
               opacity={opacity * (0.45 + 0.55 * clamp01(run * 3 + index / count))}
-              size={isStream ? 0.72 : 0.84}
+              size={isStream ? 0.64 : 0.74}
             />
           );
         })}
