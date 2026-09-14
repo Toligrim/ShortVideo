@@ -1,0 +1,339 @@
+{
+  "id": "auto-20260914-102808",
+  "title": "Почему ноль целых одна десятая плюс ноль целых две десятых иногда не равно ноль целых три десятых?",
+  "scenes": [
+    {
+      "type": "story",
+      "narration": "Вводишь в {Джаваскрипте|джаваскри́пте} ноль целых одну десятую плюс ноль целых две десятых — на экране внезапно длинный хвост. Компьютер ошибся?",
+      "beats": [
+        {
+          "visual": "binary-fraction-rounding",
+          "onWord": "Вводишь",
+          "params": {
+            "phase": "symptom"
+          },
+          "motion": {
+            "intent": "focus",
+            "camera": {
+              "onWord": "экране",
+              "target": {
+                "x": 0.5,
+                "y": 0.42
+              }
+            },
+            "entrance": "cascade",
+            "cues": [
+              {
+                "id": "screen",
+                "onWord": "экране"
+              },
+              {
+                "id": "tail",
+                "onWord": "хвост"
+              },
+              {
+                "id": "question",
+                "onWord": "Компьютер"
+              }
+            ]
+          }
+        },
+        {
+          "visual": "title-slam",
+          "onWord": "ошибся",
+          "params": {
+            "text": "ОШИБКА?",
+            "sub": "или округление?"
+          },
+          "motion": {
+            "intent": "focus",
+            "camera": {
+              "onWord": "ошибся",
+              "target": {
+                "x": 0.82,
+                "y": 0.34
+              }
+            },
+            "entrance": "materialize"
+          },
+          "transition": {
+            "kind": "continuation"
+          }
+        }
+      ]
+    },
+    {
+      "type": "story",
+      "transition": {
+        "kind": "turn"
+      },
+      "narration": "Миф: компьютер не складывает неправильно. Механизм называется {двоичная плавающая точка|двои́чная пла́вающая то́чка} — как линейка с конечными делениями: выбирается ближайшая отметка.",
+      "beats": [
+        {
+          "visual": "binary-fraction-rounding",
+          "onWord": "Миф",
+          "params": {
+            "phase": "grid"
+          },
+          "motion": {
+            "intent": "reveal",
+            "camera": {
+              "onWord": "линейка",
+              "target": {
+                "x": 0.5,
+                "y": 0.46
+              }
+            },
+            "entrance": "materialize",
+            "cues": [
+              {
+                "id": "mechanism",
+                "onWord": "Механизм"
+              },
+              {
+                "id": "nearest",
+                "onWord": "ближайшая"
+              }
+            ]
+          }
+        },
+        {
+          "visual": "title-slam",
+          "onWord": "отметка",
+          "params": {
+            "text": "0 / 1",
+            "sub": "конечные деления"
+          },
+          "motion": {
+            "intent": "focus",
+            "camera": {
+              "onWord": "отметка",
+              "target": {
+                "x": 0.5,
+                "y": 0.42
+              }
+            },
+            "entrance": "materialize"
+          },
+          "transition": {
+            "kind": "continuation"
+          }
+        }
+      ]
+    },
+    {
+      "type": "story",
+      "transition": {
+        "kind": "continuation"
+      },
+      "narration": "У дроби ноль целых одна десятая двоичная запись бесконечна: после точки идут ноль ноль ноль один, затем повторяются один ноль ноль один.",
+      "beats": [
+        {
+          "visual": "binary-fraction-rounding",
+          "onWord": "У",
+          "params": {
+            "phase": "repeat"
+          },
+          "motion": {
+            "intent": "focus",
+            "camera": {
+              "onWord": "двоичная",
+              "target": {
+                "x": 0.52,
+                "y": 0.43
+              }
+            },
+            "entrance": "cascade",
+            "cues": [
+              {
+                "id": "fraction",
+                "onWord": "двоичная"
+              },
+              {
+                "id": "repeat",
+                "onWord": "затем"
+              }
+            ]
+          }
+        },
+        {
+          "visual": "title-slam",
+          "onWord": "повторяются",
+          "params": {
+            "text": "1001",
+            "sub": "снова и снова"
+          },
+          "motion": {
+            "intent": "focus",
+            "camera": {
+              "onWord": "повторяются",
+              "target": {
+                "x": 0.7,
+                "y": 0.42
+              }
+            },
+            "entrance": "materialize"
+          },
+          "transition": {
+            "kind": "continuation"
+          }
+        }
+      ]
+    },
+    {
+      "type": "story",
+      "transition": {
+        "kind": "continuation"
+      },
+      "narration": "Формат оставляет ближайшее конечное приближение. Поэтому сохранённая внутри одна десятая чуть больше настоящей: неточность появилась ещё до сложения.",
+      "beats": [
+        {
+          "visual": "binary-fraction-rounding",
+          "onWord": "Формат",
+          "params": {
+            "phase": "round"
+          },
+          "motion": {
+            "intent": "compare",
+            "camera": {
+              "onWord": "сохранённая",
+              "target": {
+                "x": 0.72,
+                "y": 0.44
+              }
+            },
+            "entrance": "cascade",
+            "cues": [
+              {
+                "id": "round",
+                "onWord": "Формат"
+              },
+              {
+                "id": "saved",
+                "onWord": "сохранённая"
+              },
+              {
+                "id": "more",
+                "onWord": "чуть"
+              }
+            ]
+          }
+        },
+        {
+          "visual": "title-slam",
+          "onWord": "больше",
+          "params": {
+            "text": "> 0,1",
+            "sub": "ошибка до суммы"
+          },
+          "motion": {
+            "intent": "focus",
+            "camera": {
+              "onWord": "больше",
+              "target": {
+                "x": 0.72,
+                "y": 0.47
+              }
+            },
+            "entrance": "materialize"
+          },
+          "transition": {
+            "kind": "continuation"
+          }
+        }
+      ]
+    },
+    {
+      "type": "story",
+      "transition": {
+        "kind": "contrast"
+      },
+      "narration": "Складываются уже приближения. Их точная сумма — конечная двоичная дробь, но она ровно между двумя доступными двоичными значениями: при ничьей формат выбирает вариант с нулём в последнем двоичном разряде — длинный хвост.",
+      "beats": [
+        {
+          "visual": "binary-fraction-rounding",
+          "onWord": "Складываются",
+          "params": {
+            "phase": "sum"
+          },
+          "motion": {
+            "intent": "compare",
+            "camera": {
+              "onWord": "между",
+              "target": {
+                "x": 0.5,
+                "y": 0.5
+              }
+            },
+            "entrance": "cascade",
+            "cues": [
+              {
+                "id": "add",
+                "onWord": "Складываются"
+              },
+              {
+                "id": "exact",
+                "onWord": "точная"
+              },
+              {
+                "id": "tie",
+                "onWord": "ничьей"
+              },
+              {
+                "id": "tail",
+                "onWord": "хвост"
+              }
+            ]
+          }
+        },
+        {
+          "visual": "title-slam",
+          "onWord": "хвост",
+          "params": {
+            "text": "0.30000000000000004",
+            "sub": "округление снова"
+          },
+          "motion": {
+            "intent": "resolve",
+            "camera": {
+              "onWord": "хвост",
+              "target": {
+                "x": 0.62,
+                "y": 0.48
+              }
+            },
+            "entrance": "materialize"
+          },
+          "transition": {
+            "kind": "continuation"
+          }
+        }
+      ]
+    },
+    {
+      "type": "outro",
+      "transition": {
+        "kind": "finale"
+      },
+      "title": "Это не ошибка",
+      "bullets": [
+        "Двоичная шкала",
+        "Округление до ближайшего",
+        "Целые копейки или Decimal"
+      ],
+      "cta": "Подпишись: дальше — сравнение чисел",
+      "narration": "Итак, компьютер не ошибся: десятичная дробь стала двоичным приближением, а сумма тоже округлилась. Для денег используй целые копейки или десятичный тип; дальше — как сравнивать числа. Подпишись.",
+      "motion": {
+        "intent": "resolve",
+        "camera": {
+          "onWord": "копейки",
+          "target": {
+            "x": 0.5,
+            "y": 0.62
+          }
+        },
+        "entrance": "materialize"
+      }
+    }
+  ]
+}

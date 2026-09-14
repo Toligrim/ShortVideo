@@ -55,6 +55,7 @@ import { ConvolutionStencilVisual, type ConvolutionStencilPhase } from "./Convol
 import { GpuDataCenterVisual, type GpuDataCenterPhase } from "./GpuDataCenterVisual";
 import { MatrixMultiplyVisual, type MatrixMultiplyPhase } from "./MatrixMultiplyVisual";
 import { QuantizationLossVisual, type QuantizationLossPhase } from "./QuantizationLossVisual";
+import { BinaryFractionRoundingVisual, type BinaryFractionRoundingPhase } from "./BinaryFractionRoundingVisual";
 import { ProgressiveImageScansVisual, type ProgressiveImageScansPhase } from "./ProgressiveImageScansVisual";
 import { SegmentBufferPlaybackVisual, type SegmentBufferPlaybackPhase } from "./SegmentBufferPlaybackVisual";
 import { AdaptiveBitrateLadderVisual, type AdaptiveBitratePhase } from "./AdaptiveBitrateLadderVisual";
@@ -506,6 +507,10 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
     if (beat.visual === "quantization-loss") {
       const phase = beat.params?.phase as QuantizationLossPhase | undefined;
       impact = start + Math.round(dur * (phase === "zero" ? 0.68 : phase === "tail" ? 0.72 : phase === "rebuild" ? 0.66 : phase === "quantize" ? 0.64 : phase === "copy" ? 0.62 : 0.58));
+    }
+    if (beat.visual === "binary-fraction-rounding") {
+      const phase = beat.params?.phase as BinaryFractionRoundingPhase | undefined;
+      impact = start + Math.round(dur * (phase === "symptom" ? 0.62 : phase === "grid" ? 0.66 : phase === "repeat" ? 0.68 : phase === "round" ? 0.72 : phase === "sum" ? 0.7 : 0.64));
     }
     if (beat.visual === "progressive-image-scans") {
       const phase = beat.params?.phase as ProgressiveImageScansPhase | undefined;
@@ -1174,6 +1179,11 @@ export const storySfx = (
     if (s.beat.visual === "quantization-loss") {
       const phase = s.beat.params?.phase as QuantizationLossPhase | undefined;
       const sound = phase === "zero" || phase === "tail" ? "slam" : phase === "rebuild" ? "ding" : phase === "quantize" ? "pop" : phase === "coefficients" ? "click" : "whoosh";
+      events.push({ frame: s.impact, sound });
+    }
+    if (s.beat.visual === "binary-fraction-rounding") {
+      const phase = s.beat.params?.phase as BinaryFractionRoundingPhase | undefined;
+      const sound = phase === "symptom" || phase === "sum" ? "slam" : phase === "exact" ? "ding" : phase === "grid" || phase === "repeat" ? "whoosh" : "pop";
       events.push({ frame: s.impact, sound });
     }
     if (s.beat.visual === "progressive-image-scans") {
@@ -13270,6 +13280,15 @@ const StoryVisual: React.FC<{ slot: BeatSlot; sampleFrame: number }> = ({ slot, 
             fps={fps}
             impactLocal={impactLocal}
             phase={(slot.beat.params?.phase as QuantizationLossPhase | undefined) ?? "sharp"}
+          />
+        );
+      case "binary-fraction-rounding":
+        return (
+          <BinaryFractionRoundingVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as BinaryFractionRoundingPhase | undefined) ?? "symptom"}
           />
         );
       case "progressive-image-scans":

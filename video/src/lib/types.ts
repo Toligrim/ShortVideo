@@ -191,6 +191,7 @@ export interface StoryBeat {
     | "gpu-data-center"
     | "matrix-multiply"
     | "quantization-loss"
+    | "binary-fraction-rounding"
     | "progressive-image-scans"
     | "segment-buffer-playback"
     | "adaptive-bitrate-ladder"
