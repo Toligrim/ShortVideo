@@ -1,0 +1,164 @@
+{
+  "id": "auto-20260914-070735",
+  "title": "Почему AirDrop передаёт фильм быстрее Bluetooth?",
+  "scenes": [
+    {
+      "type": "hook",
+      "title": "Почему AirDrop быстрее Bluetooth?",
+      "subtitle": "У файла другой радиоканал",
+      "motion": {
+        "intent": "establish",
+        "camera": { "onWord": "AirDrop", "target": { "x": 0.5, "y": 0.43 }, "strength": 0.7 }
+      },
+      "narration": "Фильм на гигабайт улетает через {AirDrop|эйрдроп} за пару минут, хотя рядом {Bluetooth|блютус}, который считают медленным. Как это возможно?"
+    },
+    {
+      "type": "diagram",
+      "heading": "Шаг 1 · Обнаружение",
+      "transition": { "kind": "continuation", "preset": "match" },
+      "motion": {
+        "intent": "focus",
+        "camera": { "preset": "push-in", "onWord": "Bluetooth", "target": { "x": 0.5, "y": 0.45 }, "strength": 0.65 },
+        "entrance": "cascade",
+        "cues": [
+          { "id": "discover", "onWord": "Bluetooth" },
+          { "id": "no-payload", "onWord": "Файл" }
+        ]
+      },
+      "nodes": [
+        { "id": "phone-a", "label": "ТЕЛЕФОН A", "icon": "smartphone", "tone": "accent" },
+        { "id": "phone-b", "label": "ТЕЛЕФОН B", "icon": "smartphone", "tone": "accent2" }
+      ],
+      "packets": [
+        { "label": "BLE", "from": "phone-a", "to": "phone-b", "tone": "accent2", "onWord": "Bluetooth" }
+      ],
+      "state": { "label": "ФАЙЛ НЕ ЕДЕТ", "tone": "warning", "onWord": "Файл" },
+      "narration": "Шаг первый. Телефоны ищут друг друга коротким сигналом {Bluetooth|блютус}: «Ты рядом? Ты тот самый?» Файл ещё не едет — устройства только обнаруживают друг друга."
+    },
+    {
+      "type": "diagram",
+      "heading": "Шаг 2 · Согласование",
+      "transition": { "kind": "continuation", "preset": "match" },
+      "motion": {
+        "intent": "focus",
+        "camera": { "preset": "push-in", "onWord": "открыть", "target": { "x": 0.5, "y": 0.48 }, "strength": 0.7 },
+        "entrance": "cascade",
+        "cues": [
+          { "id": "request", "onWord": "договариваются" },
+          { "id": "permit", "onWord": "открыть" }
+        ]
+      },
+      "nodes": [
+        { "id": "phone-a", "label": "ТЕЛЕФОН A", "icon": "smartphone", "tone": "accent" },
+        { "id": "phone-b", "label": "ТЕЛЕФОН B", "icon": "smartphone", "tone": "accent2" }
+      ],
+      "packets": [
+        { "label": "ЗАПРОС", "from": "phone-a", "to": "phone-b", "tone": "accent", "onWord": "договариваются" },
+        { "label": "ГОТОВО", "from": "phone-b", "to": "phone-a", "tone": "success", "onWord": "открыть" }
+      ],
+      "state": { "label": "ОТПРАВКА РАЗРЕШЕНА", "tone": "success", "onWord": "открыть" },
+      "narration": "Шаг второй — согласование. Устройства договариваются о прямом соединении. {Bluetooth|блютус} здесь как короткий звонок в домофон: найти соседа и открыть встречу."
+    },
+    {
+      "type": "story",
+      "transition": { "kind": "turn", "preset": "push" },
+      "narration": "Шаг третий. В этом сценарии система поднимает прямой {Wi-Fi|вай-фай}-канал между устройствами. По нему идут байты фильма; домашний роутер в этот путь не вставляется.",
+      "beats": [
+        {
+          "visual": "direct-wifi-transfer",
+          "onWord": "Шаг",
+          "params": { "phase": "channel" },
+          "motion": {
+            "intent": "focus",
+            "camera": { "preset": "push-in", "onWord": "поднимает", "target": { "x": 0.5, "y": 0.46 }, "strength": 0.8 },
+            "entrance": "cascade",
+            "cues": [
+              { "id": "flow", "onWord": "идут" }
+            ],
+            "actors": {
+              "payload": { "preset": "transfer", "cue": "flow", "to": { "x": 120, "y": 0 } }
+            }
+          }
+        },
+        {
+          "visual": "direct-wifi-transfer",
+          "onWord": "байты",
+          "params": { "phase": "stream" },
+          "transition": { "kind": "continuation", "preset": "match" },
+          "motion": {
+            "intent": "follow",
+            "camera": { "preset": "track", "onWord": "байты", "target": { "x": 0.52, "y": 0.44 }, "strength": 0.8 },
+            "entrance": "cascade",
+            "cues": [
+              { "id": "flow", "onWord": "байты" },
+              { "id": "service", "onWord": "роутер" }
+            ],
+            "actors": {
+              "payload": { "preset": "transfer", "cue": "flow", "to": { "x": 140, "y": 0 } },
+              "service": { "preset": "depart", "cue": "service", "to": { "x": 0, "y": -120 } }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "story",
+      "transition": { "kind": "contrast", "preset": "wipe" },
+      "narration": "Вау-момент: пока виден один {AirDrop|эйрдроп}, внутри меняются роли. {Bluetooth|блютус} заканчивает служебную работу, а прямой {Wi-Fi|вай-фай} берёт большой поток. {Bluetooth|блютус} не становится быстрым — его не заставляют передавать фильм.",
+      "beats": [
+        {
+          "visual": "direct-wifi-transfer",
+          "onWord": "AirDrop",
+          "params": { "phase": "contrast" },
+          "motion": {
+            "intent": "compare",
+            "camera": { "preset": "track", "onWord": "AirDrop", "target": { "x": 0.5, "y": 0.43 }, "strength": 0.8 },
+            "entrance": "cascade",
+            "cues": [
+              { "id": "flow", "onWord": "AirDrop" },
+              { "id": "service", "onWord": "виден" }
+            ],
+            "actors": {
+              "payload": { "preset": "transfer", "cue": "flow", "to": { "x": 120, "y": 0 } },
+              "service": { "preset": "pulse", "cue": "service" }
+            }
+          }
+        },
+        {
+          "visual": "direct-wifi-transfer",
+          "onWord": "Bluetooth",
+          "params": { "phase": "handoff" },
+          "transition": { "kind": "contrast", "preset": "wipe" },
+          "motion": {
+            "intent": "follow",
+            "camera": { "preset": "push-in", "onWord": "берёт", "target": { "x": 0.52, "y": 0.44 }, "strength": 0.85 },
+            "entrance": "cascade",
+            "cues": [
+              { "id": "service", "onWord": "Bluetooth", "occurrence": 1 },
+              { "id": "flow", "onWord": "берёт" }
+            ],
+            "actors": {
+              "service": { "preset": "depart", "cue": "service", "to": { "x": 0, "y": -120 } },
+              "payload": { "preset": "transfer", "cue": "flow", "to": { "x": 150, "y": 0 } }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "outro",
+      "title": "Три роли",
+      "bullets": ["Bluetooth — обнаружение", "Bluetooth — согласование", "Wi‑Fi — фильм напрямую"],
+      "cta": "Подпишись на следующий разбор",
+      "transition": { "kind": "finale", "preset": "dissolve" },
+      "motion": {
+        "intent": "resolve",
+        "camera": { "preset": "settle", "onWord": "передаёт", "target": { "x": 0.5, "y": 0.44 }, "strength": 0.55 },
+        "cues": [
+          { "id": "summary", "onWord": "передаёт" }
+        ]
+      },
+      "narration": "Итак: {Bluetooth|блютус} обнаруживает и согласует, прямой {Wi-Fi|вай-фай} передаёт, поэтому файл не ползёт по медленному каналу. Дальше — как устройства решают, кому показываться. Подпишись."
+    }
+  ]
+}

@@ -60,6 +60,7 @@ import { SegmentBufferPlaybackVisual, type SegmentBufferPlaybackPhase } from "./
 import { AdaptiveBitrateLadderVisual, type AdaptiveBitratePhase } from "./AdaptiveBitrateLadderVisual";
 import { WifiAirtimeVisual, type WifiAirtimePhase } from "./WifiAirtimeVisual";
 import { WifiSignalVsAirtimeVisual } from "./WifiSignalVsAirtimeVisual";
+import { DirectWifiTransferVisual, type DirectWifiTransferPhase } from "./DirectWifiTransferVisual";
 import { WifiLoginVisual, type WifiLoginPhase } from "./WifiLoginVisual";
 import { WifiFourWayVisual, type WifiFourWayPhase } from "./WifiFourWayVisual";
 import { BluetoothHoppingVisual, type BluetoothHoppingPhase } from "./BluetoothHoppingVisual";
@@ -550,6 +551,9 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
               ? 0.6
               : 0.55)
         );
+    }
+    if (beat.visual === "direct-wifi-transfer") {
+      impact = resolveCue(cueFrames(beat.motion, words, start, end), "flow", start, end);
     }
     if (beat.visual === "wifi-login") {
       const phase = beat.params?.phase as WifiLoginPhase | undefined;
@@ -1198,6 +1202,10 @@ export const storySfx = (
           ? "pop"
           : "click";
       events.push({ frame: s.impact, sound });
+    }
+    if (s.beat.visual === "direct-wifi-transfer") {
+      const phase = s.beat.params?.phase as DirectWifiTransferPhase | undefined;
+      events.push({ frame: s.impact, sound: phase === "handoff" || phase === "stream" ? "whoosh" : phase === "contrast" ? "ding" : "pop" });
     }
     if (s.beat.visual === "wifi-login") {
       const phase = s.beat.params?.phase as WifiLoginPhase | undefined;
@@ -13298,6 +13306,15 @@ const StoryVisual: React.FC<{ slot: BeatSlot; sampleFrame: number }> = ({ slot, 
             fps={fps}
             impactLocal={impactLocal}
             phase={(slot.beat.params?.phase as WifiAirtimePhase | undefined) ?? "signal"}
+          />
+        );
+      case "direct-wifi-transfer":
+        return (
+          <DirectWifiTransferVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as DirectWifiTransferPhase | undefined) ?? "channel"}
           />
         );
       case "wifi-login":

@@ -196,6 +196,7 @@ export interface StoryBeat {
     | "adaptive-bitrate-ladder"
   | "wifi-airtime"
   | "wifi-signal-vs-airtime"
+  | "direct-wifi-transfer"
   | "wifi-login"
   | "wifi-four-way"
   | "bluetooth-hopping"
