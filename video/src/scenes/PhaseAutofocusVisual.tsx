@@ -40,7 +40,7 @@ const phaseBadge: Record<PhaseAutofocusPhase, string> = {
 };
 
 const Header: React.FC<{ phase: PhaseAutofocusPhase; opacity: number }> = ({ phase, opacity }) => (
-  <div style={{ position: "absolute", left: CX, top: 225, transform: "translateX(-50%)", display: "flex", alignItems: "center", gap: 12, color: phaseColor[phase], opacity, whiteSpace: "nowrap", fontSize: 23, ...mono }}>
+  <div style={{ position: "absolute", left: CX, top: 300, transform: "translateX(-50%)", display: "flex", alignItems: "center", gap: 12, color: phaseColor[phase], opacity, whiteSpace: "nowrap", fontSize: 23, ...mono }}>
     <IconGlyph name={phaseIcon[phase]} size={30} color={phaseColor[phase]} strokeWidth={1.8} />
     <span>{phaseTitle[phase]}</span>
   </div>
