@@ -130,40 +130,31 @@ const DirectPath: React.FC<{ opacity: number; color?: string; thick?: boolean; l
   </>
 );
 
-const ByteChip: React.FC<{ x: number; y: number; label: string; color: string; opacity: number; size?: number }> = ({
+/** Decorative payload marker. The lane caption carries the semantic label once. */
+const ByteChip: React.FC<{ x: number; y: number; color: string; opacity: number; size?: number }> = ({
   x,
   y,
-  label,
   color,
   opacity,
   size = 1,
 }) => (
-  <div
+  <svg
+    width={74}
+    height={38}
+    viewBox="0 0 74 38"
+    aria-hidden="true"
+    focusable="false"
     style={{
       position: "absolute",
       left: x,
       top: y,
       transform: `translate(-50%, -50%) scale(${size})`,
-      minWidth: 74,
-      height: 38,
-      padding: "0 12px",
-      borderRadius: 10,
-      background: `${color}22`,
-      border: `2px solid ${color}`,
-      color,
       opacity,
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      fontSize: 16,
-      whiteSpace: "nowrap",
-      boxSizing: "border-box",
-      ...mono,
     }}
   >
-    <IconGlyph name="file" size={20} color={color} strokeWidth={2} />
-    <span style={{ marginLeft: 7 }}>{label}</span>
-  </div>
+    <rect x="2" y="2" width="70" height="34" rx="10" fill={`${color}22`} stroke={color} strokeWidth="2" />
+    <path d="M28 10h11l7 7v11H28z M39 10v7h7" fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" />
+  </svg>
 );
 
 const pathPoint = (progress: number) => ({
@@ -198,7 +189,6 @@ const Payload: React.FC<{
               key={index}
               x={point.x}
               y={point.y + (isStream ? Math.sin(index * 2.4) * 18 : 0)}
-              label={isStream ? "ФИЛЬМ" : "БАЙТ"}
               color={phase === "handoff" ? theme.success : theme.accent}
               opacity={opacity * (0.45 + 0.55 * clamp01(run * 3 + index / count))}
               size={isStream ? 0.72 : 0.84}
