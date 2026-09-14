@@ -1,0 +1,205 @@
+{
+  "id": "auto-20260914-134923",
+  "title": "Почему камера телефона фокусируется почти мгновенно?",
+  "scenes": [
+    {
+      "type": "story",
+      "heading": "Симптом: резкость за миг",
+      "narration": "Нажимаешь на лицо — резкость запирается почти сразу, а сам объектив едва заметно сдвигается. Почему камера не ездит туда-сюда?",
+      "beats": [
+        {
+          "visual": "phase-autofocus",
+          "onWord": "Нажимаешь",
+          "params": { "phase": "symptom" },
+          "motion": {
+            "intent": "focus",
+            "camera": { "preset": "push-in", "onWord": "лицо", "target": { "x": 0.3, "y": 0.45 }, "strength": 0.65 },
+            "entrance": "cascade",
+            "cues": [
+              { "id": "tap", "onWord": "Нажимаешь" },
+              { "id": "lock", "onWord": "запирается" },
+              { "id": "shift", "onWord": "сдвигается" }
+            ],
+            "actors": {
+              "lens": { "preset": "transfer", "cue": "shift", "from": { "x": -8, "y": 0 }, "to": { "x": 8, "y": 0 } },
+              "focus": { "preset": "pulse", "cue": "lock" }
+            }
+          }
+        },
+        {
+          "visual": "phase-autofocus",
+          "onWord": "Почему",
+          "params": { "phase": "contrast" },
+          "transition": { "kind": "contrast", "preset": "wipe" },
+          "motion": {
+            "intent": "compare",
+            "camera": { "preset": "track", "onWord": "Почему", "target": { "x": 0.7, "y": 0.45 }, "strength": 0.7 },
+            "entrance": "cascade",
+            "cues": [
+              { "id": "search", "onWord": "ездит" },
+              { "id": "hunt", "onWord": "туда-сюда" }
+            ],
+            "actors": {
+              "contrast-lens": { "preset": "transfer", "cue": "hunt", "from": { "x": -55, "y": 0 }, "to": { "x": 150, "y": 0 } }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "story",
+      "heading": "Сенсор делит свет",
+      "transition": { "kind": "continuation", "preset": "match" },
+      "narration": "Секрет не в отдельном чипе, а в том, как сенсор принимает свет. В некоторых современных сенсорах {Фазовый автофокус|фазовый автофокус} использует пиксели, разделённые на две фотодиодные половины.",
+      "beats": [
+        {
+          "visual": "phase-autofocus",
+          "onWord": "Секрет",
+          "params": { "phase": "split" },
+          "motion": {
+            "intent": "reveal",
+            "camera": { "preset": "pull-out", "onWord": "сенсор", "target": { "x": 0.5, "y": 0.45 }, "strength": 0.65 },
+            "entrance": "cascade",
+            "cues": [
+              { "id": "sensor", "onWord": "сенсор" },
+              { "id": "slice", "onWord": "свет" }
+            ],
+            "actors": {
+              "rays": { "preset": "transfer", "cue": "slice", "from": { "x": -26, "y": 0 }, "to": { "x": 0, "y": 0 } },
+              "microlens": { "preset": "pulse", "cue": "sensor" }
+            }
+          }
+        },
+        {
+          "visual": "phase-autofocus",
+          "onWord": "Фазовый",
+          "params": { "phase": "scale", "variant": "generic" },
+          "transition": { "kind": "continuation", "preset": "match" },
+          "motion": {
+            "intent": "focus",
+            "camera": { "preset": "push-in", "onWord": "использует", "target": { "x": 0.5, "y": 0.43 }, "strength": 0.65 },
+            "entrance": "cascade",
+            "cues": [
+              { "id": "pixels", "onWord": "пиксели" },
+              { "id": "points", "onWord": "разделённые" }
+            ],
+            "actors": {
+              "points": { "preset": "pulse", "cue": "points" }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "story",
+      "heading": "Два среза дают фазу",
+      "transition": { "kind": "turn", "preset": "push" },
+      "narration": "Обе половины смотрят через одну микролинзу, но получают разные световые срезы. Камера сравнивает их рисунок: сдвиг показывает, куда и насколько двигать линзу.",
+      "beats": [
+        {
+          "visual": "phase-autofocus",
+          "onWord": "Обе",
+          "params": { "phase": "split", "variant": "slices" },
+          "motion": {
+            "intent": "compare",
+            "camera": { "preset": "track", "onWord": "половины", "target": { "x": 0.5, "y": 0.44 }, "strength": 0.65 },
+            "entrance": "cascade",
+            "cues": [
+              { "id": "look", "onWord": "смотрят" },
+              { "id": "slice", "onWord": "срезы" }
+            ],
+            "actors": {
+              "rays": { "preset": "transfer", "cue": "slice", "from": { "x": -26, "y": 0 }, "to": { "x": 0, "y": 0 } }
+            }
+          }
+        },
+        {
+          "visual": "phase-autofocus",
+          "onWord": "Камера",
+          "params": { "phase": "compare" },
+          "transition": { "kind": "continuation", "preset": "match" },
+          "motion": {
+            "intent": "compare",
+            "camera": { "preset": "track", "onWord": "сравнивает", "target": { "x": 0.65, "y": 0.44 }, "strength": 0.75 },
+            "entrance": "cascade",
+            "cues": [
+              { "id": "compare", "onWord": "сравнивает" },
+              { "id": "measure", "onWord": "сдвиг" }
+            ],
+            "actors": {
+              "pattern-b": { "preset": "transfer", "cue": "measure", "from": { "x": 54, "y": 0 }, "to": { "x": 0, "y": 0 } },
+              "measure": { "preset": "pulse", "cue": "measure" }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "story",
+      "heading": "Привод получает ответ",
+      "transition": { "kind": "continuation", "preset": "match" },
+      "narration": "Это как два глазка: они сравнивают один узор, и сдвиг сразу подсказывает приводу сторону и величину шага. Сони в две тысячи четырнадцатом году показала сенсор смартфона со ста девяноста двумя точками фазового автофокуса.",
+      "beats": [
+        {
+          "visual": "phase-autofocus",
+          "onWord": "Это",
+          "params": { "phase": "drive" },
+          "motion": {
+            "intent": "follow",
+            "camera": { "preset": "track", "onWord": "подсказывает", "target": { "x": 0.55, "y": 0.45 }, "strength": 0.7 },
+            "entrance": "cascade",
+            "cues": [
+              { "id": "direction", "onWord": "сторону" },
+              { "id": "step", "onWord": "шага" }
+            ],
+            "actors": {
+              "direction": { "preset": "transfer", "cue": "direction", "from": { "x": 0, "y": 0 }, "to": { "x": 160, "y": 0 } },
+              "lens": { "preset": "transfer", "cue": "step", "from": { "x": 0, "y": 0 }, "to": { "x": 350, "y": 0 } },
+              "focus": { "preset": "pulse", "cue": "step" }
+            }
+          }
+        },
+        {
+          "visual": "phase-autofocus",
+          "onWord": "Сони",
+          "params": { "phase": "scale", "variant": "sony" },
+          "transition": { "kind": "continuation", "preset": "match" },
+          "motion": {
+            "intent": "reveal",
+            "camera": { "preset": "pull-out", "onWord": "показала", "target": { "x": 0.5, "y": 0.43 }, "strength": 0.65 },
+            "entrance": "cascade",
+            "cues": [
+              { "id": "year", "onWord": "Сони" },
+              { "id": "points", "onWord": "точками" }
+            ],
+            "actors": {
+              "points": { "preset": "pulse", "cue": "points" }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "outro",
+      "title": "Сравнивает, а не перебирает",
+      "bullets": [
+        "Половины дают фазовый сдвиг",
+        "Линза получает сторону и шаг",
+        "Контраст ищет максимум",
+        "Реализации могут различаться"
+      ],
+      "cta": "Подпишись: ещё один механизм камеры",
+      "transition": { "kind": "finale", "preset": "dissolve" },
+      "motion": {
+        "intent": "resolve",
+        "camera": { "preset": "settle", "onWord": "Итак", "target": { "x": 0.5, "y": 0.44 }, "strength": 0.55 },
+        "cues": [
+          { "id": "contrast", "onWord": "Контрастный автофокус" },
+          { "id": "hunt", "onWord": "охотиться" },
+          { "id": "summary", "onWord": "Фазовый автофокус" }
+        ]
+      },
+      "narration": "У {Контрастный автофокус|контрастный автофокус} такой подсказки нет: он ищет максимум резкости, двигая линзу, поэтому может «охотиться». Итак: {Фазовый автофокус|фазовый автофокус} сравнивает половины, сразу задаёт направление и величину движения. Дальше — ещё один скрытый механизм камеры. Подпишись."
+    }
+  ]
+}
