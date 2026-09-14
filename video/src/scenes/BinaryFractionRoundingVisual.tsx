@@ -210,13 +210,13 @@ const SumPhase: React.FC<{ motion: ReturnType<typeof useMotion>; impactLocal: nu
   const tail = motion.action("tail", 0.8);
   return (
     <>
-      <MotionGroup id="left" index={0} action={{ preset: "transfer", cue: "add", to: { x: 170, y: 120 } }}>
+      <MotionGroup id="left" index={0} action={{ preset: "transfer", cue: "add", to: { x: 170, y: 50 } }}>
         <div style={{ ...panel(theme.accent), left: 36, top: 425, width: 320, height: 205 }} data-motion-shape>
           <Label left={24} top={24} text="0,1 ≈" color={theme.accent} size={23} />
           <div style={{ position: "absolute", left: 20, top: 100, color: theme.text, fontSize: 20, ...mono, whiteSpace: "nowrap" }}>0.100000000000…</div>
         </div>
       </MotionGroup>
-      <MotionGroup id="right" index={1} action={{ preset: "transfer", cue: "add", to: { x: -170, y: 120 } }}>
+      <MotionGroup id="right" index={1} action={{ preset: "transfer", cue: "add", to: { x: -170, y: 50 } }}>
         <div style={{ ...panel(theme.accent2), left: 724, top: 425, width: 320, height: 205 }} data-motion-shape>
           <Label left={24} top={24} text="0,2 ≈" color={theme.accent2} size={23} />
           <div style={{ position: "absolute", left: 20, top: 100, color: theme.text, fontSize: 20, ...mono, whiteSpace: "nowrap" }}>0.200000000000…</div>
