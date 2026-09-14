@@ -85,6 +85,7 @@ import { ContextWindowVisual, type ContextWindowPhase } from "./ContextWindowVis
 import { AttentionCostVisual, type AttentionCostPhase } from "./AttentionCostVisual";
 import { MultiFrameStackVisual, type MultiFrameStackPhase } from "./MultiFrameStackVisual";
 import { OisStabilizationVisual, type OisStabilizationPhase } from "./OisStabilizationVisual";
+import { PhaseAutofocusVisual, type PhaseAutofocusPhase, type PhaseAutofocusVariant } from "./PhaseAutofocusVisual";
 import { TiltWeightVisual, type TiltWeightPhase } from "./TiltWeightVisual";
 import { MemsCapacitorVisual, type MemsCapacitorPhase } from "./MemsCapacitorVisual";
 import { TotpWindowVisual, type TotpWindowPhase } from "./TotpWindowVisual";
@@ -701,6 +702,10 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
     if (beat.visual === "ois-stabilization") {
       const phase = beat.params?.phase as OisStabilizationPhase | undefined;
       impact = start + Math.round(dur * (phase === "countermove" || phase === "actuator" ? 0.68 : phase === "hold" ? 0.72 : phase === "gyro" ? 0.62 : 0.58));
+    }
+    if (beat.visual === "phase-autofocus") {
+      const phase = beat.params?.phase as PhaseAutofocusPhase | undefined;
+      impact = start + Math.round(dur * (phase === "contrast" ? 0.68 : phase === "drive" ? 0.7 : phase === "compare" ? 0.66 : phase === "scale" ? 0.68 : 0.62));
     }
     if (beat.visual === "mail-queue") {
       const phase = beat.params?.phase as MailQueuePhase | undefined;
@@ -1323,6 +1328,11 @@ export const storySfx = (
     if (s.beat.visual === "ois-stabilization") {
       const ph = s.beat.params?.phase as OisStabilizationPhase | undefined;
       const sound = ph === "countermove" || ph === "actuator" ? "slam" : ph === "hold" ? "ding" : ph === "gyro" ? "click" : "pop";
+      events.push({ frame: s.impact, sound });
+    }
+    if (s.beat.visual === "phase-autofocus") {
+      const ph = s.beat.params?.phase as PhaseAutofocusPhase | undefined;
+      const sound = ph === "contrast" ? "slam" : ph === "drive" || ph === "scale" ? "ding" : ph === "compare" ? "pop" : "click";
       events.push({ frame: s.impact, sound });
     }
     if (s.beat.visual === "tilt-weight") {
@@ -13586,6 +13596,16 @@ const StoryVisual: React.FC<{ slot: BeatSlot; sampleFrame: number }> = ({ slot, 
             fps={fps}
             impactLocal={impactLocal}
             phase={(slot.beat.params?.phase as OisStabilizationPhase | undefined) ?? "handheld"}
+          />
+        );
+      case "phase-autofocus":
+        return (
+          <PhaseAutofocusVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as PhaseAutofocusPhase | undefined) ?? "symptom"}
+            variant={slot.beat.params?.variant as PhaseAutofocusVariant | undefined}
           />
         );
       case "tilt-weight":

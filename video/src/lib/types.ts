@@ -224,6 +224,7 @@ export interface StoryBeat {
   | "mnemonic-seed-derivation"
   | "multi-frame-stack"
   | "ois-stabilization"
+  | "phase-autofocus"
   | "mail-queue"
   | "mail-server-handoff"
   | "totp-window"
