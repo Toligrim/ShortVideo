@@ -15,6 +15,14 @@ export const OutroScene: React.FC<{ scene: OutroProps; frames: number }> = ({ sc
   const titleS = spring({ frame: frame - TRANSITION_FRAMES - 4, fps, config: { damping: 13 } });
   const ctaFrom = Math.min(Math.round(frames * 0.55), frames - 30);
   const pulse = 1 + 0.035 * Math.sin(((frame - ctaFrom) / fps) * Math.PI * 2.2);
+  // Baseline 0.59 fits the common case (<=3 bullets, mostly one line). With 4
+  // bullets and long text wrapping to two lines the block can run past that
+  // point and collide with the CTA pill (auto-20260914-134923: overlap-check
+  // flagged "Реализации могут различаться" × CTA at frames 1526/1742, visible
+  // on the still — the CTA pill sat directly over the 4th bullet). Push the
+  // CTA down per bullet beyond 3; <=3 bullets keep the exact original position.
+  const extraBulletOffset = Math.max(0, (scene.bullets ?? []).length - 3) * 85;
+  const ctaTop = layout.height * 0.59 + extraBulletOffset;
   return (
     <>
       <div
@@ -79,7 +87,7 @@ export const OutroScene: React.FC<{ scene: OutroProps; frames: number }> = ({ sc
         <>
         <PulseRing
           x={layout.width / 2}
-          y={layout.height * 0.59 + 60}
+          y={ctaTop + 60}
           triggerFrame={ctaFrom}
           size={420}
         />
@@ -88,7 +96,7 @@ export const OutroScene: React.FC<{ scene: OutroProps; frames: number }> = ({ sc
             position: "absolute",
             left: 0,
             right: 0,
-            top: layout.height * 0.59,
+            top: ctaTop,
             display: "flex",
             justifyContent: "center",
             opacity: interpolate(frame, [ctaFrom, ctaFrom + 12], [0, 1], {
