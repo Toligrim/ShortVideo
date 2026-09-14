@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "slug": "auto-20260914-070735",
+  "targets": {
+    "youtube": {
+      "title": "Почему AirDrop передаёт фильм быстрее Bluetooth?",
+      "description": "AirDrop использует Bluetooth для знакомства устройств и прямой Wi‑Fi‑канал для самого большого потока данных — поэтому фильм не ползёт по медленному служебному каналу.",
+      "tags": ["AirDrop", "Wi-Fi", "Bluetooth", "iPhone", "передача файлов", "как работает телефон"],
+      "category_id": "28",
+      "privacy_status": "public",
+      "made_for_kids": false,
+      "contains_synthetic_media": true,
+      "notify_subscribers": false
+    },
+    "instagram": {
+      "caption": "Почему AirDrop передаёт фильм быстрее Bluetooth? Bluetooth знакомит устройства, а сам фильм идёт по прямому Wi‑Fi‑каналу. #AirDrop #WiFi #Bluetooth #iPhone",
+      "share_to_feed": true
+    }
+  }
+}
