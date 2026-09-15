@@ -100,7 +100,7 @@ const Rack: React.FC<{ left: number; index: number; active: number }> = ({ left,
     style={{
       position: "absolute",
       left,
-      top: 555,
+      top: 0,
       width: 150,
       height: 300,
       borderRadius: 18,
