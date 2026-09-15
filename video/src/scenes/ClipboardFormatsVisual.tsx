@@ -258,7 +258,7 @@ const ClipboardFormatsVisual: React.FC<Props> = ({ local, fps, impactLocal, phas
           </div>
         </Panel>
         <MotionGroup id="fragment" index={1} action={{ preset: "transfer", cue: "arrival", from: { x: 0, y: 0 }, to: { x: 470, y: -15 } }}>
-          <FormatCard left={165} top={650} width={270} height={130} title="ФРАГМЕНТ" tone={theme.accent} opacity={Math.max(0.12, 1 - arrivalP * 0.88)}>
+          <FormatCard left={165} top={650} width={270} height={130} title="ФРАГМЕНТ" tone={theme.accent} opacity={1 - arrivalP}>
             буквы + стиль
           </FormatCard>
         </MotionGroup>
@@ -285,13 +285,13 @@ const ClipboardFormatsVisual: React.FC<Props> = ({ local, fps, impactLocal, phas
         <Arrow x1={540} y1={640} x2={htmlFocus ? 755 : 365} y2={htmlFocus ? 770 : 850} color={theme.warning} opacity={enter} />
         <Arrow x1={540} y1={640} x2={htmlFocus ? 345 : 715} y2={htmlFocus ? 1010 : 850} color={theme.warning} opacity={enter} />
         <MotionGroup id="plain" index={1} action={{ preset: "transfer", cue: "plain", from: { x: -100, y: 25 }, to: { x: 0, y: 0 } }}>
-          <FormatCard left={htmlFocus ? 110 : 120} top={htmlFocus ? 820 : 650} width={htmlFocus ? 300 : 390} height={htmlFocus ? 180 : 235} title="text/plain" tone={theme.accent} opacity={Math.max(0.16, plainP)}>
+          <FormatCard left={htmlFocus ? 110 : 120} top={htmlFocus ? 820 : 650} width={htmlFocus ? 300 : 390} height={htmlFocus ? 180 : 235} title="text/plain" tone={theme.accent} opacity={plainP}>
             только буквы
             <div style={{ color: theme.subtext, fontSize: 18, marginTop: 12, ...mono }}>Важная заметка</div>
           </FormatCard>
         </MotionGroup>
         <MotionGroup id="html" index={2} action={{ preset: "transfer", cue: "html", from: { x: 100, y: 25 }, to: { x: 0, y: 0 } }}>
-          <FormatCard left={htmlFocus ? 500 : 570} top={htmlFocus ? 675 : 650} width={htmlFocus ? 430 : 390} height={htmlFocus ? 300 : 235} title="text/html" tone={theme.accent2} opacity={htmlFocus ? Math.max(0.16, htmlP) : 0}>
+          <FormatCard left={htmlFocus ? 500 : 570} top={htmlFocus ? 675 : 650} width={htmlFocus ? 430 : 390} height={htmlFocus ? 300 : 235} title="text/html" tone={theme.accent2} opacity={htmlFocus ? htmlP : 0}>
             <div style={{ ...mono, color: theme.accent2, fontSize: htmlFocus ? 21 : 18 }}>{"<b>жирный</b>"}</div>
             <div style={{ ...mono, color: theme.accent2, fontSize: htmlFocus ? 21 : 18, marginTop: 8 }}>{"<a>ссылка</a>"}</div>
             <div style={{ ...mono, color: theme.accent2, fontSize: htmlFocus ? 21 : 18, marginTop: 8 }}>{"<li>список</li>"}</div>
@@ -304,8 +304,8 @@ const ClipboardFormatsVisual: React.FC<Props> = ({ local, fps, impactLocal, phas
 
   if (phase === "envelopes") {
     const pair = variant !== "rtf";
-    const shortP = pair ? Math.max(0.42, motion.action("short")) : 1;
-    const richP = pair ? Math.max(0.42, motion.action("rich")) : 1;
+    const shortP = pair ? motion.action("short") : 1;
+    const richP = pair ? motion.action("rich") : 1;
     const rtfP = variant === "rtf" ? motion.action("rtf") : 0;
     const rulesP = variant === "rtf" ? motion.action("rules") : 0;
     return (
@@ -347,7 +347,7 @@ const ClipboardFormatsVisual: React.FC<Props> = ({ local, fps, impactLocal, phas
           </Panel>
         </MotionGroup>
         <MotionGroup id="format-list" index={1} action={{ preset: "pulse", cue: "list" }}>
-          <div style={{ position: "absolute", left: 205, top: 560, width: 670, opacity: Math.max(0.12, listP) }}>
+          <div style={{ position: "absolute", left: 205, top: 560, width: 670, opacity: listP }}>
             {[{ label: "text/plain", detail: "только буквы", tone: theme.accent }, { label: "text/html", detail: "теги и стиль", tone: theme.accent2 }, { label: "text/rtf", detail: "правила абзаца", tone: theme.warning }].map((item, index) => (
               <div key={item.label} style={{ height: 92, marginBottom: 14, padding: "18px 22px", boxSizing: "border-box", borderRadius: 18, border: `2px solid ${item.tone}66`, background: `${item.tone}10`, display: "flex", alignItems: "center", justifyContent: "space-between", color: theme.text, ...mono }}>
                 <span style={{ color: item.tone, fontSize: 22 }}>{item.label}</span>
@@ -358,7 +358,7 @@ const ClipboardFormatsVisual: React.FC<Props> = ({ local, fps, impactLocal, phas
           </div>
         </MotionGroup>
         <MotionGroup id="choice" index={2} action={{ preset: "transfer", cue: "pick", from: { x: -90, y: -160 }, to: { x: 0, y: 0 } }}>
-          <div style={{ position: "absolute", left: 190, top: 1080, width: 700, height: 92, borderRadius: 18, border: `4px solid ${theme.success}`, background: `${theme.success}18`, opacity: Math.max(0.1, pickP) }}>
+          <div style={{ position: "absolute", left: 190, top: 1080, width: 700, height: 92, borderRadius: 18, border: `4px solid ${theme.success}`, background: `${theme.success}18`, opacity: pickP }}>
             <div style={{ position: "absolute", left: 20, top: 27, color: theme.success, fontSize: 22, ...mono }}>ВЫБОР · HTML</div>
             <div style={{ position: "absolute", right: 20, top: 27, color: theme.success, fontSize: 18, ...mono, opacity: richP }}>БОГАТОЕ ИЗ ПОНЯТНЫХ</div>
           </div>
@@ -376,8 +376,8 @@ const ClipboardFormatsVisual: React.FC<Props> = ({ local, fps, impactLocal, phas
     <>
       <MotionGroup id="word-output" index={0} action={{ preset: "pulse", cue: "preserve" }}>
         <Panel left={70} top={410} width={440} height={570} color={theme.accent2}>
-          <div style={{ position: "absolute", left: 28, top: 28, opacity: Math.max(0.12, wordP) }}><AppLabel icon="file-text" text="ВОРД" color={theme.accent2} /></div>
-          <div style={{ position: "absolute", left: 30, top: 145, color: theme.text, fontSize: 28, lineHeight: 1.7, opacity: Math.max(0.12, preserveP) }}>
+          <div style={{ position: "absolute", left: 28, top: 28, opacity: wordP }}><AppLabel icon="file-text" text="ВОРД" color={theme.accent2} /></div>
+          <div style={{ position: "absolute", left: 30, top: 145, color: theme.text, fontSize: 28, lineHeight: 1.7, opacity: preserveP }}>
             <strong>Важная заметка</strong>
             <div style={{ color: theme.accent, fontSize: 21 }}>ссылка</div>
             <div style={{ color: theme.accent2, fontSize: 21 }}>• пункт списка</div>
@@ -387,10 +387,10 @@ const ClipboardFormatsVisual: React.FC<Props> = ({ local, fps, impactLocal, phas
       <MotionGroup id="plain-output" index={1} action={{ preset: "transfer", cue: "simple", from: { x: 120, y: 0 }, to: { x: 0, y: 0 } }}>
         <Panel left={570} top={410} width={440} height={570} color={theme.accent}>
           <div style={{ position: "absolute", left: 28, top: 28 }}><AppLabel icon="notebook-pen" text="ПРОСТОЙ ПОЛУЧАТЕЛЬ" color={theme.accent} /></div>
-          <div style={{ position: "absolute", left: 30, top: 150, color: theme.text, fontSize: 28, lineHeight: 1.7, opacity: Math.max(0.12, simpleP) }}>
-            <span style={{ opacity: Math.max(0.12, lettersP) }}>Важная заметка</span>
-            <div style={{ fontSize: 21, color: theme.subtext, opacity: Math.max(0.12, lettersP) }}>ссылка</div>
-            <div style={{ fontSize: 21, color: theme.subtext, opacity: Math.max(0.12, lettersP) }}>пункт списка</div>
+          <div style={{ position: "absolute", left: 30, top: 150, color: theme.text, fontSize: 28, lineHeight: 1.7, opacity: simpleP }}>
+            <span style={{ opacity: lettersP }}>Важная заметка</span>
+            <div style={{ fontSize: 21, color: theme.subtext, opacity: lettersP }}>ссылка</div>
+            <div style={{ fontSize: 21, color: theme.subtext, opacity: lettersP }}>пункт списка</div>
           </div>
         </Panel>
       </MotionGroup>
