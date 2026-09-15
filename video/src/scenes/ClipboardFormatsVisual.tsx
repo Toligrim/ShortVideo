@@ -304,8 +304,8 @@ const ClipboardFormatsVisual: React.FC<Props> = ({ local, fps, impactLocal, phas
 
   if (phase === "envelopes") {
     const pair = variant !== "rtf";
-    const shortP = pair ? motion.action("short") : 1;
-    const richP = pair ? motion.action("rich") : 1;
+    const shortP = pair ? Math.max(0.42, motion.action("short")) : 1;
+    const richP = pair ? Math.max(0.42, motion.action("rich")) : 1;
     const rtfP = variant === "rtf" ? motion.action("rtf") : 0;
     const rulesP = variant === "rtf" ? motion.action("rules") : 0;
     return (
