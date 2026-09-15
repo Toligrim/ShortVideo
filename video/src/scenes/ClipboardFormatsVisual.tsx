@@ -358,12 +358,12 @@ const ClipboardFormatsVisual: React.FC<Props> = ({ local, fps, impactLocal, phas
           </div>
         </MotionGroup>
         <MotionGroup id="choice" index={2} action={{ preset: "transfer", cue: "pick", from: { x: -90, y: -160 }, to: { x: 0, y: 0 } }}>
-          <div style={{ position: "absolute", left: 190, top: 650, width: 700, height: 92, borderRadius: 18, border: `4px solid ${theme.success}`, background: `${theme.success}18`, opacity: Math.max(0.1, pickP) }}>
+          <div style={{ position: "absolute", left: 190, top: 1080, width: 700, height: 92, borderRadius: 18, border: `4px solid ${theme.success}`, background: `${theme.success}18`, opacity: Math.max(0.1, pickP) }}>
             <div style={{ position: "absolute", left: 20, top: 27, color: theme.success, fontSize: 22, ...mono }}>ВЫБОР · HTML</div>
             <div style={{ position: "absolute", right: 20, top: 27, color: theme.success, fontSize: 18, ...mono, opacity: richP }}>БОГАТОЕ ИЗ ПОНЯТНЫХ</div>
           </div>
         </MotionGroup>
-        <PulseRing x={540} y={695} triggerFrame={impactLocal} tone="success" size={200} />
+        <PulseRing x={540} y={1126} triggerFrame={impactLocal} tone="success" size={200} />
       </>
     );
   }
