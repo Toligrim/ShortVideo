@@ -210,6 +210,7 @@ export interface StoryBeat {
   | "packet-encapsulation"
 | "block-chain"
     | "mempool-rbf"
+    | "proof-of-work"
     | "face-id-depth"
     | "diffusion-denoise"
     | "battery-sei-growth"

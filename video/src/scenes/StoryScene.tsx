@@ -71,6 +71,7 @@ import { FileDeleteRecoveryVisual, type FileDeleteRecoveryPhase } from "./FileDe
 import { PhotoAccessBoundaryVisual, type PhotoAccessBoundaryPhase } from "./PhotoAccessBoundaryVisual";
 import { BlockChainVisual, type BlockChainPhase } from "./BlockChainVisual";
 import { MempoolRbfVisual, type MempoolRbfPhase } from "./MempoolRbfVisual";
+import { ProofOfWorkVisual, type ProofOfWorkPhase } from "./ProofOfWorkVisual";
 import { DiffusionDenoiseVisual, type DiffusionDenoisePhase } from "./DiffusionDenoiseVisual";
 import { TlsHandshakeVisual, type TlsHandshakePhase } from "./TlsHandshakeVisual";
 import { PacketEncapsulationVisual, type PacketEncapsulationPhase } from "./PacketEncapsulationVisual";
@@ -602,6 +603,17 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
     if (beat.visual === "block-chain") {
       const phase = beat.params?.phase;
       impact = start + Math.round(dur * (phase === "confirm" ? 0.78 : phase === "tamper" ? 0.6 : 0.55));
+    }
+    if (beat.visual === "proof-of-work") {
+      const phase = beat.params?.phase as ProofOfWorkPhase | undefined;
+      const cues = cueFrames(beat.motion, words, start, end);
+      const cue = phase === "farm" ? "consume"
+        : phase === "proposal" ? "proof"
+        : phase === "lottery" ? "rare"
+        : phase === "nonce" ? (Object.hasOwn(cues, "hash") ? "hash" : "increment")
+        : phase === "target" ? "check"
+        : "check";
+      impact = resolveCue(cues, cue, start, end);
     }
     if (beat.visual === "mempool-rbf") {
       const phase = beat.params?.phase;
@@ -1274,6 +1286,11 @@ export const storySfx = (
     if (s.beat.visual === "block-chain") {
       const phase = s.beat.params?.phase;
       const sound = phase === "confirm" ? "ding" : phase === "tamper" ? "slam" : "pop";
+      events.push({ frame: s.impact, sound });
+    }
+    if (s.beat.visual === "proof-of-work") {
+      const phase = s.beat.params?.phase as ProofOfWorkPhase | undefined;
+      const sound = phase === "verify" ? "ding" : phase === "target" || phase === "lottery" ? "pop" : phase === "farm" ? "whoosh" : "click";
       events.push({ frame: s.impact, sound });
     }
     if (s.beat.visual === "mempool-rbf") {
@@ -13449,6 +13466,19 @@ const StoryVisual: React.FC<{ slot: BeatSlot; sampleFrame: number }> = ({ slot, 
             fps={fps}
             impactLocal={impactLocal}
             phase={(slot.beat.params?.phase as BlockChainPhase | undefined) ?? "link"}
+          />
+        );
+      case "proof-of-work":
+        return (
+          <ProofOfWorkVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as ProofOfWorkPhase | undefined) ?? "farm"}
+            workers={slot.beat.params?.workers as string | undefined}
+            nonceStart={slot.beat.params?.nonceStart as number | undefined}
+            target={slot.beat.params?.target as string | undefined}
+            blockLabel={slot.beat.params?.blockLabel as string | undefined}
           />
         );
       case "mempool-rbf":
