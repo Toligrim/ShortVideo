@@ -1,0 +1,209 @@
+{
+  "id": "auto-20260915-062748",
+  "title": "Почему текст из браузера приезжает в Ворд уже с форматированием?",
+  "scenes": [
+    {
+      "type": "story",
+      "heading": "Симптом: приезжают не только буквы",
+      "narration": "Копируешь абзац с сайта в Ворд — и вместе с буквами приезжают жирный шрифт, ссылка и список. Откуда редактор узнал, что ты не просил?",
+      "beats": [
+        {
+          "visual": "clipboard-formats",
+          "onWord": "Копируешь",
+          "params": { "phase": "browser" },
+          "motion": {
+            "intent": "focus",
+            "camera": { "preset": "push-in", "onWord": "абзац", "target": { "x": 0.48, "y": 0.48 }, "strength": 0.55 },
+            "entrance": "cascade",
+            "cues": [
+              { "id": "copy", "onWord": "Копируешь" },
+              { "id": "selection", "onWord": "абзац" }
+            ],
+            "actors": {
+              "selection": { "preset": "pulse", "cue": "selection" },
+              "cursor": { "preset": "transfer", "cue": "copy", "from": { "x": -80, "y": 50 }, "to": { "x": 0, "y": 0 } }
+            }
+          }
+        },
+        {
+          "visual": "clipboard-formats",
+          "onWord": "вместе",
+          "params": { "phase": "copy" },
+          "transition": { "kind": "continuation", "preset": "match" },
+          "motion": {
+            "intent": "follow",
+            "camera": { "preset": "track", "onWord": "приезжают", "target": { "x": 0.78, "y": 0.46 }, "strength": 0.55 },
+            "entrance": "cascade",
+            "cues": [
+              { "id": "arrival", "onWord": "приезжают" },
+              { "id": "editor", "onWord": "редактор" }
+            ],
+            "actors": {
+              "fragment": { "preset": "transfer", "cue": "arrival", "from": { "x": 0, "y": 0 }, "to": { "x": 470, "y": -15 } }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "story",
+      "heading": "Одна копия, несколько форматов",
+      "transition": { "kind": "turn", "preset": "push" },
+      "narration": "При копировании браузер не обязан складывать в буфер только строку. Он может записать один фрагмент сразу как обычный текст и как {HTML|эйч ти эм эл} — с тегами жирного, ссылок и списков.",
+      "beats": [
+        {
+          "visual": "clipboard-formats",
+          "onWord": "При",
+          "params": { "phase": "formats", "variant": "source" },
+          "motion": {
+            "intent": "reveal",
+            "camera": { "preset": "pull-out", "onWord": "фрагмент", "target": { "x": 0.5, "y": 0.5 }, "strength": 0.55 },
+            "entrance": "cascade",
+            "cues": [
+              { "id": "copy", "onWord": "копировании" },
+              { "id": "plain", "onWord": "текст" }
+            ],
+            "actors": {
+              "source": { "preset": "pulse", "cue": "copy" },
+              "plain": { "preset": "transfer", "cue": "plain", "from": { "x": -100, "y": 25 }, "to": { "x": 0, "y": 0 } }
+            }
+          }
+        },
+        {
+          "visual": "clipboard-formats",
+          "onWord": "HTML",
+          "params": { "phase": "formats", "variant": "html" },
+          "transition": { "kind": "continuation", "preset": "match" },
+          "motion": {
+            "intent": "focus",
+            "camera": { "preset": "push-in", "onWord": "HTML", "target": { "x": 0.72, "y": 0.46 }, "strength": 0.6 },
+            "entrance": "cascade",
+            "cues": [
+              { "id": "html", "onWord": "HTML" },
+              { "id": "tags", "onWord": "тегами" },
+              { "id": "links", "onWord": "ссылок" },
+              { "id": "lists", "onWord": "списков" }
+            ],
+            "actors": {
+              "html": { "preset": "transfer", "cue": "html", "from": { "x": 100, "y": 25 }, "to": { "x": 0, "y": 0 } }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "story",
+      "heading": "Два конверта — один фрагмент",
+      "transition": { "kind": "continuation", "preset": "match" },
+      "narration": "Так работают форматы буфера: один текст лежит в двух конвертах — коротком и подробном. Некоторые программы добавляют ещё {RTF|ар ти эф}, где правила шрифта и абзаца записаны отдельно.",
+      "beats": [
+        {
+          "visual": "clipboard-formats",
+          "onWord": "Так",
+          "params": { "phase": "envelopes", "variant": "pair" },
+          "motion": {
+            "intent": "compare",
+            "camera": { "preset": "track", "onWord": "конвертах", "target": { "x": 0.5, "y": 0.48 }, "strength": 0.5 },
+            "entrance": "cascade",
+            "cues": [
+              { "id": "short", "onWord": "коротком" },
+              { "id": "rich", "onWord": "подробном" }
+            ],
+            "actors": {
+              "short-envelope": { "preset": "transfer", "cue": "short", "from": { "x": -130, "y": 0 }, "to": { "x": 0, "y": 0 } },
+              "rich-envelope": { "preset": "transfer", "cue": "rich", "from": { "x": 130, "y": 0 }, "to": { "x": 0, "y": 0 } }
+            }
+          }
+        },
+        {
+          "visual": "clipboard-formats",
+          "onWord": "Некоторые",
+          "params": { "phase": "envelopes", "variant": "rtf" },
+          "transition": { "kind": "continuation", "preset": "match" },
+          "motion": {
+            "intent": "reveal",
+            "camera": { "preset": "push-in", "onWord": "правила", "target": { "x": 0.73, "y": 0.5 }, "strength": 0.55 },
+            "entrance": "cascade",
+            "cues": [
+              { "id": "rtf", "onWord": "RTF" },
+              { "id": "rules", "onWord": "правила" }
+            ],
+            "actors": {
+              "rtf-label": { "preset": "pulse", "cue": "rtf" }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "story",
+      "heading": "Получатель выбирает представление",
+      "transition": { "kind": "turn", "preset": "push" },
+      "narration": "При вставке редактор смотрит список представлений и берёт подходящее, обычно самое богатое из понятных ему. Поэтому Ворд сохраняет жирный шрифт, ссылки и списки; простой получатель оставит только буквы.",
+      "beats": [
+        {
+          "visual": "clipboard-formats",
+          "onWord": "При",
+          "params": { "phase": "choose" },
+          "motion": {
+            "intent": "focus",
+            "camera": { "preset": "push-in", "onWord": "список", "target": { "x": 0.5, "y": 0.5 }, "strength": 0.55 },
+            "entrance": "cascade",
+            "cues": [
+              { "id": "list", "onWord": "список" },
+              { "id": "pick", "onWord": "подходящее" },
+              { "id": "rich", "onWord": "богатое" }
+            ],
+            "actors": {
+              "format-list": { "preset": "pulse", "cue": "list" },
+              "choice": { "preset": "transfer", "cue": "pick", "from": { "x": -90, "y": -160 }, "to": { "x": 0, "y": 0 } }
+            }
+          }
+        },
+        {
+          "visual": "clipboard-formats",
+          "onWord": "Поэтому",
+          "params": { "phase": "result" },
+          "transition": { "kind": "contrast", "preset": "wipe" },
+          "motion": {
+            "intent": "compare",
+            "camera": { "preset": "track", "onWord": "сохраняет", "target": { "x": 0.72, "y": 0.48 }, "strength": 0.55 },
+            "entrance": "cascade",
+            "cues": [
+              { "id": "word", "onWord": "Ворд" },
+              { "id": "preserve", "onWord": "сохраняет" },
+              { "id": "simple", "onWord": "простой" },
+              { "id": "letters", "onWord": "буквы" }
+            ],
+            "actors": {
+              "word-output": { "preset": "pulse", "cue": "preserve" },
+              "plain-output": { "preset": "transfer", "cue": "simple", "from": { "x": 120, "y": 0 }, "to": { "x": 0, "y": 0 } }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "outro",
+      "title": "Запомни формат",
+      "transition": { "kind": "finale", "preset": "dissolve" },
+      "bullets": [
+        "Одна копия — несколько форматов",
+        "Получатель выбирает понятный",
+        "Word сохраняет оформление"
+      ],
+      "cta": "Подпишись: дальше — ссылки",
+      "narration": "Выжимка: браузер записывает несколько представлений, редактор выбирает понятное, а оформление приезжает из выбранной копии. Дальше — почему ссылка иногда вставляется не адресом. Подпишись.",
+      "motion": {
+        "intent": "resolve",
+        "camera": { "preset": "settle", "onWord": "Дальше", "target": { "x": 0.5, "y": 0.46 }, "strength": 0.35 },
+        "entrance": "rise",
+        "cues": [
+          { "id": "formats", "onWord": "несколько" },
+          { "id": "choose", "onWord": "выбирает" },
+          { "id": "next", "onWord": "Дальше" }
+        ]
+      }
+    }
+  ]
+}
