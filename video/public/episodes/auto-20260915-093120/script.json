@@ -1,0 +1,230 @@
+{
+  "id": "auto-20260915-093120",
+  "title": "Почему майнинг биткоина требует столько электричества — нельзя просто проголосовать?",
+  "scenes": [
+    {
+      "type": "story",
+      "narration": "В майнинговой ферме гудят тысячи вентиляторов, счётчик электричества считает расход, и возникает честный вопрос: зачем не проголосовать за следующий блок?",
+      "beats": [
+        {
+          "visual": "gpu-data-center",
+          "onWord": "В",
+          "params": { "phase": "hall" },
+          "motion": {
+            "intent": "establish",
+            "camera": { "preset": "hold", "onWord": "ферме", "target": { "x": 0.5, "y": 0.45 }, "strength": 0.4 },
+            "entrance": "cascade",
+            "cues": [
+              { "id": "fans", "onWord": "гудят" },
+              { "id": "scale", "onWord": "тысячи" }
+            ]
+          }
+        },
+        {
+          "visual": "proof-of-work",
+          "onWord": "счётчик",
+          "params": { "phase": "farm", "workers": "тысячи ASIC" },
+          "transition": { "kind": "continuation", "preset": "match" },
+          "motion": {
+            "intent": "focus",
+            "camera": { "preset": "push-in", "onWord": "электричества", "target": { "x": 0.78, "y": 0.45 }, "strength": 0.55 },
+            "entrance": "cascade",
+            "cues": [
+              { "id": "consume", "onWord": "электричества" },
+              { "id": "question", "onWord": "вопрос" }
+            ],
+            "actors": {
+              "meter": { "preset": "pulse", "cue": "consume" }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "story",
+      "heading": "Право на следующий блок",
+      "transition": { "kind": "turn", "preset": "push" },
+      "narration": "Простое голосование считает голоса, но не показывает, кто реально вложил ресурс. Поэтому биткоин использует {доказательство работы|доказа́тельство рабо́ты}: кандидат на блок должен предъявить результат вычисления.",
+      "beats": [
+        {
+          "visual": "proof-of-work",
+          "onWord": "Простое",
+          "params": { "phase": "proposal", "blockLabel": "BLOCK #840" },
+          "motion": {
+            "intent": "compare",
+            "camera": { "preset": "track", "onWord": "голоса", "target": { "x": 0.76, "y": 0.48 }, "strength": 0.5 },
+            "entrance": "cascade",
+            "cues": [
+              { "id": "votes", "onWord": "голоса" },
+              { "id": "proof", "onWord": "доказательство работы" }
+            ],
+            "actors": {
+              "candidate": { "preset": "transfer", "cue": "proof", "from": { "x": -70, "y": 0 }, "to": { "x": 0, "y": 0 } },
+              "work-gate": { "preset": "pulse", "cue": "proof" },
+              "ballot": { "preset": "recoil", "cue": "votes", "to": { "x": 55, "y": -30 } }
+            }
+          }
+        },
+        {
+          "visual": "proof-of-work",
+          "onWord": "кандидат",
+          "params": { "phase": "nonce", "blockLabel": "BLOCK #840", "nonceStart": 41 },
+          "transition": { "kind": "continuation", "preset": "match" },
+          "motion": {
+            "intent": "reveal",
+            "camera": { "preset": "pull-out", "onWord": "результат", "target": { "x": 0.72, "y": 0.46 }, "strength": 0.45 },
+            "entrance": "cascade",
+            "cues": [
+              { "id": "candidate", "onWord": "кандидат" },
+              { "id": "hash", "onWord": "результат" }
+            ],
+            "actors": {
+              "input-block": { "preset": "pulse", "cue": "candidate" },
+              "hash-result": { "preset": "transfer", "cue": "hash", "from": { "x": -50, "y": 0 }, "to": { "x": 0, "y": 0 } }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "story",
+      "heading": "Случайный билет",
+      "transition": { "kind": "turn", "preset": "push" },
+      "narration": "Представь барабан с билетами: его крутишь снова и снова, пока не выпадет редкий. Каждый вариант блока даёт новый хеш; годится лишь хеш ниже заданного порога.",
+      "beats": [
+        {
+          "visual": "proof-of-work",
+          "onWord": "Представь",
+          "params": { "phase": "lottery" },
+          "motion": {
+            "intent": "establish",
+            "camera": { "preset": "hold", "onWord": "барабан", "target": { "x": 0.48, "y": 0.46 }, "strength": 0.4 },
+            "entrance": "cascade",
+            "cues": [
+              { "id": "spin", "onWord": "крутишь" },
+              { "id": "hashes", "onWord": "билетами" },
+              { "id": "rare", "onWord": "редкий" }
+            ],
+            "actors": {
+              "tickets": { "preset": "pulse", "cue": "spin" },
+              "hashes": { "preset": "transfer", "cue": "hashes", "from": { "x": -45, "y": 0 }, "to": { "x": 0, "y": 0 } },
+              "winner": { "preset": "pulse", "cue": "rare" }
+            }
+          }
+        },
+        {
+          "visual": "proof-of-work",
+          "onWord": "Каждый",
+          "params": { "phase": "target", "target": "00ff…" },
+          "transition": { "kind": "continuation", "preset": "match" },
+          "motion": {
+            "intent": "focus",
+            "camera": { "preset": "push-in", "onWord": "порога", "target": { "x": 0.75, "y": 0.5 }, "strength": 0.55 },
+            "entrance": "cascade",
+            "cues": [
+              { "id": "option", "onWord": "вариант" },
+              { "id": "hash", "onWord": "хеш", "occurrence": 1 },
+              { "id": "check", "onWord": "порога" }
+            ],
+            "actors": {
+              "attempts": { "preset": "transfer", "cue": "check", "from": { "x": -25, "y": 0 }, "to": { "x": 0, "y": 0 } },
+              "target-line": { "preset": "pulse", "cue": "check" },
+              "winner": { "preset": "transfer", "cue": "check", "from": { "x": 0, "y": 45 }, "to": { "x": 0, "y": 0 } }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "story",
+      "heading": "Хеш не угадывают",
+      "transition": { "kind": "turn", "preset": "push" },
+      "narration": "Для новых попыток майнер перебирает варианты, меняя служебное число {нонс|но́нс}: прибавил единицу, пересчитал хеш, проверил. Победный результат заранее вычислить нельзя — только перебирать.",
+      "beats": [
+        {
+          "visual": "proof-of-work",
+          "onWord": "Для",
+          "params": { "phase": "nonce", "nonceStart": 41, "blockLabel": "BLOCK #840" },
+          "motion": {
+            "intent": "follow",
+            "camera": { "preset": "track", "onWord": "нонс", "target": { "x": 0.5, "y": 0.46 }, "strength": 0.5 },
+            "entrance": "cascade",
+            "cues": [
+              { "id": "variants", "onWord": "варианты" },
+              { "id": "increment", "onWord": "прибавил" }
+            ],
+            "actors": {
+              "input-block": { "preset": "pulse", "cue": "increment" },
+              "nonce-chip": { "preset": "pulse", "cue": "increment" },
+              "hash-result": { "preset": "transfer", "cue": "increment", "from": { "x": -50, "y": 0 }, "to": { "x": 0, "y": 0 } }
+            }
+          }
+        },
+        {
+          "visual": "proof-of-work",
+          "onWord": "пересчитал",
+          "params": { "phase": "target", "target": "00ff…" },
+          "transition": { "kind": "continuation", "preset": "match" },
+          "motion": {
+            "intent": "focus",
+            "camera": { "preset": "push-in", "onWord": "проверил", "target": { "x": 0.76, "y": 0.48 }, "strength": 0.55 },
+            "entrance": "cascade",
+            "cues": [
+              { "id": "hash", "onWord": "хеш" },
+              { "id": "check", "onWord": "проверил" }
+            ],
+            "actors": {
+              "attempts": { "preset": "transfer", "cue": "check", "from": { "x": -25, "y": 0 }, "to": { "x": 0, "y": 0 } },
+              "target-line": { "preset": "pulse", "cue": "check" },
+              "winner": { "preset": "transfer", "cue": "check", "from": { "x": 0, "y": 45 }, "to": { "x": 0, "y": 0 } }
+            }
+          }
+        },
+        {
+          "visual": "proof-of-work",
+          "onWord": "Победный",
+          "params": { "phase": "verify", "target": "00ff…" },
+          "transition": { "kind": "contrast", "preset": "wipe" },
+          "motion": {
+            "intent": "resolve",
+            "camera": { "preset": "settle", "onWord": "результат", "target": { "x": 0.55, "y": 0.46 }, "strength": 0.45 },
+            "entrance": "cascade",
+            "cues": [
+              { "id": "check", "onWord": "Победный" },
+              { "id": "rewrite", "onWord": "результат" }
+            ],
+            "actors": {
+              "found-hash": { "preset": "transfer", "cue": "check", "from": { "x": -55, "y": 0 }, "to": { "x": 0, "y": 0 } },
+              "verify-node": { "preset": "pulse", "cue": "check" },
+              "chain-stack": { "preset": "pulse", "cue": "rewrite" }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "outro",
+      "title": "Цена права на блок",
+      "transition": { "kind": "finale", "preset": "dissolve" },
+      "bullets": [
+        "Один хеш проверяется дёшево",
+        "Nonce меняет вход",
+        "Переписывание стоит заново"
+      ],
+      "cta": "Подпишись",
+      "narration": "Вот вау-факт: найти подходящий хеш трудно, а проверить его дёшево — узел один раз считает хеш и сравнивает с порогом. Трудный поиск защищает общую очередь блоков: переписывание снова стоит работы. Не голос, а цена предложения. Подпишись.",
+      "motion": {
+        "intent": "resolve",
+        "camera": { "preset": "settle", "onWord": "дёшево", "target": { "x": 0.58, "y": 0.46 }, "strength": 0.4 },
+        "entrance": "rise",
+        "cues": [
+          { "id": "found", "onWord": "найти" },
+          { "id": "cheap", "onWord": "дёшево" },
+          { "id": "rewrite", "onWord": "переписывание" },
+          { "id": "price", "onWord": "цена" },
+          { "id": "cta", "onWord": "Подпишись" }
+        ]
+      }
+    }
+  ]
+}
