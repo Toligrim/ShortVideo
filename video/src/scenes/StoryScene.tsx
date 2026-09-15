@@ -127,6 +127,7 @@ import { NatPatTranslationVisual, type NatPatPhase } from "./NatPatTranslationVi
 import { CookieTicketVisual, type CookieTicketPhase } from "./CookieTicketVisual";
 import { UniqueInsertRaceVisual, type UniqueInsertRacePhase } from "./UniqueInsertRaceVisual";
 import { IdempotencyFlowVisual, type IdempotencyFlowPhase } from "./IdempotencyFlowVisual";
+import { ClipboardFormatsVisual, type ClipboardFormatsPhase, type ClipboardFormatsVariant } from "./ClipboardFormatsVisual";
 
 /* ──────────────────────────── расписание битов ──────────────────────────── */
 
@@ -145,6 +146,16 @@ export const storySchedule = (scene: StoryProps, words: Word[], frames: number):
     const dur = end - start;
     let impact: number | null = null;
     if (beat.visual === "browser-click") impact = start + Math.round(dur * 0.55);
+    if (beat.visual === "clipboard-formats") {
+      const phase = beat.params?.phase as ClipboardFormatsPhase | undefined;
+      const cue = phase === "browser" ? "copy"
+        : phase === "copy" ? "arrival"
+        : phase === "formats" ? (beat.params?.variant === "html" ? "html" : "plain")
+        : phase === "envelopes" ? (beat.params?.variant === "rtf" ? "rtf" : "rich")
+        : phase === "choose" ? "pick"
+        : "preserve";
+      impact = resolveCue(cueFrames(beat.motion, words, start, end), cue, start, end);
+    }
     if (beat.visual === "recommendation-loop") {
       const phase = beat.params?.phase as RecommendationLoopPhase | undefined;
       impact = start + Math.round(dur * (
@@ -817,6 +828,16 @@ export const storySfx = (
     if (i > 0) events.push({ frame: s.start, sound: "whoosh-short" });
     if (s.impact === null) continue;
     if (s.beat.visual === "browser-click") events.push({ frame: s.impact, sound: "click" });
+    if (s.beat.visual === "clipboard-formats") {
+      const phase = s.beat.params?.phase as ClipboardFormatsPhase | undefined;
+      const sound = phase === "browser" ? "click"
+        : phase === "copy" ? "pop"
+        : phase === "formats" ? "whoosh"
+        : phase === "envelopes" ? "pop"
+        : phase === "choose" ? "ding"
+        : "ding";
+      events.push({ frame: s.impact, sound });
+    }
     if (s.beat.visual === "recommendation-loop") {
       const phase = s.beat.params?.phase as RecommendationLoopPhase | undefined;
       const view = s.beat.params?.view as RecommendationLoopView | undefined;
@@ -12265,6 +12286,16 @@ const StoryVisual: React.FC<{ slot: BeatSlot; sampleFrame: number }> = ({ slot, 
     switch (slot.beat.visual) {
       case "browser-click":
         return <BrowserClick local={local} dur={dur} impactLocal={impactLocal} fps={fps} url={slot.beat.params?.url as string} />;
+      case "clipboard-formats":
+        return (
+          <ClipboardFormatsVisual
+            local={local}
+            fps={fps}
+            impactLocal={impactLocal}
+            phase={(slot.beat.params?.phase as ClipboardFormatsPhase | undefined) ?? "browser"}
+            variant={(slot.beat.params?.variant as ClipboardFormatsVariant | undefined) ?? "source"}
+          />
+        );
       case "recommendation-loop":
         return (
           <RecommendationLoopVisual

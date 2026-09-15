@@ -80,6 +80,7 @@ export interface StoryBeat {
   transition?: MotionTransition; // incoming beat boundary
   visual:
     | "browser-click"
+    | "clipboard-formats"
     | "recommendation-loop"
     | "origin-check"
     | "devices-meet"
