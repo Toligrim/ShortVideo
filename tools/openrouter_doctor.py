@@ -1,0 +1,135 @@
+#!/usr/bin/env python3
+"""Fail-closed host preflight for the ShortVideo OpenRouter runner."""
+from __future__ import annotations
+
+import argparse
+import importlib.util
+import json
+import os
+import shutil
+import subprocess
+import tempfile
+from pathlib import Path
+
+TOOLS = Path(__file__).resolve().parent
+ROOT = TOOLS.parent
+
+
+def _check_bwrap(path: str | None) -> dict:
+    result = {"configured": bool(path), "path": path, "smoke_ok": False}
+    if not path:
+        result["error"] = "bwrap_missing"
+        return result
+    try:
+        ver = subprocess.run([path, "--version"], capture_output=True, text=True, timeout=5)
+    except OSError as exc:
+        result["error"] = f"bwrap_exec_failed:{exc}"
+        return result
+    result["version"] = (ver.stdout or ver.stderr).strip()
+    if ver.returncode != 0:
+        result["error"] = "bwrap_version_failed"
+        return result
+
+    with tempfile.TemporaryDirectory(prefix="sv-bwrap-doctor-") as td:
+        scratch = Path(td)
+        try:
+            smoke = subprocess.run(
+                [
+                    path,
+                    "--die-with-parent",
+                    "--new-session",
+                    "--unshare-pid",
+                    "--unshare-net",
+                    "--proc", "/proc",
+                    "--dev", "/dev",
+                    "--ro-bind", "/usr", "/usr",
+                    "--ro-bind", "/bin", "/bin",
+                    "--bind", str(scratch), "/tmp",
+                    "/bin/sh", "-c",
+                    "test -w /tmp && test ! -e /tmp/not-created && printf ok",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=10,
+                env={"PATH": "/usr/bin:/bin", "HOME": "/tmp"},
+            )
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            result["error"] = f"bwrap_smoke_failed:{exc}"
+            return result
+    result["smoke_rc"] = smoke.returncode
+    result["smoke_stderr"] = smoke.stderr[-1000:]
+    result["smoke_ok"] = smoke.returncode == 0 and smoke.stdout == "ok"
+    if not result["smoke_ok"]:
+        result["error"] = "bwrap_namespace_denied"
+    return result
+
+
+def main(argv: list[str] | None = None) -> int:
+    p = argparse.ArgumentParser(description=__doc__)
+    p.parse_args(argv)
+
+    bwrap = os.environ.get("SHORTVIDEO_BWRAP") or shutil.which("bwrap")
+    checks = {
+        "openrouter_api_key": bool(os.environ.get("OPENROUTER_API_KEY", "").strip()),
+        "exa_api_key": bool(os.environ.get("EXA_API_KEY", "").strip()),
+        "httpx": importlib.util.find_spec("httpx") is not None,
+        "trafilatura": importlib.util.find_spec("trafilatura") is not None,
+        "git": shutil.which("git") is not None,
+        "rg": shutil.which("rg") is not None,
+        "node": shutil.which("node") is not None,
+        "chromium": bool(
+            os.environ.get("SHORTVIDEO_CHROMIUM")
+            or shutil.which("chromium")
+            or shutil.which("chromium-browser")
+            or shutil.which("google-chrome")
+            or shutil.which("google-chrome-stable")
+        ),
+        "policy": (ROOT / "tools" / "delegate_policy.json").is_file(),
+        "role_prompts": all(
+            (ROOT / ".claude" / "agents" / name).is_file()
+            for name in ("scriptwriter.md", "animation-director.md", "critic.md")
+        ),
+        "bwrap": _check_bwrap(bwrap),
+    }
+    required_ok = (
+        checks["openrouter_api_key"]
+        and checks["exa_api_key"]
+        and checks["httpx"]
+        and checks["trafilatura"]
+        and checks["git"]
+        and checks["rg"]
+        and checks["node"]
+        and checks["policy"]
+        and checks["role_prompts"]
+        and checks["bwrap"]["smoke_ok"]
+    )
+    error_class = "ok"
+    if not checks["openrouter_api_key"]:
+        error_class = "openrouter_key_missing"
+    elif not checks["exa_api_key"]:
+        error_class = "exa_key_missing"
+    elif not checks["httpx"] or not checks["trafilatura"]:
+        error_class = "openrouter_python_dependency_missing"
+    elif not checks["bwrap"]["smoke_ok"]:
+        error_class = checks["bwrap"].get("error", "bwrap_unknown_failure")
+    elif not all(checks[k] for k in ("git", "rg", "node", "policy", "role_prompts")):
+        error_class = "openrouter_host_dependency_missing"
+
+    out = {
+        "ok": required_ok,
+        "error_class": error_class,
+        "checks": checks,
+        "notes": {
+            "chromium": (
+                "optional until a JS-only web_fetch fallback is needed"
+                if not checks["chromium"] else "available"
+            ),
+            "network": "model shell is expected to have no external network; supervisor owns HTTP",
+        },
+    }
+    print(json.dumps(out, ensure_ascii=False, indent=2))
+    return 0 if required_ok else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
