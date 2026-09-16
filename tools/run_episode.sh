@@ -59,10 +59,34 @@ case "$RUNNER" in
   *) echo "runner должен быть codex|claude" >&2; exit 2 ;;
 esac
 
+# Pin codex-cli to a known-good release, resolved here (pure lookup, no
+# side effects yet - the hard failure needs RUN_DIR, defined further down,
+# to write a durable manifest, so it lives next to the sandbox preflight
+# below). Root cause (found 2026-09-13): ~/.local/bin/codex resolves
+# through ~/.codex/packages/standalone/current, a symlink codex's own
+# updater silently repoints between installed releases with no operator
+# action and no warning - observed flipping 0.149.0 <-> 0.154.0
+# machine-wide, shared with every other Claude Code session on this host
+# that also has the `codex` MCP server configured. Empirical evidence
+# across production runs (runs/index.jsonl x codex-sandbox-doctor.json):
+# codex-cli 0.154.0 had a 0/7 success rate (every run failed or was
+# killed, most on mcp_invocation_invalid - tools.mcp__codex__codex missing
+# inside its own exec sandbox); 0.149.0 has the normal healthy
+# ok/failed/killed mix. Bump PINNED_CODEX_VERSION once a newer release is
+# separately verified not to regress this.
+PINNED_CODEX_VERSION="0.149.0"
+PINNED_CODEX_BIN=""
+if [[ "$RUNNER" == codex ]]; then
+  PINNED_CODEX_CANDIDATES=("$HOME"/.codex/packages/standalone/releases/"${PINNED_CODEX_VERSION}"-*/bin/codex)
+  if [[ -x "${PINNED_CODEX_CANDIDATES[0]:-}" && "${#PINNED_CODEX_CANDIDATES[@]}" -eq 1 ]]; then
+    PINNED_CODEX_BIN="${PINNED_CODEX_CANDIDATES[0]}"
+  fi
+fi
+
 INVOCATION=""
 case "$RUNNER" in
   codex)
-    INVOCATION="codex exec -m $MODEL -c model_reasoning_effort=$EFFORT --sandbox danger-full-access < $PROMPT_FILE"
+    INVOCATION="${PINNED_CODEX_BIN:-codex} exec -m $MODEL -c model_reasoning_effort=$EFFORT -c mcp_servers.codex.command=${PINNED_CODEX_BIN:-codex} --sandbox danger-full-access < $PROMPT_FILE"
     ;;
   claude)
     INVOCATION="claude -p <prompt> --model $MODEL --effort $EFFORT --dangerously-skip-permissions"
@@ -127,6 +151,37 @@ export SV_EFFORT="$EFFORT"
 export SV_ORCHESTRATION="$ORCH"
 export SV_SANDBOX_POLICY="danger-full-access"
 
+# Hard-fail if the pinned codex-cli release (resolved above) is missing -
+# intentionally after run-start (durable manifest, same rationale as the
+# sandbox preflight right below) and before any Codex process starts. An
+# empty PINNED_CODEX_BIN here means the release directory was removed
+# (e.g. a future `codex` uninstall/prune) - refuse rather than silently
+# falling back to whatever ~/.local/bin/codex -> current happens to
+# resolve to right now, which is exactly the unpinned behavior this
+# guards against.
+if [[ "$RUNNER" == codex && -z "$PINNED_CODEX_BIN" ]]; then
+  python3 tools/pipeline_log.py finish --status failed --exit-code 79 \
+    --result-class infrastructure_failure --error-code codex_pinned_version_missing \
+    > "$RUN_DIR/manifest.json"
+  echo "pinned codex-cli $PINNED_CODEX_VERSION not found (or ambiguous) under ~/.codex/packages/standalone/releases/ — refusing to fall back to the unpinned 'current' symlink" >&2
+  exit 79
+fi
+
+# Belt-and-suspenders: win any bare `codex` lookup by name for a
+# subprocess in this run's tree that isn't routed through the -c
+# mcp_servers.codex.command override below (e.g. a delegate literally
+# shelling out to `codex`). Does NOT protect a `bash -lc` login-shell
+# invocation, which re-sources ~/.bashrc and re-prepends ~/.local/bin
+# unconditionally (same mechanism the opencode-tool shim below already
+# has to work around) - the -c override is the actual fix for delegation,
+# this is only extra insurance for anything else.
+if [[ "$RUNNER" == codex ]]; then
+  PINNED_CODEX_BIN_DIR="$RUN_DIR/pinned-codex-bin"
+  mkdir -p "$PINNED_CODEX_BIN_DIR"
+  ln -sfn "$PINNED_CODEX_BIN" "$PINNED_CODEX_BIN_DIR/codex"
+  export PATH="$PINNED_CODEX_BIN_DIR:$PATH"
+fi
+
 # Host-side Codex sandbox preflight.  This is intentionally after run-start
 # (so the refusal is durable in the manifest) and before the first Codex
 # process or delegate worktree can be created.  Claude does not invoke Codex,
@@ -189,16 +244,21 @@ if [[ "$TTS_QUOTA_RC" -ne 0 ]]; then
   exit 77
 fi
 
-# The producer prompt remains a normal file value.  The protocol is appended
-# only after the host preflight and is read from disk by codex exec; nested
-# delegation itself is further constrained by delegate_invoke.py.
+# The producer prompt remains a normal file value.  The protocol is read from
+# disk by codex exec; nested delegation itself is further constrained by
+# delegate_invoke.py. Static protocol goes FIRST and the growing, per-run
+# producer_scheduler.py prompt (topic instructions + past-episode-titles list)
+# goes LAST, so the stable prefix is identical across runs — this is what lets
+# any provider-side prompt-prefix caching actually apply (token-reduction
+# pass, 2026-09-12; previously the variable content came first, which
+# defeated prefix caching on every single run).
 CODEX_PROMPT_FILE="$PROMPT_FILE"
 if [[ "$RUNNER" == codex ]]; then
   CODEX_PROMPT_FILE="$RUN_DIR/orchestrator-prompt.md"
   {
-    cat "$PROMPT_FILE"
-    printf '\n\n--- ShortVideo deterministic delegate invocation protocol ---\n\n'
     cat "$ROOT/docs/delegate-invocation-protocol.md"
+    printf '\n\n--- ShortVideo producer prompt for this run ---\n\n'
+    cat "$PROMPT_FILE"
   } > "$CODEX_PROMPT_FILE"
   chmod 600 "$CODEX_PROMPT_FILE"
 fi
@@ -235,10 +295,11 @@ SHIM
     # миллисекунды). Без этого весь trap выше был бы бесполезен на боевом
     # прогоне — именно так и убили run_episode.sh 31.08.2026.
     SHORTVIDEO_NO_OPENCODE=1 \
-    timeout "${TIMEOUT_MIN}m" codex exec \
+    timeout "${TIMEOUT_MIN}m" "$PINNED_CODEX_BIN" exec \
       -C "$ROOT" \
       -m "$MODEL" \
       -c model_reasoning_effort="$EFFORT" \
+      -c "mcp_servers.codex.command=\"$PINNED_CODEX_BIN\"" \
       --sandbox danger-full-access \
       - < "$CODEX_PROMPT_FILE" \
       > "$RUN_DIR/cli-stdout.log" 2> "$RUN_DIR/cli-stderr.log" &
