@@ -152,4 +152,3 @@ def system_prompt_for(role: str) -> str:
     prompt_path = ROLE_PROMPTS[role]
     role_text = _strip_front_matter(prompt_path.read_text(encoding="utf-8"))
     return COMMON_SYSTEM + "\n\n" + ROLE_SYSTEM[role] + "\n\nCURRENT ROLE PROMPT:\n\n" + role_text
-
