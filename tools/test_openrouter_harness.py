@@ -62,6 +62,24 @@ def test_openrouter_runner_and_doctor_have_no_exa_dependency():
     assert "SEARXNG_URL" in doctor and "FIRECRAWL_API_KEY" in doctor
 
 
+def test_singleflight_cache_marker_becomes_public_cache_hit_only():
+    pytest.importorskip("httpx")
+    sys.path.insert(0, str(TOOLS))
+    try:
+        from openrouter_web_search import WebSearcher
+    finally:
+        sys.path.pop(0)
+    response = {
+        "ok": True,
+        "data": [{"url": "https://example.com/"}],
+        "meta": {"provider": "searxng", "_singleflight_cache_hit": True},
+    }
+    out = WebSearcher._slice(response, 1, cache_hit=False)
+    assert out["meta"]["cache_hit"] is True
+    assert "_singleflight_cache_hit" not in out["meta"]
+    assert response["meta"]["_singleflight_cache_hit"] is True
+
+
 def test_shell_entrypoints_parse():
     for name in ("run_episode.sh", "run_episode_legacy.sh", "run_episode_openrouter.sh"):
         proc = subprocess.run(
