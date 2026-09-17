@@ -66,7 +66,7 @@ class ControlMixin:
         timeout = int(self.policy.get("timeout_seconds", 5400))
         task_id = f"{role}:{slug}"
         open_cmd = [sys.executable, str(ROOT / "tools" / "delegate_worktree.py"), "open", "--task-id", task_id, "--role", role, "--reason", f"OpenRouter harness: {task[:300]}"]
-        opened = subprocess.run(open_cmd, cwd=str(ROOT), capture_output=True, text=True, timeout=30)
+        opened = subprocess.run(open_cmd, cwd=str(ROOT), capture_output=True, text=True, timeout=90)
         if opened.returncode != 0:
             raise RuntimeError(f"delegate_worktree open failed rc={opened.returncode}: {opened.stdout[-2000:]} {opened.stderr[-2000:]}")
         info = json.loads(opened.stdout)

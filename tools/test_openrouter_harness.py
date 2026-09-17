@@ -140,6 +140,17 @@ def test_delegation_is_intercepted_control_plane_and_worktree_is_detached():
     assert '["worktree", "add", "--detach", str(wt), base]' in worktree
 
 
+def test_delegate_open_timeout_has_raspberry_pi_headroom():
+    """staging incident 2026-09-17: real `git worktree add --detach` on the
+    Pi measured ~22-30s; the old timeout=30 for delegate_worktree.py open
+    intermittently raised TimeoutExpired. Guard against it silently
+    regressing back to a too-tight value."""
+    source = (TOOLS / "openrouter_control.py").read_text(encoding="utf-8")
+    assert 'opened = subprocess.run(open_cmd, cwd=str(ROOT), capture_output=True, text=True, timeout=90)' in source
+    # close already had enough headroom (120s) and must stay untouched.
+    assert 'closed = subprocess.run(close_cmd, cwd=str(ROOT), capture_output=True, text=True, timeout=120)' in source
+
+
 def test_staging_producer_dry_run_selects_openrouter():
     proc = subprocess.run(
         [sys.executable, str(TOOLS / "producer_openrouter_once.py"), "--dry-run", "--now", "1789600000"],
