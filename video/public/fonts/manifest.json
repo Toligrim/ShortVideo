@@ -1,0 +1,45 @@
+{
+  "generatedAt": "2026-09-17T12:01:19.171Z",
+  "files": [
+    {
+      "family": "Montserrat",
+      "importName": "Montserrat",
+      "version": "v31",
+      "subset": "cyrillic",
+      "filename": "montserrat-v31-cyrillic.woff2",
+      "sourceUrl": "https://fonts.gstatic.com/s/montserrat/v31/JTUSjIg1_i6t8kCHKm459W1hyzbi.woff2",
+      "sha256": "a187b077090fe8ae3fd2d7496aabbeae604819c718a282e0afc92df72b450766",
+      "bytes": 23828
+    },
+    {
+      "family": "Montserrat",
+      "importName": "Montserrat",
+      "version": "v31",
+      "subset": "latin",
+      "filename": "montserrat-v31-latin.woff2",
+      "sourceUrl": "https://fonts.gstatic.com/s/montserrat/v31/JTUSjIg1_i6t8kCHKm459Wlhyw.woff2",
+      "sha256": "06b16db7a969135d48d38c49183be7fb88d4452e2a3011957c7851941f4e4879",
+      "bytes": 37956
+    },
+    {
+      "family": "JetBrains Mono",
+      "importName": "JetBrainsMono",
+      "version": "v24",
+      "subset": "cyrillic",
+      "filename": "jetbrainsmono-v24-cyrillic.woff2",
+      "sourceUrl": "https://fonts.gstatic.com/s/jetbrainsmono/v24/tDbV2o-flEEny0FZhsfKu5WU4xD_OwG_TA.woff2",
+      "sha256": "d274604c40757f98f07df623a8b8fb5194508a6fa4f5413a7a107f09e3b7452a",
+      "bytes": 12108
+    },
+    {
+      "family": "JetBrains Mono",
+      "importName": "JetBrainsMono",
+      "version": "v24",
+      "subset": "latin",
+      "filename": "jetbrainsmono-v24-latin.woff2",
+      "sourceUrl": "https://fonts.gstatic.com/s/jetbrainsmono/v24/tDbV2o-flEEny0FZhsfKu5WU4xD7OwE.woff2",
+      "sha256": "18be452724bfdc236c074ca94a249a7f41a86752c7d04ab258ce9ed5651f6a7e",
+      "bytes": 40404
+    }
+  ]
+}
