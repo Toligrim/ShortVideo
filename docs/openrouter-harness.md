@@ -25,7 +25,8 @@ Model surface is intentionally small: `web_search(query, limit=5)`. The provider
 - Results are normalized to title/url/description/position/score and sorted by SearXNG score.
 - Search queries are case-folded and whitespace-normalized for caching.
 - Limit buckets are 5 and 10, so callers requesting smaller limits can share one cached backend result.
-- Search TTL is 20 minutes by default. Search results are reusable across runs and concurrent identical in-process requests use bounded single-flight coalescing.
+- Search TTL is 20 minutes by default. Search results are reusable across runs. Identical concurrent requests are coalesced within a process and across Linux harness/delegate processes: exact keys use the normal in-memory flight table, while processes coordinate through 64 fixed advisory-lock shards and recheck disk cache after acquiring the shard. The fixed shard set avoids an unbounded lock-file table.
+- Disk hits preserve the original `expires_at`; loading a near-expiry entry into memory does not grant it another full TTL.
 - Failed searches are not cached.
 
 Optional fallback: keyed Firecrawl REST search, enabled only when `FIRECRAWL_API_KEY` is present. No Firecrawl SDK, keyless cloud ring, Nous gateway or provider registry is imported. If SearXNG is healthy, Firecrawl is not used. If neither SearXNG nor the keyed fallback is usable, doctor fails closed.
