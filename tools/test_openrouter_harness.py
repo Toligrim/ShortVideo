@@ -175,6 +175,16 @@ def test_run_delegate_parses_last_json_object_from_open_stdout():
     assert "info = _last_json_object(opened.stdout)" in source
 
 
+def test_provider_routing_prefers_throughput_over_cheapest_saturated_endpoint():
+    """staging incident 2026-09-17: sort="price" repeatedly routed to a
+    saturated shared (non-BYOK) endpoint and 429'd with no fallback left
+    (require_parameters narrowed the pool to that one provider). The
+    account has paid balance, so route for available capacity instead."""
+    source = (TOOLS / "openrouter_client.py").read_text(encoding="utf-8")
+    assert '"sort": "throughput"' in source
+    assert '"sort": "price"' not in source
+
+
 def test_staging_producer_dry_run_selects_openrouter():
     proc = subprocess.run(
         [sys.executable, str(TOOLS / "producer_openrouter_once.py"), "--dry-run", "--now", "1789600000"],

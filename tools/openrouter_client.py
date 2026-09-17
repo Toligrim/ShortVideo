@@ -171,11 +171,18 @@ class OpenRouterClient:
             "stream": False,
             "session_id": self.session_id,
             "metadata": {"shortvideo_session": self.session_id[:240], "role": self.role},
-            # Cost is the first routing objective for this harness. Explicit
+            # Reliability is the first routing objective for this harness:
+            # sort by throughput so OpenRouter prefers a provider with real
+            # available capacity over the cheapest one (2026-09-17 staging:
+            # sort="price" repeatedly routed to a saturated shared-pool
+            # endpoint - is_byok=false, only 1 of 29 endpoints satisfied
+            # require_parameters - and 429'd with no fallback candidate left;
+            # the account has paid balance, so pay for capacity instead of
+            # getting stuck on the cheapest saturated endpoint). Explicit
             # sorting also avoids Auto Exacto silently reprioritizing providers
             # for tool-calling requests; fallback providers remain available.
             "provider": {
-                "sort": "price",
+                "sort": "throughput",
                 "require_parameters": True,
                 "allow_fallbacks": True,
             },
