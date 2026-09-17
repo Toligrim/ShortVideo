@@ -163,6 +163,10 @@ class WebSearcher:
     def _slice(response: dict[str, Any], limit: int, *, cache_hit: bool) -> dict[str, Any]:
         out = {"ok": response.get("ok", False), "data": list(response.get("data") or [])[:limit]}
         meta = dict(response.get("meta") or {})
+        # A process-level single-flight follower can receive a disk-cache hit
+        # after waiting on the leader. Preserve that truthful provenance rather
+        # than overwriting it with the caller's initial cache-miss state.
+        cache_hit = cache_hit or bool(meta.pop("_singleflight_cache_hit", False))
         meta["cache_hit"] = cache_hit
         out["meta"] = meta
         return out
