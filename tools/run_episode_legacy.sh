@@ -152,8 +152,13 @@ export SV_ORCHESTRATION="$ORCH"
 export SV_SANDBOX_POLICY="danger-full-access"
 
 # Hard-fail if the pinned codex-cli release (resolved above) is missing -
-# intentionally after run-start (so the refusal is durable in the manifest)
-# and before any Codex process starts.
+# intentionally after run-start (durable manifest, same rationale as the
+# sandbox preflight right below) and before any Codex process starts. An
+# empty PINNED_CODEX_BIN here means the release directory was removed
+# (e.g. a future `codex` uninstall/prune) - refuse rather than silently
+# falling back to whatever ~/.local/bin/codex -> current happens to
+# resolve to right now, which is exactly the unpinned behavior this
+# guards against.
 if [[ "$RUNNER" == codex && -z "$PINNED_CODEX_BIN" ]]; then
   python3 tools/pipeline_log.py finish --status failed --exit-code 79 \
     --result-class infrastructure_failure --error-code codex_pinned_version_missing \
@@ -162,6 +167,14 @@ if [[ "$RUNNER" == codex && -z "$PINNED_CODEX_BIN" ]]; then
   exit 79
 fi
 
+# Belt-and-suspenders: win any bare `codex` lookup by name for a
+# subprocess in this run's tree that isn't routed through the -c
+# mcp_servers.codex.command override below (e.g. a delegate literally
+# shelling out to `codex`). Does NOT protect a `bash -lc` login-shell
+# invocation, which re-sources ~/.bashrc and re-prepends ~/.local/bin
+# unconditionally (same mechanism the opencode-tool shim below already
+# has to work around) - the -c override is the actual fix for delegation,
+# this is only extra insurance for anything else.
 if [[ "$RUNNER" == codex ]]; then
   PINNED_CODEX_BIN_DIR="$RUN_DIR/pinned-codex-bin"
   mkdir -p "$PINNED_CODEX_BIN_DIR"
@@ -169,9 +182,14 @@ if [[ "$RUNNER" == codex ]]; then
   export PATH="$PINNED_CODEX_BIN_DIR:$PATH"
 fi
 
-# Host-side Codex sandbox preflight.
+# Host-side Codex sandbox preflight.  This is intentionally after run-start
+# (so the refusal is durable in the manifest) and before the first Codex
+# process or delegate worktree can be created.  Claude does not invoke Codex,
+# so its run must not be coupled to Codex/bwrap availability.
 export SV_CODEX_VERSION=""
 if [[ "$RUNNER" == codex ]]; then
+  # A non-zero doctor result is an infrastructure failure, never a semantic
+  # attempt.
   DOCTOR_JSON="$RUN_DIR/codex-sandbox-doctor.json"
   set +e
   python3 tools/codex_sandbox_doctor.py > "$DOCTOR_JSON"
@@ -199,7 +217,17 @@ if [[ "$RUNNER" == codex ]]; then
   fi
 fi
 
-# Gemini TTS free-tier daily quota preflight.
+# Gemini TTS free-tier daily quota preflight (2026-09-05). Real incidents
+# 2026-09-04/05: multiple full scriptwriter+director passes (tens of
+# minutes of real delegate work) completed only to fail at TTS with
+# nothing to show for it, because
+# generativelanguage.googleapis.com/generate_content_free_tier_requests
+# was already exhausted on every fallback model before the run even
+# started. tools/tts_scenes.py remembers a 429 per model until the next
+# Pacific-Time day (Google's documented reset boundary; no live quota-
+# check API exists for a plain API key, only a browser-auth'd dashboard) -
+# if every model is already known exhausted, fail here, before any Codex
+# delegate time is spent, rather than discover it after the fact.
 TTS_QUOTA_JSON="$RUN_DIR/tts-quota-preflight.json"
 set +e
 python3 tools/tts_scenes.py --check-quota > "$TTS_QUOTA_JSON"
@@ -216,6 +244,14 @@ if [[ "$TTS_QUOTA_RC" -ne 0 ]]; then
   exit 77
 fi
 
+# The producer prompt remains a normal file value.  The protocol is read from
+# disk by codex exec; nested delegation itself is further constrained by
+# delegate_invoke.py. Static protocol goes FIRST and the growing, per-run
+# producer_scheduler.py prompt (topic instructions + past-episode-titles list)
+# goes LAST, so the stable prefix is identical across runs — this is what lets
+# any provider-side prompt-prefix caching actually apply (token-reduction
+# pass, 2026-09-12; previously the variable content came first, which
+# defeated prefix caching on every single run).
 CODEX_PROMPT_FILE="$PROMPT_FILE"
 if [[ "$RUNNER" == codex ]]; then
   CODEX_PROMPT_FILE="$RUN_DIR/orchestrator-prompt.md"
@@ -230,6 +266,18 @@ fi
 set +e
 case "$RUNNER" in
   codex)
+    # Оркестратору-Codex запрещено делегировать через skill
+    # ~/.codex/skills/delegate-with-opencode (инцидент 31.08.2026: делегат не
+    # смог прочитать словарь транслитерации вне проекта, Codex в обход велел
+    # оставить буквальный плейсхолдер {SHOW|термин} — он дошёл до эфира).
+    # Единственный разрешённый канал делегирования — MCP-сервер `codex`
+    # (codex mcp add codex -- codex mcp-server). Технически блокируем сам
+    # бинарь opencode-tool шимом в PATH: SKILL.md он прочитать может,
+    # выполнить — нет, получит понятный отказ вместо тихого обхода. Шим
+    # активируется через SHORTVIDEO_NO_OPENCODE в ~/.bashrc (а не через
+    # PATH= здесь), потому что shell-тул codex гоняет `bash -lc`, login-шелл
+    # заново подключает ~/.bashrc и переприкладывает ~/.local/bin поверх
+    # любого PATH= из родителя.
     SHIM_DIR="$ROOT/var/codex-shim"
     mkdir -p "$SHIM_DIR"
     cat > "$SHIM_DIR/opencode-tool" <<'SHIM'
@@ -239,6 +287,13 @@ echo "Для делегирования подзадач используй MCP-
 exit 127
 SHIM
     chmod +x "$SHIM_DIR/opencode-tool"
+    # Явный background + wait, а не просто foreground-вызов: bash не
+    # прерывает синхронную foreground-команду ради trap — обработчик
+    # SIGTERM/SIGINT молча откладывается до её завершения (проверено эмпирически:
+    # foreground `timeout ... sleep` не давал trap сработать вообще, пока не
+    # закончится сам; тот же код через `cmd & wait "$!"` прерывался за
+    # миллисекунды). Без этого весь trap выше был бы бесполезен на боевом
+    # прогоне — именно так и убили run_episode.sh 31.08.2026.
     SHORTVIDEO_NO_OPENCODE=1 \
     timeout "${TIMEOUT_MIN}m" "$PINNED_CODEX_BIN" exec \
       -C "$ROOT" \
@@ -278,6 +333,15 @@ if [[ $CODE -eq 0 ]]; then
     RESULT_CLASS="semantic_failure"
     ERROR_CODE="pipeline_incomplete"
   elif ! grep -q '"kind": "publication_created"' "$RUN_DIR/events.jsonl" 2>/dev/null; then
+    # episodes/<slug>.json exists as soon as animation-director finishes -
+    # long before tts/critic/render/publish. A real incident
+    # (auto-20260904-144810, 2026-09-04): Gemini TTS returned 429 on every
+    # available model, the pipeline honestly stopped there (no MP4, no
+    # review sent - orchestrator's own summary said so explicitly), yet
+    # this gate still marked the run status=ok/success because the episode
+    # JSON alone was already valid. publication_created only appears once
+    # publish.py review has actually created a Publication - the real
+    # deliverable for an automated run - so require it too.
     STATUS="failed"
     RESULT_CLASS="semantic_failure"
     ERROR_CODE="pipeline_incomplete"
@@ -286,6 +350,8 @@ fi
 if [[ $CODE -ne 0 ]]; then
   STATUS="failed"
   RESULT_CLASS="semantic_failure"
+  # Classification is based only on process exit status and host/runtime
+  # stderr, never on an LLM-authored --note or free-form summary.
   if rg -qi 'RTM_NEWADDR|Failed to create network namespace|bwrap|user namespace' \
       "$RUN_DIR/cli-stderr.log"; then
     RESULT_CLASS="infrastructure_failure"
@@ -309,6 +375,10 @@ if [[ -n "$ERROR_CODE" ]]; then
 fi
 python3 tools/pipeline_log.py finish "${FINISH_ARGS[@]}" > "$RUN_DIR/manifest.json"
 
+# Наблюдаемость (docs/agent-safety-architecture.md, этап 1.2): втянуть сессии
+# делегатов Codex за этот прогон в runs/$RUN_ID/agents/ и собрать рассказ.
+# Оба шага — ПОСЛЕ завершения прогона и с || true: телеметрия не имеет права
+# стоить эпизода, тот же принцип, что уже принят в pipeline_log.py.
 python3 tools/codex_session_import.py import --run-id "$RUN_ID" || true
 python3 tools/episode_story.py run --run-id "$RUN_ID" || true
 python3 tools/repo_guard.py check --warn-only || true
