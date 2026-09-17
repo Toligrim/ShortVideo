@@ -2,9 +2,12 @@
 from __future__ import annotations
 
 import json
+import multiprocessing
+import os
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 
 import pytest
 
@@ -18,6 +21,29 @@ from openrouter_executor import ToolExecutor
 from openrouter_web_cache import ExtractDiskCache, SearchMemo
 from openrouter_web_extract import WebExtractor, strip_base64_images, truncate_75_25
 from openrouter_web_search import WebSearcher, normalize_search_results
+
+
+def _process_singleflight_worker(root: str, start_event, counter, result_queue) -> None:
+    memo = SearchMemo(Path(root))
+    provider, query, limit = "p", "same process query", 5
+    start_event.wait()
+
+    def network():
+        with counter.get_lock():
+            counter.value += 1
+        time.sleep(0.15)
+        response = {"ok": True, "data": ["x"]}
+        # Production WebSearcher stores a successful response before returning
+        # from the single-flight leader. Mirror that contract here so a second
+        # process can observe the completed flight through disk cache.
+        memo.store(provider, query, limit, response)
+        return response
+
+    try:
+        result = memo.singleflight(provider, query, limit, network)
+        result_queue.put(("ok", result))
+    except BaseException as exc:  # pragma: no cover - surfaced in parent assertion
+        result_queue.put(("error", repr(exc)))
 
 
 def test_exact_eight_tool_surface():
@@ -66,6 +92,41 @@ def test_search_singleflight_coalesces_identical_queries(tmp_path):
     with ThreadPoolExecutor(max_workers=8) as pool:
         results = list(pool.map(lambda _: call(), range(8)))
     assert counter == 1 and all(r["data"] == ["x"] for r in results) and not memo._flights
+
+
+@pytest.mark.skipif(openrouter_web_cache.fcntl is None, reason="cross-process search flight uses Linux flock")
+def test_search_singleflight_coalesces_across_processes(tmp_path):
+    ctx = multiprocessing.get_context("fork" if hasattr(os, "fork") else "spawn")
+    start_event = ctx.Event()
+    counter = ctx.Value("i", 0)
+    result_queue = ctx.Queue()
+    processes = [
+        ctx.Process(
+            target=_process_singleflight_worker,
+            args=(str(tmp_path), start_event, counter, result_queue),
+        )
+        for _ in range(2)
+    ]
+    for process in processes:
+        process.start()
+    start_event.set()
+    results = [result_queue.get(timeout=5) for _ in processes]
+    for process in processes:
+        process.join(timeout=5)
+        assert not process.is_alive()
+        assert process.exitcode == 0
+    assert counter.value == 1
+    assert all(status == "ok" and payload["data"] == ["x"] for status, payload in results)
+
+
+def test_search_process_lock_table_is_fixed_and_bounded(tmp_path):
+    memo = SearchMemo(tmp_path)
+    paths = {
+        memo._flight_lock_path(memo.key("provider", f"query {index}", 5)).name
+        for index in range(5000)
+    }
+    assert len(paths) <= openrouter_web_cache.SEARCH_LOCK_SHARDS == 64
+    assert all(name.endswith(".lock") for name in paths)
 
 
 def test_failed_search_not_cached(tmp_path):
