@@ -12,6 +12,7 @@ import httpx
 
 from openrouter_config import OPENROUTER_URL, MAX_API_RETRIES
 
+
 def estimate_tokens(value: Any) -> int:
     raw = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
     return max(1, (len(raw) + 2) // 3)
@@ -137,7 +138,10 @@ class OpenRouterClient:
                 continue
             if resp.status_code < 400:
                 body = resp.json()
-                self.ledger.record(role=self.role, kind=kind, model=model, response=body, session_id=self.session_id)
+                self.ledger.record(
+                    role=self.role, kind=kind, model=model,
+                    response=body, session_id=self.session_id,
+                )
                 return body
             retryable = resp.status_code in {408, 409, 425, 429, 500, 502, 503, 504}
             message = resp.text[:2000]
@@ -151,20 +155,39 @@ class OpenRouterClient:
             time.sleep(delay)
         raise RuntimeError(f"OpenRouter transport failed after retries: {last}")
 
-    def chat(self, *, model: str, messages: list[dict[str, Any]], tools: list[dict[str, Any]] | None, effort: str, max_completion_tokens: int = 24_000, kind: str = "agent") -> dict[str, Any]:
+    def chat(
+        self,
+        *,
+        model: str,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]] | None,
+        effort: str,
+        max_completion_tokens: int = 24_000,
+        kind: str = "agent",
+    ) -> dict[str, Any]:
         payload: dict[str, Any] = {
             "model": model,
             "messages": messages,
             "stream": False,
             "session_id": self.session_id,
             "metadata": {"shortvideo_session": self.session_id[:240], "role": self.role},
-            "provider": {"require_parameters": True},
+            # Cost is the first routing objective for this harness. Explicit
+            # sorting also avoids Auto Exacto silently reprioritizing providers
+            # for tool-calling requests; fallback providers remain available.
+            "provider": {
+                "sort": "price",
+                "require_parameters": True,
+                "allow_fallbacks": True,
+            },
             "max_completion_tokens": max_completion_tokens,
             "reasoning": {"effort": effort, "exclude": True},
         }
         if tools is not None:
             payload["tools"] = tools
             payload["tool_choice"] = "auto"
+            # File/code side effects are deliberately serialized. This keeps
+            # tool-result ordering deterministic and avoids write races.
+            payload["parallel_tool_calls"] = False
         return self._post(payload, kind=kind, model=model)
 
     def inspect_image(self, path: Path, model: str) -> str:
@@ -188,7 +211,14 @@ class OpenRouterClient:
                 ],
             },
         ]
-        body = self.chat(model=model, messages=messages, tools=None, effort="low", max_completion_tokens=4000, kind="vision")
+        body = self.chat(
+            model=model,
+            messages=messages,
+            tools=None,
+            effort="low",
+            max_completion_tokens=4000,
+            kind="vision",
+        )
         return str(((body.get("choices") or [{}])[0].get("message") or {}).get("content") or "")
 
 
