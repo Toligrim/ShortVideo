@@ -42,6 +42,13 @@ if [[ ! -f "$PROMPT_FILE" ]]; then
   exit 2
 fi
 
+HARNESS_PYTHON="${SHORTVIDEO_OPENROUTER_PYTHON:-$ROOT/venv/bin/python}"
+if [[ ! -x "$HARNESS_PYTHON" ]]; then
+  echo "OpenRouter Python not found/executable: $HARNESS_PYTHON" >&2
+  echo "Create/use the project venv and install requirements-openrouter.txt." >&2
+  exit 78
+fi
+
 ENV_FILE="${SHORTVIDEO_OPENROUTER_ENV:-$HOME/.config/shortvideo/openrouter.env}"
 if [[ -f "$ENV_FILE" ]]; then
   set -a
@@ -66,7 +73,7 @@ if (( FREE_KB < 2 * 1024 * 1024 )); then
   exit 1
 fi
 
-INVOCATION="python3 tools/openrouter_harness.py run --role orchestrator --model $MODEL --effort $EFFORT --task-file $PROMPT_FILE"
+INVOCATION="$HARNESS_PYTHON tools/openrouter_harness.py run --role orchestrator --model $MODEL --effort $EFFORT --task-file $PROMPT_FILE"
 RUN_ID=$(python3 tools/pipeline_log.py run-start \
   --slug "$SLUG" --topic "$TOPIC" --cli openrouter --model "$MODEL" \
   --effort "$EFFORT" --orchestration subagents --invocation "$INVOCATION")
@@ -94,7 +101,7 @@ on_kill_signal() {
     --exit-code "$((128 + sig_num))" \
     --result-class infrastructure_failure --error-code openrouter_runner_killed \
     > "$RUN_DIR/manifest.json" 2>/dev/null
-  python3 tools/openrouter_harness.py finalize-cost --run-dir "$RUN_DIR" >/dev/null 2>&1 || true
+  "$HARNESS_PYTHON" tools/openrouter_harness.py finalize-cost --run-dir "$RUN_DIR" >/dev/null 2>&1 || true
   python3 tools/episode_story.py run --run-id "$RUN_ID" >/dev/null 2>&1 || true
   exit "$((128 + sig_num))"
 }
@@ -103,7 +110,7 @@ trap 'on_kill_signal 2' INT
 
 DOCTOR_JSON="$RUN_DIR/openrouter-doctor.json"
 set +e
-python3 tools/openrouter_doctor.py > "$DOCTOR_JSON"
+"$HARNESS_PYTHON" tools/openrouter_doctor.py > "$DOCTOR_JSON"
 DOCTOR_RC=$?
 set -e
 DOCTOR_CLASS=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8")).get("error_class", "openrouter_doctor_failed"))' "$DOCTOR_JSON" 2>/dev/null || true)
@@ -138,7 +145,7 @@ if [[ "$TTS_QUOTA_RC" -ne 0 ]]; then
 fi
 
 set +e
-timeout "${TIMEOUT_MIN}m" python3 tools/openrouter_harness.py run \
+timeout "${TIMEOUT_MIN}m" "$HARNESS_PYTHON" tools/openrouter_harness.py run \
   --role orchestrator \
   --workspace "$ROOT" \
   --model "$MODEL" \
@@ -182,7 +189,7 @@ fi
 FINISH_ARGS=(--status "$STATUS" --exit-code "$CODE" --result-class "$RESULT_CLASS")
 [[ -n "$ERROR_CODE" ]] && FINISH_ARGS+=(--error-code "$ERROR_CODE")
 python3 tools/pipeline_log.py finish "${FINISH_ARGS[@]}" > "$RUN_DIR/manifest.json"
-python3 tools/openrouter_harness.py finalize-cost --run-dir "$RUN_DIR" > "$RUN_DIR/openrouter-finalize.log" 2>&1 || true
+"$HARNESS_PYTHON" tools/openrouter_harness.py finalize-cost --run-dir "$RUN_DIR" > "$RUN_DIR/openrouter-finalize.log" 2>&1 || true
 python3 tools/episode_story.py run --run-id "$RUN_ID" || true
 python3 tools/repo_guard.py check --warn-only || true
 
