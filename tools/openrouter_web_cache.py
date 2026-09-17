@@ -20,6 +20,7 @@ except ImportError:  # pragma: no cover - Raspberry Pi/Linux has fcntl
 
 DEFAULT_TTL_SECONDS = 20 * 60
 SEARCH_LIMIT_BUCKETS = (5, 10)
+SEARCH_LOCK_SHARDS = 64
 MAX_SEARCH_FILES = 512
 MAX_EXTRACT_INDEX_ENTRIES = 500
 MAX_STORED_TEXT_CHARS = 2_000_000
@@ -126,7 +127,14 @@ class _Flight:
 
 
 class SearchMemo:
-    """TTL search memo with disk reuse and per-key single-flight coalescing."""
+    """TTL search memo with disk reuse and thread/process single-flight coalescing.
+
+    Threads in one harness process share an exact-key in-memory flight. Separate
+    delegate processes additionally serialize through a fixed set of advisory
+    lock shards. The bounded shard set avoids one lock file per query forever;
+    after acquiring a shard a waiter rechecks disk cache before making network
+    I/O, so an identical query completed by another process is reused.
+    """
 
     MAX_ACTIVE_FLIGHTS = 256
 
@@ -134,6 +142,8 @@ class SearchMemo:
         self.root = (root or cache_root()).resolve()
         self.search_dir = self.root / "search"
         self.search_dir.mkdir(parents=True, exist_ok=True)
+        self.flight_lock_dir = self.root / "search-locks"
+        self.flight_lock_dir.mkdir(parents=True, exist_ok=True)
         self._store: dict[tuple[str, str, int], tuple[float, dict[str, Any]]] = {}
         self._lock = threading.Lock()
         self._flights: dict[tuple[str, str, int], _Flight] = {}
@@ -144,6 +154,10 @@ class SearchMemo:
 
     def _disk_path(self, key: tuple[str, str, int]) -> Path:
         return self.search_dir / f"{_digest(key)}.json"
+
+    def _flight_lock_path(self, key: tuple[str, str, int]) -> Path:
+        shard = int(_digest(key)[:8], 16) % SEARCH_LOCK_SHARDS
+        return self.flight_lock_dir / f"{shard:02d}.lock"
 
     def lookup(self, provider: str, query: str, limit: int) -> dict[str, Any] | None:
         key = self.key(provider, query, limit)
@@ -192,6 +206,25 @@ class SearchMemo:
         except OSError:
             pass
 
+    def _run_process_flight(
+        self,
+        key: tuple[str, str, int],
+        provider: str,
+        query: str,
+        limit: int,
+        fn: Callable[[], Any],
+    ) -> Any:
+        if fcntl is None:
+            return fn()
+        with _process_lock(self._flight_lock_path(key)):
+            # Another harness/delegate process may have completed this exact
+            # request while we waited on the shard. Recheck disk cache only
+            # after taking the process lock, before any network call.
+            hit = self.lookup(provider, query, limit)
+            if hit is not None:
+                return hit
+            return fn()
+
     def singleflight(self, provider: str, query: str, limit: int, fn: Callable[[], Any]) -> Any:
         key = self.key(provider, query, limit)
         with self._lock:
@@ -206,14 +239,14 @@ class SearchMemo:
             else:
                 leader = False
         if flight is None:
-            return fn()
+            return self._run_process_flight(key, provider, query, limit, fn)
         if not leader:
             flight.event.wait()
             if flight.error is not None:
                 raise flight.error
             return _deep_copy(flight.result)
         try:
-            result = fn()
+            result = self._run_process_flight(key, provider, query, limit, fn)
             flight.result = _deep_copy(result)
             return result
         except BaseException as exc:
