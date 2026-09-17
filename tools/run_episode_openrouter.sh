@@ -177,8 +177,10 @@ else
     RESULT_CLASS="infrastructure_failure"; ERROR_CODE="openrouter_timeout"
   elif rg -qi 'bwrap|user namespace|network namespace|namespace denied' "$RUN_DIR/cli-stderr.log"; then
     RESULT_CLASS="infrastructure_failure"; ERROR_CODE="openrouter_sandbox_unavailable"
-  elif rg -qi '401|unauthorized|OPENROUTER_API_KEY|EXA_API_KEY|key_missing' "$RUN_DIR/cli-stderr.log"; then
+  elif rg -qi '401|unauthorized|OPENROUTER_API_KEY|FIRECRAWL_API_KEY|key_missing' "$RUN_DIR/cli-stderr.log"; then
     RESULT_CLASS="infrastructure_failure"; ERROR_CODE="openrouter_auth_failed"
+  elif rg -qi 'SEARXNG_URL|search_unconfigured|search_backend_unconfigured|search_transport_error|search_http_error' "$RUN_DIR/cli-stderr.log"; then
+    RESULT_CLASS="infrastructure_failure"; ERROR_CODE="openrouter_search_unavailable"
   elif rg -qi '429|502|503|504|provider.*(failed|unavailable)|upstream' "$RUN_DIR/cli-stderr.log"; then
     RESULT_CLASS="infrastructure_failure"; ERROR_CODE="openrouter_provider_failure"
   elif rg -qi 'unknown model|model .*(not found|unavailable|invalid)|invalid.*model' "$RUN_DIR/cli-stderr.log"; then
