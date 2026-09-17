@@ -300,8 +300,11 @@ class ExtractDiskCache:
         key = self.key(url, mode, provider)
         rel = Path("extract") / f"{key}.md"
         path = self.root / rel
-        _atomic_write_text(path, content)
         with self._lock, _process_lock(self.lock_path):
+            # Keep the content version and its index metadata under one cross-process
+            # critical section. Atomic replace prevents torn files; the lock prevents
+            # two writers for the same cache key from publishing mismatched metadata.
+            _atomic_write_text(path, content)
             index = self._load_index()
             index[key] = {
                 "url": url,
