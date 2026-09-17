@@ -15,6 +15,16 @@ TOOLS = Path(__file__).resolve().parent
 ROOT = TOOLS.parent
 
 
+def _runtime_ro_binds() -> list[str]:
+    """Directories required by ordinary dynamically-linked CLI programs.
+
+    Keep this aligned with openrouter_sandbox.BubblewrapSandbox. In
+    particular, ARM64 Ubuntu needs the loader reachable through /lib; a doctor
+    that only mounts /usr and /bin can falsely diagnose AppArmor/userns failure.
+    """
+    return [p for p in ("/usr", "/bin", "/sbin", "/lib", "/lib64", "/etc", "/opt") if Path(p).exists()]
+
+
 def _check_bwrap(path: str | None) -> dict:
     result = {"configured": bool(path), "path": path, "smoke_ok": False}
     if not path:
@@ -32,26 +42,29 @@ def _check_bwrap(path: str | None) -> dict:
 
     with tempfile.TemporaryDirectory(prefix="sv-bwrap-doctor-") as td:
         scratch = Path(td)
+        cmd = [
+            path,
+            "--die-with-parent",
+            "--new-session",
+            "--unshare-pid",
+            "--unshare-net",
+            "--proc", "/proc",
+            "--dev", "/dev",
+        ]
+        for directory in _runtime_ro_binds():
+            cmd += ["--ro-bind", directory, directory]
+        cmd += [
+            "--bind", str(scratch), "/tmp",
+            "/bin/sh", "-c",
+            "test -w /tmp && test ! -e /tmp/not-created && printf ok",
+        ]
         try:
             smoke = subprocess.run(
-                [
-                    path,
-                    "--die-with-parent",
-                    "--new-session",
-                    "--unshare-pid",
-                    "--unshare-net",
-                    "--proc", "/proc",
-                    "--dev", "/dev",
-                    "--ro-bind", "/usr", "/usr",
-                    "--ro-bind", "/bin", "/bin",
-                    "--bind", str(scratch), "/tmp",
-                    "/bin/sh", "-c",
-                    "test -w /tmp && test ! -e /tmp/not-created && printf ok",
-                ],
+                cmd,
                 capture_output=True,
                 text=True,
                 timeout=10,
-                env={"PATH": "/usr/bin:/bin", "HOME": "/tmp"},
+                env={"PATH": "/usr/bin:/bin", "HOME": "/tmp", "LANG": "C.UTF-8"},
             )
         except (OSError, subprocess.TimeoutExpired) as exc:
             result["error"] = f"bwrap_smoke_failed:{exc}"
