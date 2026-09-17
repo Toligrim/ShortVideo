@@ -17,9 +17,9 @@ for arg in "$@"; do
 done
 
 if [[ "$RUNNER" == "openrouter" ]]; then
-  exec "$ROOT/tools/run_episode_openrouter.sh" "$@"
+  exec bash "$ROOT/tools/run_episode_openrouter.sh" "$@"
 fi
 
 # Missing/unknown runners deliberately fall through to the legacy parser so
 # its established usage/error semantics remain authoritative for codex/claude.
-exec "$ROOT/tools/run_episode_legacy.sh" "$@"
+exec bash "$ROOT/tools/run_episode_legacy.sh" "$@"
