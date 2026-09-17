@@ -52,6 +52,16 @@ def test_openrouter_runner_is_fail_closed_before_llm_and_uses_project_venv():
     assert "finalize-cost" in source
 
 
+def test_openrouter_runner_and_doctor_have_no_exa_dependency():
+    runner = (TOOLS / "run_episode_openrouter.sh").read_text(encoding="utf-8")
+    doctor = (TOOLS / "openrouter_doctor.py").read_text(encoding="utf-8")
+    assert "EXA_API_KEY" not in runner
+    assert "EXA_API_KEY" not in doctor
+    assert "SEARXNG_URL" in runner and "FIRECRAWL_API_KEY" in runner
+    assert "openrouter_search_unavailable" in runner
+    assert "SEARXNG_URL" in doctor and "FIRECRAWL_API_KEY" in doctor
+
+
 def test_shell_entrypoints_parse():
     for name in ("run_episode.sh", "run_episode_legacy.sh", "run_episode_openrouter.sh"):
         proc = subprocess.run(
