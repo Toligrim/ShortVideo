@@ -99,7 +99,7 @@ def main(argv: list[str] | None = None) -> int:
     elif not all(checks[k] for k in ("git", "rg", "node", "policy", "role_prompts")): error_class = "openrouter_host_dependency_missing"
     print(json.dumps({"ok": required_ok, "error_class": error_class, "checks": checks, "notes": {
         "chromium": "optional until a JS-only web_fetch fallback is needed" if not checks["chromium"] else "available",
-        "search": "SearXNG is primary; FIRECRAWL_API_KEY enables an optional keyed fallback. EXA_API_KEY is not used.",
+        "search": "SearXNG is primary; FIRECRAWL_API_KEY enables an optional keyed fallback. The legacy Exa key is not used.",
         "network": "model shell has no external network; trusted supervisor owns search/fetch HTTP",
     }}, ensure_ascii=False, indent=2))
     return 0 if required_ok else 1
