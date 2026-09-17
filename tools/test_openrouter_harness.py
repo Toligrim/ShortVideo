@@ -204,6 +204,41 @@ def test_staging_producer_dry_run_selects_openrouter():
     assert body["production_scheduler_unchanged"]["runner"] == "codex"
 
 
+def test_openrouter_prompt_has_no_absolute_skill_path():
+    """staging incident 2026-09-17: producer_scheduler.build_prompt() embeds
+    an absolute filesystem path to the skill file (fine for Codex's
+    unrestricted read access); read_file only accepts workspace-relative
+    paths, so an unpatched prompt sent the orchestrator into a
+    path_outside_workspace retry loop that burned the entire
+    MAX_AGENT_STEPS budget without ever delegating to any role. Guard the
+    fix in producer_openrouter_once.py."""
+    sys.path.insert(0, str(TOOLS))
+    try:
+        import producer_openrouter_once as sched_once
+    finally:
+        sys.path.pop(0)
+
+    now = 1789600000
+    slug = sched_once.sched.make_slug(now, sched_once.ROOT / "episodes")
+    raw_prompt = sched_once.sched.build_prompt(sched_once.ROOT, slug, sched_once.sched.PROMPT_TOPIC_LABEL)
+    absolute_skill_path = str(sched_once.ROOT / ".claude" / "skills" / "produce" / "SKILL.md")
+    assert absolute_skill_path in raw_prompt, "test assumption stale: build_prompt() no longer embeds an absolute path"
+
+    relative_skill_path = ".claude/skills/produce/SKILL.md"
+    expected_patched_chars = len(raw_prompt) - len(absolute_skill_path) + len(relative_skill_path)
+
+    proc = subprocess.run(
+        [sys.executable, str(TOOLS / "producer_openrouter_once.py"), "--dry-run", "--now", str(now)],
+        cwd=str(ROOT), capture_output=True, text=True, timeout=20,
+    )
+    assert proc.returncode == 0, proc.stderr
+    body = json.loads(proc.stdout)
+    # dry-run doesn't echo the prompt text itself, but the actual patched
+    # length (one occurrence of the absolute path shortened to relative)
+    # only matches if main()'s replace() in fact ran against this same slug.
+    assert body["prompt_chars"] == expected_patched_chars
+
+
 def test_sandbox_shares_node_modules_readonly_into_detached_worktree(tmp_path, monkeypatch):
     """staging incident 2026-09-17: a fresh detached worktree has no
     video/node_modules (never installed there) and the model shell has no

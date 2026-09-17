@@ -33,6 +33,23 @@ def main(argv: list[str] | None = None) -> int:
     now = args.now if args.now is not None else int(time.time())
     slug = args.slug or sched.make_slug(now, ROOT / "episodes")
     prompt = sched.build_prompt(ROOT, slug, sched.PROMPT_TOPIC_LABEL)
+    # sched.build_prompt() embeds an absolute filesystem path to the skill
+    # file (fine for Codex's unrestricted read access). The OpenRouter
+    # harness's read_file only accepts workspace-relative paths, so an
+    # unpatched prompt sends the orchestrator on a repeated
+    # path_outside_workspace loop trying to read its own pipeline
+    # instructions - staging incident 2026-09-17, burned the full
+    # MAX_AGENT_STEPS budget without ever delegating. Rewrite it to the
+    # equivalent relative path before handing the prompt to the harness.
+    skill_path_abs = str(ROOT / ".claude" / "skills" / "produce" / "SKILL.md")
+    skill_path_rel = ".claude/skills/produce/SKILL.md"
+    if skill_path_abs not in prompt:
+        raise RuntimeError(
+            "producer_scheduler.build_prompt() no longer embeds the expected "
+            f"absolute skill path {skill_path_abs!r} - update skill_path_abs/"
+            "skill_path_rel above to match its current output."
+        )
+    prompt = prompt.replace(skill_path_abs, skill_path_rel)
     command_preview = [
         str(ROOT / "tools" / "run_episode.sh"),
         "--topic", sched.PROMPT_TOPIC_LABEL,
