@@ -79,6 +79,18 @@ def test_search_cache_ttl_and_cross_instance(tmp_path, monkeypatch):
     assert SearchMemo(tmp_path).lookup("p", "query", 5) is None
 
 
+def test_search_disk_hit_does_not_extend_original_ttl(tmp_path, monkeypatch):
+    monkeypatch.setattr(openrouter_web_cache, "ttl_seconds", lambda: 0.10)
+    SearchMemo(tmp_path).store("p", "q", 5, {"ok":True,"data":[1]})
+    time.sleep(0.07)
+    reader = SearchMemo(tmp_path)
+    assert reader.lookup("p", "q", 5)["data"] == [1]
+    # Only about 30ms remained on the disk entry when reader loaded it. A disk
+    # hit must not reset that to another full 100ms in the in-memory tier.
+    time.sleep(0.05)
+    assert reader.lookup("p", "q", 5) is None
+
+
 def test_search_singleflight_coalesces_identical_queries(tmp_path):
     memo, guard, barrier = SearchMemo(tmp_path), threading.Lock(), threading.Barrier(8)
     counter = 0
