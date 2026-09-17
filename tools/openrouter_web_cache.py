@@ -226,6 +226,9 @@ class SearchMemo:
             # after taking the process lock, before any network call.
             hit = self.lookup(provider, query, limit)
             if hit is not None:
+                meta = dict(hit.get("meta") or {})
+                meta["_singleflight_cache_hit"] = True
+                hit["meta"] = meta
                 return hit
             return fn()
 
