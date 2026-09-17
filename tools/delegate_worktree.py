@@ -1126,6 +1126,11 @@ def cmd_gc(args: argparse.Namespace) -> int:
         if not run_path.is_dir():
             continue
         worktrees = sorted(wt for wt in run_path.iterdir() if wt.is_dir())
+        if not worktrees:
+            # Nothing to quarantine or remove here, so a missing/corrupt
+            # registry for this run is not evidence of anything unsafe -
+            # skip it rather than failing the whole GC pass.
+            continue
         worktrees_by_run[run_path.name] = worktrees
         reg_path = pipeline_log.RUNS / run_path.name / "delegations.json"
         try:

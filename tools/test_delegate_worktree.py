@@ -792,3 +792,26 @@ def test_animation_workspace_write_canary_cannot_write_repository_root(sandbox, 
 
     worktree_marker.unlink()
     remove_clean_worktree(sandbox, wt)
+
+
+def test_gc_skips_empty_run_dir_without_registry(sandbox, capsys):
+    """An empty run directory with no delegations.json has nothing to
+    quarantine and must not fail the whole GC pass (staging incident
+    2026-09-17: an empty leftover run dir from a manual OpenRouter smoke
+    test turned a safe dry-run GC into delegation_registry_invalid)."""
+    wt = open_delegate(sandbox, capsys, "real-one")
+    set_claim(sandbox, "real-one", expires_at=time.time() - 1)
+
+    ghost_run = sandbox["worktrees"] / "ghost-run-no-registry"
+    ghost_run.mkdir(parents=True)
+    assert not (sandbox["root"] / "runs" / ghost_run.name / "delegations.json").exists()
+
+    assert sandbox["dw"].main(["gc", "--dry-run"]) == 0
+    result = last_json(capsys.readouterr().out)
+    assert "error" not in result
+    assert "error_code" not in result
+    assert not any(ghost_run.name in p for p in result["removed"] + result["kept"])
+    assert str(wt) in result["removed"]
+
+    assert wt.is_dir()
+    assert ghost_run.is_dir()

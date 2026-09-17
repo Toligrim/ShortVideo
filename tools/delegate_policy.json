@@ -4,18 +4,32 @@
   "timeout_seconds": 5400,
   "max_infrastructure_attempts": 3,
   "infrastructure_circuit_repeat": 2,
+  "openrouter_orchestrator": {
+    "model": "deepseek/deepseek-v4-flash-0731",
+    "effort": "high",
+    "sandbox": "workspace-write",
+    "vision_model": "deepseek/deepseek-v4.1-flash"
+  },
+  "openrouter_compactor_model": "deepseek/deepseek-v4-flash-0731",
   "roles": {
     "scriptwriter": {
       "model": "gpt-5.6-luna",
-      "sandbox": "workspace-write"
+      "sandbox": "workspace-write",
+      "openrouter_model": "deepseek/deepseek-v4-flash-0731",
+      "openrouter_effort": "high"
     },
     "animation-director": {
       "model": "gpt-5.6-luna",
-      "sandbox": "workspace-write"
+      "sandbox": "workspace-write",
+      "openrouter_model": "deepseek/deepseek-v4-flash-0731",
+      "openrouter_effort": "high",
+      "openrouter_vision_model": "deepseek/deepseek-v4.1-flash"
     },
     "critic": {
       "model": "gpt-5.6-luna",
-      "sandbox": "read-only"
+      "sandbox": "read-only",
+      "openrouter_model": "deepseek/deepseek-v4-flash-0731",
+      "openrouter_effort": "high"
     }
   }
 }
