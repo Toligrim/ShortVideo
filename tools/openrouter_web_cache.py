@@ -171,7 +171,9 @@ class SearchMemo:
         path = self._disk_path(key)
         try:
             payload = json.loads(path.read_text(encoding="utf-8"))
-            if not isinstance(payload, dict) or time.time() >= float(payload.get("expires_at", 0)):
+            expires_at = float(payload.get("expires_at", 0)) if isinstance(payload, dict) else 0.0
+            remaining = expires_at - time.time()
+            if not isinstance(payload, dict) or remaining <= 0:
                 path.unlink(missing_ok=True)
                 return None
             response = payload.get("response")
@@ -179,8 +181,10 @@ class SearchMemo:
                 return None
         except Exception:
             return None
+        # Preserve the original disk expiry. A disk hit late in the TTL window
+        # must not acquire a fresh full in-memory TTL and outlive expires_at.
         with self._lock:
-            self._store[key] = (time.monotonic() + ttl_seconds(), _deep_copy(response))
+            self._store[key] = (time.monotonic() + remaining, _deep_copy(response))
         return _deep_copy(response)
 
     def store(self, provider: str, query: str, limit: int, response: dict[str, Any]) -> None:
