@@ -67,6 +67,8 @@ Before a full episode, verify the web layer with the same production user:
 
 - doctor reports SearXNG search success, or explicitly reports the keyed Firecrawl fallback as configured;
 - `web_search` returns normalized SearXNG results and a repeated identical query hits cache;
+- start two separate harness/test processes with the same normalized query and verify cross-process single-flight produces one backend search while the follower reuses disk cache; the lock namespace is fixed to 64 shards rather than one file per query;
+- verify a near-expiry disk search entry expires at its original `expires_at` after being loaded into memory rather than receiving a fresh TTL;
 - `web_fetch` can fetch a normal public article, batch two to five public URLs, and read a truncated page's `@web-cache/...` path through `read_file`;
 - localhost, metadata IPs, CGNAT/private addresses and a public-to-private redirect fail closed;
 - a JS-only test page works only if Chromium is installed, and Chromium cannot subrequest localhost/private hosts;
