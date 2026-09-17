@@ -177,12 +177,16 @@ def test_run_delegate_parses_last_json_object_from_open_stdout():
 
 def test_provider_routing_prefers_throughput_over_cheapest_saturated_endpoint():
     """staging incident 2026-09-17: sort="price" repeatedly routed to a
-    saturated shared (non-BYOK) endpoint and 429'd with no fallback left
-    (require_parameters narrowed the pool to that one provider). The
-    account has paid balance, so route for available capacity instead."""
+    saturated shared (non-BYOK) endpoint and 429'd. Switching only the sort
+    order did not help - require_parameters=True had already narrowed the
+    field to that one provider (1 of 29 endpoints), so there was nothing
+    left to sort/fall back to. The account has paid balance, so route for
+    available capacity instead: sort by throughput AND stop requiring every
+    provider to support our exact parameter set."""
     source = (TOOLS / "openrouter_client.py").read_text(encoding="utf-8")
     assert '"sort": "throughput"' in source
     assert '"sort": "price"' not in source
+    assert '"require_parameters": False' in source
 
 
 def test_staging_producer_dry_run_selects_openrouter():

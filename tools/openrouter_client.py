@@ -173,17 +173,20 @@ class OpenRouterClient:
             "metadata": {"shortvideo_session": self.session_id[:240], "role": self.role},
             # Reliability is the first routing objective for this harness:
             # sort by throughput so OpenRouter prefers a provider with real
-            # available capacity over the cheapest one (2026-09-17 staging:
-            # sort="price" repeatedly routed to a saturated shared-pool
-            # endpoint - is_byok=false, only 1 of 29 endpoints satisfied
-            # require_parameters - and 429'd with no fallback candidate left;
-            # the account has paid balance, so pay for capacity instead of
-            # getting stuck on the cheapest saturated endpoint). Explicit
-            # sorting also avoids Auto Exacto silently reprioritizing providers
-            # for tool-calling requests; fallback providers remain available.
+            # available capacity over the cheapest one. require_parameters
+            # is deliberately False (2026-09-17 staging: with it True, only
+            # 1 of 29 deepseek/deepseek-v4-flash-0731 endpoints supported our
+            # exact parameter set - tool-calling + parallel_tool_calls=false
+            # + reasoning.exclude - so sort/allow_fallbacks had nothing else
+            # to route to and every call 429'd on that one saturated,
+            # non-BYOK shared-pool endpoint; the account has paid balance to
+            # spend on capacity instead). Trade-off accepted: a provider that
+            # does not fully support one of these parameters may silently
+            # drop it rather than being excluded - acceptable risk versus
+            # having zero eligible providers.
             "provider": {
                 "sort": "throughput",
-                "require_parameters": True,
+                "require_parameters": False,
                 "allow_fallbacks": True,
             },
             "max_completion_tokens": max_completion_tokens,

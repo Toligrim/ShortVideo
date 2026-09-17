@@ -8,7 +8,7 @@ The critic is a script/source gate before animation/TTS, not a final visual crit
 
 ## Harness boundary
 
-The harness calls `POST https://openrouter.ai/api/v1/chat/completions` directly with `httpx`; no LangChain, LiteLLM, PydanticAI, OpenAI SDK or OpenRouter Agent SDK is used. OpenRouter requests keep `provider.sort = "throughput"` (changed from `"price"` on 2026-09-17: sorting by price repeatedly routed staging traffic to a saturated shared, non-BYOK endpoint with `require_parameters` leaving no fallback candidate; the account pays for reliable capacity instead of the cheapest saturated one).
+The harness calls `POST https://openrouter.ai/api/v1/chat/completions` directly with `httpx`; no LangChain, LiteLLM, PydanticAI, OpenAI SDK or OpenRouter Agent SDK is used. OpenRouter requests keep `provider.sort = "throughput"` and `provider.require_parameters = false` (changed from `"price"`/`true` on 2026-09-17: with `require_parameters` true, only 1 of 29 `deepseek/deepseek-v4-flash-0731` endpoints supported the harness's exact parameter set, so sort order and fallbacks had nothing else to route to and every call 429'd on that one saturated, non-BYOK shared-pool endpoint; the account pays for reliable capacity instead of getting stuck on the cheapest/only saturated one - accepted trade-off: a provider may silently drop an unsupported parameter instead of being excluded).
 
 The model sees exactly eight tools, in fixed order: `read_file`, `write_file`, `edit_file`, `grep`, `glob`, `bash`, `web_search`, `web_fetch`. Delegation to scriptwriter/critic/animation-director is internal control-plane logic and is not a ninth tool. Existing detached worktrees, leases, allowlists and integration remain owned by `delegate_worktree.py` and `delegate_policy.json`.
 
