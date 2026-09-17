@@ -73,6 +73,17 @@ class BubblewrapSandbox:
                 and dst_node_modules.resolve() != src_node_modules.resolve():
             argv += _ensure_parents_args(dst_node_modules)
             argv += ["--ro-bind", str(src_node_modules), str(dst_node_modules)]
+            # remotion/webpack unconditionally write their build cache under
+            # node_modules/.cache (hardcoded, no env var override - see
+            # @remotion/bundler's getWebpackCacheDir) and hang/error with
+            # EROFS against the read-only bind above. Layer a private,
+            # writable scratch directory over just that subpath, mirroring
+            # the existing git_common/objects writable-overlay pattern below.
+            webpack_cache = self.scratch / "webpack-cache"
+            webpack_cache.mkdir(parents=True, exist_ok=True)
+            cache_dst = dst_node_modules / ".cache"
+            argv += _ensure_parents_args(cache_dst)
+            argv += ["--bind", str(webpack_cache), str(cache_dst)]
 
         git_dir, git_common = _resolve_git_paths(self.workspace)
         if git_dir and git_common:
