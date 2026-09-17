@@ -11,6 +11,7 @@ import pytest
 
 TOOLS = Path(__file__).resolve().parent
 ROOT = TOOLS.parent
+LEGACY_RUNNER_BLOB = "c2c7e2c454919b26fd0638dbdaa0951e74b8f3c1"
 
 
 def test_production_scheduler_remains_codex_luna_max():
@@ -26,6 +27,17 @@ def test_run_episode_dispatches_only_explicit_openrouter():
     assert 'run_episode_openrouter.sh' in source
     assert 'run_episode_legacy.sh' in source
     assert source.index('if [[ "$RUNNER" == "openrouter" ]]') < source.index('run_episode_legacy.sh')
+
+
+def test_legacy_runner_is_exact_pre_openrouter_blob():
+    proc = subprocess.run(
+        ["git", "hash-object", str(TOOLS / "run_episode_legacy.sh")],
+        cwd=str(ROOT),
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert proc.stdout.strip() == LEGACY_RUNNER_BLOB
 
 
 def test_openrouter_runner_is_fail_closed_before_llm_and_uses_project_venv():
