@@ -4,13 +4,27 @@ This is a staging deployment. It does not switch the production cron runner.
 
 ## Python dependencies
 
-From the repository virtualenv:
+Install the harness dependencies into the repository virtualenv used by the runner:
 
 ```bash
 venv/bin/pip install -r requirements-openrouter.txt
 ```
 
-The harness intentionally adds only `httpx` and `trafilatura` to the Python runtime.
+The harness intentionally adds only `httpx` and `trafilatura` to the Python runtime. `tools/run_episode_openrouter.sh` uses `venv/bin/python` by default; set `SHORTVIDEO_OPENROUTER_PYTHON` only if this installation uses a different dedicated interpreter.
+
+Before any live API call, run the deterministic checks:
+
+```bash
+venv/bin/python -m py_compile \
+  tools/openrouter_base.py tools/openrouter_client.py tools/openrouter_config.py \
+  tools/openrouter_control.py tools/openrouter_doctor.py tools/openrouter_executor.py \
+  tools/openrouter_agent.py tools/openrouter_harness.py tools/openrouter_sandbox.py \
+  tools/openrouter_tools.py tools/openrouter_web.py tools/producer_openrouter_once.py
+bash -n tools/run_episode.sh
+bash -n tools/run_episode_legacy.sh
+bash -n tools/run_episode_openrouter.sh
+venv/bin/python -m pytest -q tools/test_openrouter_harness.py tools/test_run_episode_runner.py
+```
 
 ## Credentials
 
@@ -44,7 +58,7 @@ After loading the profile, run:
 set -a
 . ~/.config/shortvideo/openrouter.env
 set +a
-python3 tools/openrouter_doctor.py
+venv/bin/python tools/openrouter_doctor.py
 ```
 
 The doctor performs a real user/PID/network namespace smoke test. `bwrap --version` alone is not sufficient.
@@ -72,6 +86,17 @@ python3 tools/producer_openrouter_once.py
 ```
 
 A successful staging run must create the normal Telegram-gated publication review. Production scheduler constants remain Codex/Luna until parity runs are accepted.
+
+## Acceptance on the real Pi
+
+Before calling the staging runner healthy, verify all of these on the actual host:
+
+1. `openrouter_doctor.py` is green under the same user that runs production.
+2. A scriptwriter worktree can be written/committed and merged through `delegate_worktree.py close`.
+3. The critic cannot write the worktree, while its shell can still perform read-only fact checks through harness web tools.
+4. The animation director can run `npx tsc --noEmit`, render a Remotion Preview still into private `/tmp`, inspect it through the V4.1 Flash vision helper, commit in the detached worktree, and merge only allow-listed paths.
+5. The orchestrator can execute the trusted Gemini TTS bridge and create a dry-run/normal approval review without exposing OpenRouter/Exa keys to model shell commands.
+6. One full manual episode reaches `publication_created` before any production scheduler switch.
 
 ## Inspect cost and cache usage
 
