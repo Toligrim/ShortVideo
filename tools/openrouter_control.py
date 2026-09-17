@@ -14,6 +14,29 @@ from typing import Any
 from openrouter_base import ToolError
 from openrouter_config import ROOT, ROLE_PROMPTS, role_config
 
+
+def _last_json_object(text: str) -> dict[str, Any]:
+    """Parse the LAST top-level JSON object printed to stdout.
+
+    `delegate_worktree.py open` prints the delegate-claim result first (via
+    the in-process agent_log.main call) and then its own open-result object,
+    so a plain json.loads(text) fails with "Extra data". The open result is
+    always the final object printed.
+    """
+    decoder = json.JSONDecoder()
+    index = 0
+    result: dict[str, Any] = {}
+    while index < len(text):
+        while index < len(text) and text[index] in " \n\r\t":
+            index += 1
+        if index >= len(text):
+            break
+        value, index = decoder.raw_decode(text, index)
+        if isinstance(value, dict):
+            result = value
+    return result
+
+
 class ControlMixin:
     def _trusted_bash(self, command: str, timeout_seconds: int) -> dict[str, Any] | None:
         try:
@@ -69,7 +92,7 @@ class ControlMixin:
         opened = subprocess.run(open_cmd, cwd=str(ROOT), capture_output=True, text=True, timeout=90)
         if opened.returncode != 0:
             raise RuntimeError(f"delegate_worktree open failed rc={opened.returncode}: {opened.stdout[-2000:]} {opened.stderr[-2000:]}")
-        info = json.loads(opened.stdout)
+        info = _last_json_object(opened.stdout)
         agent_id = str(info["agent_id"])
         worktree = Path(info["worktree"])
         base_sha = str(info["base"])

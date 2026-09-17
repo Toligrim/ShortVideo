@@ -151,6 +151,30 @@ def test_delegate_open_timeout_has_raspberry_pi_headroom():
     assert 'closed = subprocess.run(close_cmd, cwd=str(ROOT), capture_output=True, text=True, timeout=120)' in source
 
 
+def test_run_delegate_parses_last_json_object_from_open_stdout():
+    """delegate_worktree.py open always prints two JSON objects to stdout
+    (the in-process delegate-claim result, then its own open result) -
+    plain json.loads(opened.stdout) raises "Extra data". Masked previously
+    by the too-tight open timeout (never reached this parse); exposed once
+    that timeout was fixed. Guard the fix and its usage site."""
+    sys.path.insert(0, str(TOOLS))
+    try:
+        from openrouter_control import _last_json_object
+    finally:
+        sys.path.pop(0)
+
+    two_json_objects = (
+        '{\n "granted": true,\n "agent_id": "scriptwriter-abc"\n}\n'
+        '{\n "agent_id": "scriptwriter-abc",\n "worktree": "/tmp/x"\n}\n'
+    )
+    assert _last_json_object(two_json_objects) == {
+        "agent_id": "scriptwriter-abc", "worktree": "/tmp/x",
+    }
+
+    source = (TOOLS / "openrouter_control.py").read_text(encoding="utf-8")
+    assert "info = _last_json_object(opened.stdout)" in source
+
+
 def test_staging_producer_dry_run_selects_openrouter():
     proc = subprocess.run(
         [sys.executable, str(TOOLS / "producer_openrouter_once.py"), "--dry-run", "--now", "1789600000"],
