@@ -28,10 +28,12 @@ def test_run_episode_dispatches_only_explicit_openrouter():
     assert source.index('if [[ "$RUNNER" == "openrouter" ]]') < source.index('run_episode_legacy.sh')
 
 
-def test_openrouter_runner_is_fail_closed_before_llm():
+def test_openrouter_runner_is_fail_closed_before_llm_and_uses_project_venv():
     source = (TOOLS / "run_episode_openrouter.sh").read_text(encoding="utf-8")
-    doctor = source.index("python3 tools/openrouter_doctor.py")
-    llm = source.index("python3 tools/openrouter_harness.py run")
+    assert 'HARNESS_PYTHON="${SHORTVIDEO_OPENROUTER_PYTHON:-$ROOT/venv/bin/python}"' in source
+    assert '[[ ! -x "$HARNESS_PYTHON" ]]' in source
+    doctor = source.index('"$HARNESS_PYTHON" tools/openrouter_doctor.py')
+    llm = source.index('"$HARNESS_PYTHON" tools/openrouter_harness.py run')
     assert doctor < llm
     assert "tts_scenes.py --check-quota" in source
     assert "publication_created" in source
@@ -88,12 +90,14 @@ def test_exact_eight_tools_and_no_delegate_tool():
     assert "delegate" not in names
 
 
-def test_delegation_is_intercepted_control_plane():
+def test_delegation_is_intercepted_control_plane_and_worktree_is_detached():
     source = (TOOLS / "openrouter_control.py").read_text(encoding="utf-8")
     assert '["python3", "tools/openrouter_harness.py", "internal-delegate"]' in source
     assert "self.run_delegate(ns.role, ns.slug, ns.task)" in source
     harness = (TOOLS / "openrouter_harness.py").read_text(encoding="utf-8")
     assert "internal-delegate is a harness control-plane command" in harness
+    worktree = (TOOLS / "delegate_worktree.py").read_text(encoding="utf-8")
+    assert '["worktree", "add", "--detach", str(wt), base]' in worktree
 
 
 def test_staging_producer_dry_run_selects_openrouter():
