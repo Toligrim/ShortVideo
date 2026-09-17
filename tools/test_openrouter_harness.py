@@ -202,3 +202,41 @@ def test_staging_producer_dry_run_selects_openrouter():
     assert body["runner"] == "openrouter"
     assert body["model"] == "deepseek/deepseek-v4-flash-0731"
     assert body["production_scheduler_unchanged"]["runner"] == "codex"
+
+
+def test_sandbox_shares_node_modules_readonly_into_detached_worktree(tmp_path, monkeypatch):
+    """staging incident 2026-09-17: a fresh detached worktree has no
+    video/node_modules (never installed there) and the model shell has no
+    network, so tsc/remotion had nothing to run. Share the trusted
+    supervisor's own install read-only instead of requiring network in the
+    sandbox."""
+    sys.path.insert(0, str(TOOLS))
+    try:
+        import openrouter_sandbox
+    finally:
+        sys.path.pop(0)
+
+    fake_root = tmp_path / "root"
+    (fake_root / "video" / "node_modules").mkdir(parents=True)
+    monkeypatch.setattr(openrouter_sandbox, "ROOT", fake_root)
+
+    workspace_with_video = tmp_path / "worktree-with-video"
+    (workspace_with_video / "video").mkdir(parents=True)
+    sandbox = openrouter_sandbox.BubblewrapSandbox(
+        workspace_with_video, tmp_path / "scratch1", writable=True,
+        role="animation-director", bwrap_path="/bin/true",
+    )
+    argv = sandbox._argv("true")
+    src = str(fake_root / "video" / "node_modules")
+    dst = str(workspace_with_video / "video" / "node_modules")
+    ro_binds = [argv[i + 1 : i + 3] for i, arg in enumerate(argv) if arg == "--ro-bind"]
+    assert [src, dst] in ro_binds
+
+    workspace_without_video = tmp_path / "worktree-no-video"
+    workspace_without_video.mkdir()
+    sandbox_no_video = openrouter_sandbox.BubblewrapSandbox(
+        workspace_without_video, tmp_path / "scratch2", writable=True,
+        role="scriptwriter", bwrap_path="/bin/true",
+    )
+    argv_no_video = sandbox_no_video._argv("true")
+    assert src not in argv_no_video

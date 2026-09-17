@@ -12,6 +12,7 @@ from openrouter_base import (
     MAX_BASH_OUTPUT_CHARS, ToolError, _dangerous_command_reason,
     _ensure_parents_args, _ok, _resolve_git_paths, sanitized_child_env,
 )
+from openrouter_config import ROOT
 
 class BubblewrapSandbox:
     def __init__(
@@ -59,6 +60,19 @@ class BubblewrapSandbox:
         argv += _ensure_parents_args(self.workspace)
         argv += ["--bind" if self.writable else "--ro-bind", str(self.workspace), str(self.workspace)]
         argv += ["--bind", str(self.scratch), "/tmp"]
+
+        # Detached delegate worktrees never get their own `npm ci` (the model
+        # shell has no network by design), so video/node_modules is simply
+        # missing there and tsc/remotion have nothing to run. Share the
+        # trusted supervisor's own install read-only instead of requiring
+        # network access inside the sandbox. Skipped when the workspace IS
+        # the main checkout (nothing to bind onto itself).
+        src_node_modules = ROOT / "video" / "node_modules"
+        dst_node_modules = self.workspace / "video" / "node_modules"
+        if src_node_modules.is_dir() and (self.workspace / "video").is_dir() \
+                and dst_node_modules.resolve() != src_node_modules.resolve():
+            argv += _ensure_parents_args(dst_node_modules)
+            argv += ["--ro-bind", str(src_node_modules), str(dst_node_modules)]
 
         git_dir, git_common = _resolve_git_paths(self.workspace)
         if git_dir and git_common:
