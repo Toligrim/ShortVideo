@@ -75,6 +75,8 @@ For the director, `.claude/skills/animator/catalog.md` is a large lookup resourc
 
 Normal model-issued `bash` stays under bubblewrap with private PID/network namespaces, private persistent `/tmp`, no external network and scrubbed credentials. Writer roles get workspace-write; critic is workspace read-only. The supervisor remains outside bwrap and owns OpenRouter/search/fetch network I/O. The dedicated ShortVideo AppArmor profile remains separate from the existing Codex profile.
 
+A fresh detached delegate worktree never gets its own `npm ci` (no network in the sandbox), so `BubblewrapSandbox` read-only binds the trusted supervisor's own `video/node_modules` into the worktree, plus a second, writable overlay bind sourced from the sandbox's private scratch dir at just `node_modules/.cache` (remotion/webpack hard-write their build cache there with no override, and would otherwise fail with `EROFS` against the read-only bind). Renders stay network-free because fonts are vendored under `video/public/fonts` (see that directory's `README.md`) rather than fetched from `fonts.gstatic.com` - the director's `tsc`/`remotion still`/vision preview loop runs end-to-end with zero network.
+
 ## Cost accounting
 
 OpenRouter generations continue through the existing run telemetry. Provider `usage.cost` is authoritative when present; role/model/token/cache/reasoning fields are recorded in `runs/<run_id>/`. No parallel telemetry database is introduced.

@@ -240,3 +240,43 @@ def test_sandbox_shares_node_modules_readonly_into_detached_worktree(tmp_path, m
     )
     argv_no_video = sandbox_no_video._argv("true")
     assert src not in argv_no_video
+
+
+def test_doctor_render_assets_check_catches_missing_and_tampered_fonts(tmp_path, monkeypatch):
+    """The director's still/vision loop silently reaches for the CDN (or
+    renders with the wrong font) if a vendored file is missing or a
+    @remotion/google-fonts bump changes the expected bytes without
+    regenerating video/public/fonts. Doctor must catch both before any
+    OpenRouter call."""
+    sys.path.insert(0, str(TOOLS))
+    try:
+        import openrouter_doctor
+    finally:
+        sys.path.pop(0)
+
+    fake_root = tmp_path / "root"
+    fonts_dir = fake_root / "video" / "public" / "fonts"
+    fonts_dir.mkdir(parents=True)
+    (fonts_dir / "a.woff2").write_bytes(b"font-bytes")
+    import hashlib
+    manifest = {"files": [{"filename": "a.woff2", "sha256": hashlib.sha256(b"font-bytes").hexdigest()}]}
+    (fonts_dir / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+    chrome_dir = fake_root / "video" / "node_modules" / ".remotion" / "chrome-headless-shell" / "linux-arm64"
+    chrome_dir.mkdir(parents=True)
+    (chrome_dir / "chrome-headless-shell").write_bytes(b"x")
+
+    monkeypatch.setattr(openrouter_doctor, "ROOT", fake_root)
+    ok = openrouter_doctor._check_render_assets()
+    assert ok == {"fonts_ok": True, "chrome_headless_shell_ok": True}
+
+    (fonts_dir / "a.woff2").write_bytes(b"tampered")
+    tampered = openrouter_doctor._check_render_assets()
+    assert tampered["fonts_ok"] is False
+    assert "hash_mismatch" in tampered["fonts_error"]
+
+    (fonts_dir / "a.woff2").write_bytes(b"font-bytes")
+    (chrome_dir / "chrome-headless-shell").unlink()
+    chrome_dir.rmdir()
+    no_chrome = openrouter_doctor._check_render_assets()
+    assert no_chrome["fonts_ok"] is True
+    assert no_chrome["chrome_headless_shell_ok"] is False

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import importlib.util
 import json
 import os
@@ -70,6 +71,37 @@ def _check_searxng() -> dict:
     return result
 
 
+def _check_render_assets() -> dict:
+    """The director's tsc/remotion-still/vision loop needs these present and
+    correct to actually work in the network-free sandbox: vendored fonts
+    (see video/public/fonts/README.md - no fonts.gstatic.com fetch at render
+    time) and remotion's own bundled headless-shell binary (no network to
+    download it if missing)."""
+    fonts_dir = ROOT / "video" / "public" / "fonts"
+    result: dict = {"fonts_ok": False, "chrome_headless_shell_ok": False}
+    try:
+        manifest = json.loads((fonts_dir / "manifest.json").read_text(encoding="utf-8"))
+        mismatches = []
+        for entry in manifest.get("files", []):
+            fpath = fonts_dir / entry["filename"]
+            if not fpath.is_file():
+                mismatches.append(f"{entry['filename']}:missing")
+                continue
+            if hashlib.sha256(fpath.read_bytes()).hexdigest() != entry["sha256"]:
+                mismatches.append(f"{entry['filename']}:hash_mismatch")
+        result["fonts_ok"] = bool(manifest.get("files")) and not mismatches
+        if mismatches:
+            result["fonts_error"] = ",".join(mismatches)
+    except (OSError, ValueError, KeyError) as exc:
+        result["fonts_error"] = f"manifest_unreadable:{type(exc).__name__}"
+
+    chrome_dir = ROOT / "video" / "node_modules" / ".remotion" / "chrome-headless-shell"
+    result["chrome_headless_shell_ok"] = chrome_dir.is_dir() and any(chrome_dir.iterdir())
+    if not result["chrome_headless_shell_ok"]:
+        result["chrome_headless_shell_error"] = "chrome_headless_shell_missing"
+    return result
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.parse_args(argv)
@@ -89,13 +121,15 @@ def main(argv: list[str] | None = None) -> int:
         "policy": (ROOT / "tools" / "delegate_policy.json").is_file(),
         "role_prompts": all((ROOT / ".claude" / "agents" / name).is_file() for name in ("scriptwriter.md", "animation-director.md", "critic.md")),
         "bwrap": _check_bwrap(bwrap),
+        "render_assets": _check_render_assets(),
     }
-    required_ok = checks["openrouter_api_key"] and checks["search_backend"]["ok"] and checks["httpx"] and checks["trafilatura"] and checks["git"] and checks["rg"] and checks["node"] and checks["policy"] and checks["role_prompts"] and checks["bwrap"]["smoke_ok"]
+    required_ok = checks["openrouter_api_key"] and checks["search_backend"]["ok"] and checks["httpx"] and checks["trafilatura"] and checks["git"] and checks["rg"] and checks["node"] and checks["policy"] and checks["role_prompts"] and checks["bwrap"]["smoke_ok"] and checks["render_assets"]["fonts_ok"] and checks["render_assets"]["chrome_headless_shell_ok"]
     error_class = "ok"
     if not checks["openrouter_api_key"]: error_class = "openrouter_key_missing"
     elif not checks["search_backend"]["ok"]: error_class = "web_search_backend_unavailable"
     elif not checks["httpx"] or not checks["trafilatura"]: error_class = "openrouter_python_dependency_missing"
     elif not checks["bwrap"]["smoke_ok"]: error_class = checks["bwrap"].get("error", "bwrap_unknown_failure")
+    elif not checks["render_assets"]["fonts_ok"] or not checks["render_assets"]["chrome_headless_shell_ok"]: error_class = "render_assets_missing"
     elif not all(checks[k] for k in ("git", "rg", "node", "policy", "role_prompts")): error_class = "openrouter_host_dependency_missing"
     print(json.dumps({"ok": required_ok, "error_class": error_class, "checks": checks, "notes": {
         "chromium": "optional until a JS-only web_fetch fallback is needed" if not checks["chromium"] else "available",
