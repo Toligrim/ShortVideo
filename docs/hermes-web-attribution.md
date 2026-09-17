@@ -18,7 +18,7 @@ Files studied at that commit include:
 
 Ideas deliberately carried into the ShortVideo-specific implementation include the small `web_search(query, limit)` model interface, separation of search metadata from page extraction, normalized-query TTL caching, bounded single-flight, disk extraction cache, safety-before-cache, line-aware 75/25 truncation with spill-to-disk, base64 image removal, hard extraction timeouts, batch extraction and non-positional result/cache association.
 
-ShortVideo substantially changes the implementation: it has no Hermes plugin/provider registry, CLI config, managed gateway, browser tool, memory system or keyless provider ring. It keeps ShortVideo's stronger DNS pinning, redirect revalidation and restricted Chromium proxy, and exposes no browser tool beyond the existing eight-function surface.
+ShortVideo substantially changes the implementation: it has no Hermes plugin/provider registry, CLI config, managed gateway, browser tool, memory system or keyless provider ring. It keeps ShortVideo's stronger DNS pinning, redirect revalidation and restricted Chromium proxy, and exposes no browser tool beyond the existing eight-function surface. Search single-flight is extended beyond Hermes' in-process reference: ShortVideo keeps exact-key thread coalescing and adds Linux cross-process coordination through a fixed 64-shard advisory-lock namespace so independent delegates can share the completed disk cache without an unbounded lock table.
 
 The ShortVideo code is a purpose-built reimplementation rather than a vendored Hermes module. This attribution is retained because the architecture and several algorithms were materially informed by Hermes.
 
