@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 from __future__ import annotations
+
 import contextlib
 import gzip
 import http.client
+import io
 import ipaddress
 import os
+import re
 import select
 import shutil
 import socket
@@ -15,11 +18,177 @@ import tempfile
 import threading
 import time
 from pathlib import Path
-from urllib.parse import urljoin, urlsplit
+from urllib.parse import parse_qsl, quote, urljoin, urlsplit, urlunsplit
 
-from openrouter_base import (
-    MAX_FETCH_BYTES, ToolError, sanitized_child_env,
+from openrouter_base import MAX_FETCH_BYTES, ToolError, sanitized_child_env
+
+_HTTP_SCHEMES = {"http", "https"}
+_ALLOWED_PORTS = {80, 443}
+_CGNAT_NETWORK = ipaddress.ip_network("100.64.0.0/10")
+_METADATA_V4 = (
+    "169.254.169.254",
+    "169.254.170.2",
+    "169.254.169.253",
+    "100.100.100.200",
 )
+_ALWAYS_BLOCKED_IPS = frozenset(
+    {ipaddress.ip_address(ip) for ip in _METADATA_V4}
+    | {ipaddress.ip_address("::ffff:" + ip) for ip in _METADATA_V4}
+    | {ipaddress.ip_address("fd00:ec2::254")}
+)
+_ALWAYS_BLOCKED_NETWORKS = tuple(
+    ipaddress.ip_network(value)
+    for value in ("169.254.0.0/16", "::ffff:169.254.0.0/112")
+)
+_BLOCKED_HOSTNAMES = {"localhost", "localhost.localdomain", "metadata.google.internal", "metadata.goog"}
+_SENSITIVE_QUERY_PARAM_NAMES = frozenset({
+    "access_token", "api_key", "apikey", "auth_token", "authorization",
+    "awsaccesskeyid", "client_secret", "credential", "credentials", "jwt",
+    "password", "passwd", "secret", "session_id", "signature", "token",
+    "x_amz_security_token", "x_amz_signature", "x-amz-security-token", "x-amz-signature",
+})
+_SCHEME_SPACE_RE = re.compile(r"^([A-Za-z][A-Za-z0-9+.-]*://)\s+")
+
+
+def sensitive_query_param_name(url: str) -> str | None:
+    if not isinstance(url, str) or "?" not in url:
+        return None
+    try:
+        parts = urlsplit(url.strip())
+    except ValueError:
+        return None
+    if parts.scheme.lower() not in _HTTP_SCHEMES:
+        return None
+    for key, value in parse_qsl(parts.query, keep_blank_values=True):
+        if value and key.lower() in _SENSITIVE_QUERY_PARAM_NAMES:
+            return key
+    return None
+
+
+def normalize_url_for_request(url: str) -> str:
+    if not isinstance(url, str):
+        raise ToolError("invalid_url", "URL must be a string", retryable=False)
+    raw = _SCHEME_SPACE_RE.sub(r"\1", url.strip())
+    if not raw:
+        raise ToolError("invalid_url", "URL is empty", retryable=False)
+    try:
+        parts = urlsplit(raw)
+    except ValueError as exc:
+        raise ToolError("invalid_url", f"cannot parse URL: {exc}", retryable=False) from exc
+    scheme = parts.scheme.lower()
+    if scheme not in _HTTP_SCHEMES:
+        raise ToolError("invalid_url", "only http:// and https:// URLs are allowed", retryable=False)
+    if not parts.hostname:
+        raise ToolError("invalid_url", "URL must contain a hostname", retryable=False)
+    if parts.username is not None or parts.password is not None:
+        raise ToolError("secret_url_blocked", "embedded URL credentials are not allowed", retryable=False)
+    if sensitive := sensitive_query_param_name(raw):
+        raise ToolError(
+            "secret_url_blocked",
+            f"URL query contains sensitive parameter {sensitive!r}",
+            "Do not send API keys, tokens, passwords or signed credentials through web_fetch.",
+            False,
+        )
+    try:
+        port = parts.port
+    except ValueError as exc:
+        raise ToolError("invalid_url", "invalid URL port", retryable=False) from exc
+    port = port or (443 if scheme == "https" else 80)
+    if port not in _ALLOWED_PORTS:
+        raise ToolError("ssrf_blocked", f"port {port} is not allowed", retryable=False)
+    try:
+        ascii_host = parts.hostname.encode("idna").decode("ascii").rstrip(".").lower()
+    except UnicodeError as exc:
+        raise ToolError("invalid_url", "hostname is not valid IDNA", retryable=False) from exc
+    if not ascii_host:
+        raise ToolError("invalid_url", "hostname is empty", retryable=False)
+    host_for_netloc = f"[{ascii_host}]" if ":" in ascii_host else ascii_host
+    default_port = 443 if scheme == "https" else 80
+    netloc = host_for_netloc if port == default_port else f"{host_for_netloc}:{port}"
+    safe = "/%:@!$&'()*+,;="
+    path = quote(parts.path or "/", safe=safe)
+    query = quote(parts.query, safe=safe + "?")
+    return urlunsplit((scheme, netloc, path, query, ""))
+
+
+def _is_blocked_ip(addr: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+    if addr in _ALWAYS_BLOCKED_IPS or any(addr in net for net in _ALWAYS_BLOCKED_NETWORKS):
+        return True
+    if isinstance(addr, ipaddress.IPv6Address) and addr.ipv4_mapped is not None:
+        addr = addr.ipv4_mapped
+    return (
+        addr.is_private
+        or addr.is_loopback
+        or addr.is_link_local
+        or addr.is_reserved
+        or addr.is_multicast
+        or addr.is_unspecified
+        or (isinstance(addr, ipaddress.IPv4Address) and addr in _CGNAT_NETWORK)
+        or not addr.is_global
+    )
+
+
+def _public_ips_for_host(host: str, port: int) -> list[str]:
+    normalized_host = host.rstrip(".").lower()
+    if normalized_host in _BLOCKED_HOSTNAMES or normalized_host.endswith(".localhost"):
+        raise ToolError("ssrf_blocked", f"internal hostname {host!r} is not allowed", retryable=False)
+    try:
+        literal = ipaddress.ip_address(normalized_host)
+    except ValueError:
+        literal = None
+    if literal is not None:
+        if _is_blocked_ip(literal):
+            raise ToolError("ssrf_blocked", f"non-public address {normalized_host} is not allowed", retryable=False)
+        return [normalized_host]
+    try:
+        infos = socket.getaddrinfo(normalized_host, port, socket.AF_UNSPEC, socket.SOCK_STREAM)
+    except socket.gaierror as exc:
+        raise ToolError("dns_failed", f"cannot resolve {normalized_host}: {exc}", retryable=True) from exc
+    ips: list[str] = []
+    for info in infos:
+        raw = info[4][0]
+        ip = raw.split("%", 1)[0]
+        try:
+            addr = ipaddress.ip_address(ip)
+        except ValueError as exc:
+            raise ToolError("dns_failed", f"resolver returned invalid address {raw!r}", retryable=True) from exc
+        if _is_blocked_ip(addr):
+            raise ToolError(
+                "ssrf_blocked",
+                f"{normalized_host} resolved to non-public address {ip}",
+                "web_fetch only accepts public Internet destinations.",
+                False,
+            )
+        if ip not in ips:
+            ips.append(ip)
+    if not ips:
+        raise ToolError("dns_failed", f"no usable public address for {normalized_host}", retryable=True)
+    return ips[:8]
+
+
+def _validate_public_url(url: str) -> tuple[str, str, int, str]:
+    normalized = normalize_url_for_request(url)
+    parts = urlsplit(normalized)
+    host = parts.hostname or ""
+    port = parts.port or (443 if parts.scheme == "https" else 80)
+    _public_ips_for_host(host, port)
+    path = parts.path or "/"
+    if parts.query:
+        path += "?" + parts.query
+    return parts.scheme, host, port, path
+
+
+def validate_public_url(url: str) -> tuple[str, str, str, int, str, list[str]]:
+    normalized = normalize_url_for_request(url)
+    parts = urlsplit(normalized)
+    host = parts.hostname or ""
+    port = parts.port or (443 if parts.scheme == "https" else 80)
+    ips = _public_ips_for_host(host, port)
+    path = parts.path or "/"
+    if parts.query:
+        path += "?" + parts.query
+    return normalized, parts.scheme, host, port, path, ips
+
 
 class _PinnedHTTPConnection(http.client.HTTPConnection):
     def __init__(self, hostname: str, pinned_ip: str, port: int, timeout: float):
@@ -41,139 +210,128 @@ class _PinnedHTTPSConnection(http.client.HTTPSConnection):
         self.sock = self._context.wrap_socket(raw, server_hostname=self.host)
 
 
-def _public_ips_for_host(host: str, port: int) -> list[str]:
-    try:
-        infos = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
-    except socket.gaierror as exc:
-        raise ToolError("dns_failed", f"cannot resolve {host}: {exc}", retryable=True) from exc
-    ips: list[str] = []
-    for info in infos:
-        ip = info[4][0].split("%", 1)[0]
-        try:
-            addr = ipaddress.ip_address(ip)
-        except ValueError:
-            continue
-        if not addr.is_global:
+def _remaining(deadline: float) -> float:
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise ToolError("fetch_timeout", "web fetch exceeded its wall-clock timeout", retryable=True)
+    return max(0.05, remaining)
+
+
+def _host_header(host: str, scheme: str, port: int) -> str:
+    rendered = f"[{host}]" if ":" in host and not host.startswith("[") else host
+    default = 443 if scheme == "https" else 80
+    return rendered if port == default else f"{rendered}:{port}"
+
+
+def _request_once(
+    scheme: str, host: str, port: int, path: str, ip: str, timeout: float
+) -> tuple[http.client.HTTPConnection, http.client.HTTPResponse]:
+    cls = _PinnedHTTPSConnection if scheme == "https" else _PinnedHTTPConnection
+    conn = cls(host, ip, port, timeout)
+    conn.request(
+        "GET",
+        path,
+        headers={
+            "Host": _host_header(host, scheme, port),
+            "User-Agent": "ShortVideoResearchBot/2.0 (+web_fetch)",
+            "Accept": "text/html,application/xhtml+xml,text/plain;q=0.9,*/*;q=0.1",
+            "Accept-Encoding": "gzip",
+            "Connection": "close",
+        },
+    )
+    return conn, conn.getresponse()
+
+
+def _read_limited(response: http.client.HTTPResponse, deadline: float) -> bytes:
+    chunks: list[bytes] = []
+    total = 0
+    while True:
+        timeout = _remaining(deadline)
+        with contextlib.suppress(Exception):
+            response.fp.raw._sock.settimeout(timeout)  # type: ignore[attr-defined]
+        chunk = response.read(min(65536, MAX_FETCH_BYTES + 1 - total))
+        if not chunk:
+            break
+        chunks.append(chunk)
+        total += len(chunk)
+        if total > MAX_FETCH_BYTES:
             raise ToolError(
-                "ssrf_blocked",
-                f"{host} resolved to non-public address {ip}",
-                "web_fetch only accepts public Internet destinations.",
-                retryable=False,
+                "response_too_large",
+                f"page exceeds {MAX_FETCH_BYTES} compressed/raw bytes",
+                "Fetch a more specific documentation/article URL.",
+                False,
             )
-        if ip not in ips:
-            ips.append(ip)
-    if not ips:
-        raise ToolError("dns_failed", f"no usable public address for {host}", retryable=True)
-    return ips
+    return b"".join(chunks)
 
 
-def _validate_public_url(url: str) -> tuple[str, str, int, str]:
-    parts = urlsplit(url)
-    if parts.scheme not in {"http", "https"}:
-        raise ToolError("invalid_url", "only http:// and https:// URLs are allowed", retryable=False)
-    if not parts.hostname or parts.username or parts.password:
-        raise ToolError("invalid_url", "URL must contain a normal public hostname and no embedded credentials", retryable=False)
+def _gunzip_limited(raw: bytes) -> bytes:
     try:
-        port = parts.port or (443 if parts.scheme == "https" else 80)
-    except ValueError as exc:
-        raise ToolError("invalid_url", "invalid URL port", retryable=False) from exc
-    if port not in {80, 443}:
-        raise ToolError("ssrf_blocked", f"port {port} is not allowed", "Only public HTTP/HTTPS ports 80 and 443 are accepted.", False)
-    host = parts.hostname.rstrip(".")
-    if host.lower() in {"localhost", "localhost.localdomain"}:
-        raise ToolError("ssrf_blocked", "localhost is not allowed", retryable=False)
-    path = parts.path or "/"
-    if parts.query:
-        path += "?" + parts.query
-    return parts.scheme, host, port, path
+        with gzip.GzipFile(fileobj=io.BytesIO(raw)) as gz:
+            decoded = gz.read(MAX_FETCH_BYTES + 1)
+    except OSError as exc:
+        raise ToolError("decode_failed", "invalid gzip response", retryable=True) from exc
+    if len(decoded) > MAX_FETCH_BYTES:
+        raise ToolError("response_too_large", "decompressed response exceeds fetch byte budget", retryable=False)
+    return decoded
 
 
-def _fetch_public_bytes(url: str, *, timeout: float = 12.0, redirects: int = 4) -> tuple[str, bytes, str]:
-    current = url
+def _fetch_public_bytes(
+    url: str, *, timeout: float = 12.0, wall_timeout: float = 25.0, redirects: int = 4
+) -> tuple[str, bytes, str]:
+    current = normalize_url_for_request(url)
+    deadline = time.monotonic() + wall_timeout
     for _ in range(redirects + 1):
-        scheme, host, port, path = _validate_public_url(current)
-        ips = _public_ips_for_host(host, port)
+        normalized, scheme, host, port, path, ips = validate_public_url(current)
+        current = normalized
         last_exc: Exception | None = None
-        response = None
-        conn = None
+        conn: http.client.HTTPConnection | None = None
+        response: http.client.HTTPResponse | None = None
         for ip in ips:
             try:
-                cls = _PinnedHTTPSConnection if scheme == "https" else _PinnedHTTPConnection
-                conn = cls(host, ip, port, timeout)
-                conn.request(
-                    "GET",
-                    path,
-                    headers={
-                        "Host": host if port in {80, 443} else f"{host}:{port}",
-                        "User-Agent": "ShortVideoResearchBot/1.0 (+web_fetch)",
-                        "Accept": "text/html,application/xhtml+xml,text/plain;q=0.9,*/*;q=0.1",
-                        "Accept-Encoding": "gzip",
-                        "Connection": "close",
-                    },
+                conn, response = _request_once(
+                    scheme, host, port, path, ip, min(timeout, _remaining(deadline))
                 )
-                response = conn.getresponse()
                 break
+            except ToolError:
+                raise
             except (OSError, ssl.SSLError, http.client.HTTPException) as exc:
                 last_exc = exc
-                if conn:
-                    try:
+                if conn is not None:
+                    with contextlib.suppress(Exception):
                         conn.close()
-                    except Exception:
-                        pass
-        if response is None:
+        if response is None or conn is None:
             raise ToolError("fetch_failed", f"connection failed: {last_exc}", retryable=True)
 
         status = response.status
         location = response.getheader("Location")
         content_type = response.getheader("Content-Type") or ""
         encoding = (response.getheader("Content-Encoding") or "").lower()
-
-        if status in {301, 302, 303, 307, 308} and location:
-            response.read(1024)
-            conn.close()
-            current = urljoin(current, location)
-            continue
-        if status < 200 or status >= 300:
-            body = response.read(min(4096, MAX_FETCH_BYTES))
-            conn.close()
-            raise ToolError(
-                "http_error",
-                f"HTTP {status} from {current}",
-                body.decode("utf-8", errors="replace")[:500] or None,
-                retryable=status in {408, 425, 429, 500, 502, 503, 504},
-            )
-
-        chunks: list[bytes] = []
-        total = 0
-        while True:
-            chunk = response.read(min(65536, MAX_FETCH_BYTES + 1 - total))
-            if not chunk:
-                break
-            chunks.append(chunk)
-            total += len(chunk)
-            if total > MAX_FETCH_BYTES:
-                conn.close()
+        try:
+            if status in {301, 302, 303, 307, 308} and location:
+                response.read(1024)
+                current = urljoin(current, location)
+                continue
+            if status < 200 or status >= 300:
+                body = response.read(min(4096, MAX_FETCH_BYTES))
                 raise ToolError(
-                    "response_too_large",
-                    f"page exceeds {MAX_FETCH_BYTES} bytes",
-                    "Fetch a more specific documentation/article URL.",
-                    False,
+                    "http_error",
+                    f"HTTP {status} from {current}",
+                    body.decode("utf-8", errors="replace")[:500] or None,
+                    status in {408, 425, 429, 500, 502, 503, 504},
                 )
-        conn.close()
-        raw = b"".join(chunks)
+            raw = _read_limited(response, deadline)
+        finally:
+            with contextlib.suppress(Exception):
+                conn.close()
         if encoding == "gzip":
-            try:
-                raw = gzip.decompress(raw)
-            except OSError as exc:
-                raise ToolError("decode_failed", "invalid gzip response", retryable=True) from exc
+            raw = _gunzip_limited(raw)
         return current, raw, content_type
-
     raise ToolError("redirect_limit", f"more than {redirects} redirects", retryable=False)
 
 
 def _extract_html(raw: bytes, url: str, content_type: str) -> str:
-    if "text/plain" in content_type:
-        return raw.decode("utf-8", errors="replace")
+    if "text/plain" in content_type.lower():
+        return raw.decode("utf-8", errors="replace").strip()
     try:
         from trafilatura import extract
     except ImportError as exc:
@@ -249,7 +407,7 @@ class _RestrictedBrowserProxyHandler(socketserver.BaseRequestHandler):
             if close < 0:
                 raise ValueError("invalid bracketed host")
             host = value[1:close]
-            tail = value[close + 1 :]
+            tail = value[close + 1:]
             port = int(tail[1:]) if tail.startswith(":") else default_port
             return host, port
         if value.count(":") == 1:
@@ -302,7 +460,7 @@ class _RestrictedBrowserProxyHandler(socketserver.BaseRequestHandler):
     def handle(self) -> None:
         try:
             header = self._read_header()
-            head, sep, rest = header.partition(b"\r\n\r\n")
+            head, _, rest = header.partition(b"\r\n\r\n")
             lines = head.split(b"\r\n")
             if not lines:
                 return
@@ -326,9 +484,8 @@ class _RestrictedBrowserProxyHandler(socketserver.BaseRequestHandler):
                 finally:
                     upstream.close()
                 return
-
             split = urlsplit(target)
-            if split.scheme not in {"http", "https"} or not split.hostname:
+            if split.scheme not in _HTTP_SCHEMES or not split.hostname:
                 self._deny("400 Bad Request")
                 return
             default_port = 443 if split.scheme == "https" else 80
@@ -361,10 +518,7 @@ class _RestrictedBrowserProxyHandler(socketserver.BaseRequestHandler):
 @contextlib.contextmanager
 def _restricted_browser_proxy(host: str, port: int, ip: str):
     proxy = _RestrictedBrowserProxy(
-        ("127.0.0.1", 0),
-        allowed_host=host,
-        allowed_port=port,
-        pinned_ip=ip,
+        ("127.0.0.1", 0), allowed_host=host, allowed_port=port, pinned_ip=ip
     )
     thread = threading.Thread(target=proxy.serve_forever, daemon=True)
     thread.start()
@@ -380,30 +534,31 @@ def _chromium_dump_dom(url: str, host: str, ip: str, *, port: int, timeout: int 
     chrome = _chrome_binary()
     if not chrome:
         raise ToolError("js_renderer_unavailable", "headless Chromium was not found", retryable=False)
-    env = sanitized_child_env({"HOME": tempfile.mkdtemp(prefix="sv-chrome-")})
-    try:
-        with _restricted_browser_proxy(host, port, ip) as proxy_port:
-            cmd = [
-                chrome,
-                "--headless=new",
-                "--disable-gpu",
-                "--disable-background-networking",
-                "--disable-component-update",
-                "--disable-default-apps",
-                "--disable-extensions",
-                "--disable-sync",
-                "--metrics-recording-only",
-                "--no-first-run",
-                "--disable-quic",
-                f"--proxy-server=http://127.0.0.1:{proxy_port}",
-                "--proxy-bypass-list=<-loopback>",
-                "--virtual-time-budget=8000",
-                "--dump-dom",
-                url,
-            ]
-            proc = subprocess.run(cmd, env=env, capture_output=True, timeout=timeout)
-    except subprocess.TimeoutExpired as exc:
-        raise ToolError("js_render_timeout", f"Chromium exceeded {timeout}s", retryable=True) from exc
+    with tempfile.TemporaryDirectory(prefix="sv-chrome-") as home:
+        env = sanitized_child_env({"HOME": home})
+        try:
+            with _restricted_browser_proxy(host, port, ip) as proxy_port:
+                cmd = [
+                    chrome,
+                    "--headless=new",
+                    "--disable-gpu",
+                    "--disable-background-networking",
+                    "--disable-component-update",
+                    "--disable-default-apps",
+                    "--disable-extensions",
+                    "--disable-sync",
+                    "--metrics-recording-only",
+                    "--no-first-run",
+                    "--disable-quic",
+                    f"--proxy-server=http://127.0.0.1:{proxy_port}",
+                    "--proxy-bypass-list=<-loopback>",
+                    "--virtual-time-budget=8000",
+                    "--dump-dom",
+                    url,
+                ]
+                proc = subprocess.run(cmd, env=env, capture_output=True, timeout=timeout)
+        except subprocess.TimeoutExpired as exc:
+            raise ToolError("js_render_timeout", f"Chromium exceeded {timeout}s", retryable=True) from exc
     if proc.returncode != 0 or not proc.stdout:
         detail = proc.stderr.decode("utf-8", errors="replace")[-1000:]
         raise ToolError("js_render_failed", detail or f"Chromium exit {proc.returncode}", retryable=True)
