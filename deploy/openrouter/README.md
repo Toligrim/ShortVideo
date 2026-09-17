@@ -1,83 +1,81 @@
 # Deploy the OpenRouter harness on Raspberry Pi
 
-This is a staging deployment. It does not switch the production cron runner.
+This is staging only. It does not switch the production cron runner.
 
-## Python dependencies
-
-Install the harness dependencies into the repository virtualenv used by the runner:
+## Dependencies
 
 ```bash
 venv/bin/pip install -r requirements-openrouter.txt
 ```
 
-The harness intentionally adds only `httpx` and `trafilatura` to the Python runtime. `tools/run_episode_openrouter.sh` uses `venv/bin/python` by default; set `SHORTVIDEO_OPENROUTER_PYTHON` only if this installation uses a different dedicated interpreter.
+Only `httpx` and `trafilatura` are required by the harness; SearXNG and optional Firecrawl are accessed through raw HTTP. `tools/run_episode_openrouter.sh` uses `venv/bin/python` by default.
 
-Before any live API call, run the deterministic checks:
+Run deterministic checks before a live episode:
 
 ```bash
 venv/bin/python -m py_compile \
   tools/openrouter_base.py tools/openrouter_client.py tools/openrouter_config.py \
   tools/openrouter_control.py tools/openrouter_doctor.py tools/openrouter_executor.py \
   tools/openrouter_agent.py tools/openrouter_harness.py tools/openrouter_sandbox.py \
-  tools/openrouter_tools.py tools/openrouter_web.py tools/producer_openrouter_once.py
+  tools/openrouter_tools.py tools/openrouter_web.py tools/openrouter_web_cache.py \
+  tools/openrouter_web_search.py tools/openrouter_web_extract.py tools/producer_openrouter_once.py
 bash -n tools/run_episode.sh
 bash -n tools/run_episode_legacy.sh
 bash -n tools/run_episode_openrouter.sh
-venv/bin/python -m pytest -q tools/test_openrouter_harness.py tools/test_run_episode_runner.py
+venv/bin/python -m pytest -q \
+  tools/test_openrouter_harness.py tools/test_openrouter_web.py tools/test_run_episode_runner.py
 ```
 
-## Credentials
+## Trusted supervisor environment
 
-Create `~/.config/shortvideo/openrouter.env`, mode `0600`:
+Create `~/.config/shortvideo/openrouter.env` with mode `0600`:
 
 ```text
 OPENROUTER_API_KEY=...
-EXA_API_KEY=...
+SEARXNG_URL=http://127.0.0.1:8888
+# Optional paid/keyed fallback only:
+# FIRECRAWL_API_KEY=...
+# Optional cache placement/TTL overrides:
+# SHORTVIDEO_WEB_CACHE_DIR=~/.cache/shortvideo/openrouter-web
+# SHORTVIDEO_WEB_CACHE_TTL_SECONDS=1200
 ```
 
-Load it into the trusted producer/supervisor environment only. Model-controlled shell processes are scrubbed of these values.
+`EXA_API_KEY` is no longer required. Do not assume the example SearXNG address is correct for a host: set `SEARXNG_URL` to the actual instance. The doctor performs a real JSON search probe. If SearXNG is unavailable, a configured `FIRECRAWL_API_KEY` supplies the optional fallback route; keyless Firecrawl is intentionally not supported.
 
-Existing Gemini TTS and publisher credentials stay in their existing files/services.
+Load these variables only into the trusted producer/supervisor. OpenRouter, SearXNG/Firecrawl, Gemini, Telegram and other secret families are scrubbed from model-controlled bash.
+
+Existing Gemini TTS and publisher credentials remain in their existing files/services.
 
 ## bubblewrap and AppArmor
 
-Ubuntu 24.04 on this host uses `kernel.apparmor_restrict_unprivileged_userns=1`. Do not globally disable that sysctl.
-
-Install bubblewrap:
+Ubuntu 24.04 may have `kernel.apparmor_restrict_unprivileged_userns=1`. Do not globally disable it. Install bubblewrap, then create a separate ShortVideo/OpenRouter AppArmor profile for the exact bwrap binary selected by `SHORTVIDEO_BWRAP`, using the already-working `/etc/apparmor.d/codex-bwrap` only as a reference. Do not edit/broaden the Codex profile.
 
 ```bash
 sudo apt update
 sudo apt install bubblewrap
-```
-
-Before changing AppArmor, save the current state and use the already-working Codex bwrap profile only as a reference. Create a separate ShortVideo profile for the exact bwrap binary selected by `SHORTVIDEO_BWRAP`; do not broaden the Codex profile.
-
-After loading the profile, run:
-
-```bash
 set -a
 . ~/.config/shortvideo/openrouter.env
 set +a
 venv/bin/python tools/openrouter_doctor.py
 ```
 
-The doctor performs a real user/PID/network namespace smoke test. `bwrap --version` alone is not sufficient.
+The doctor performs a real bwrap namespace smoke test; `bwrap --version` alone is not acceptance.
 
-### Rollback
+## Web acceptance on the Pi
 
-Unload/remove only the new ShortVideo AppArmor profile, restore any edited file from its backup, reload AppArmor and unset `SHORTVIDEO_BWRAP`. Do not change `kernel.apparmor_restrict_unprivileged_userns` as a workaround.
+Before a full episode, verify the web layer with the same production user:
+
+- doctor reports SearXNG search success, or explicitly reports the keyed Firecrawl fallback as configured;
+- `web_search` returns normalized SearXNG results and a repeated identical query hits cache;
+- `web_fetch` can fetch a normal public article, batch two to five public URLs, and read a truncated page's `@web-cache/...` path through `read_file`;
+- localhost, metadata IPs, CGNAT/private addresses and a public-to-private redirect fail closed;
+- a JS-only test page works only if Chromium is installed, and Chromium cannot subrequest localhost/private hosts;
+- cache directory ownership/permissions are correct for the service user.
 
 ## First staging run
 
-Inspect the command without starting an LLM:
-
 ```bash
 python3 tools/producer_openrouter_once.py --dry-run
-```
-
-Then use the same approval store as production:
-
-```bash
 set -a
 . ~/.config/shortvideo/openrouter.env
 set +a
@@ -85,24 +83,25 @@ export SHORTVIDEO_PUBLISH_STATE_DIR=...
 python3 tools/producer_openrouter_once.py
 ```
 
-A successful staging run must create the normal Telegram-gated publication review. Production scheduler constants remain Codex/Luna until parity runs are accepted.
+A staging run must create the normal Telegram-gated review. Production scheduler constants stay `codex` / `gpt-5.6-luna` / `max` until parity is explicitly accepted.
 
-## Acceptance on the real Pi
+## Full Raspberry Pi acceptance
 
-Before calling the staging runner healthy, verify all of these on the actual host:
+Before calling the runner healthy, verify on the actual host:
 
-1. `openrouter_doctor.py` is green under the same user that runs production.
-2. A scriptwriter worktree can be written/committed and merged through `delegate_worktree.py close`.
-3. The critic cannot write the worktree, while its shell can still perform read-only fact checks through harness web tools.
-4. The animation director can run `npx tsc --noEmit`, render a Remotion Preview still into private `/tmp`, inspect it through the V4.1 Flash vision helper, commit in the detached worktree, and merge only allow-listed paths.
-5. The orchestrator can execute the trusted Gemini TTS bridge and create a dry-run/normal approval review without exposing OpenRouter/Exa keys to model shell commands.
-6. One full manual episode reaches `publication_created` before any production scheduler switch.
+1. `openrouter_doctor.py` is green under the production user, including bwrap and search route.
+2. A scriptwriter detached worktree can write/commit and integrate through the existing `delegate_worktree.py` lease/allowlist path.
+3. Critic is read-only and can still research through supervisor web tools.
+4. Animation director can run `tsc`, render a Preview still into private `/tmp`, inspect it through the V4.1 Flash vision helper, commit in its detached worktree and integrate only allowed paths. For the ~270 KB animator catalog, use `grep` then ranged `read_file`, never load the whole catalog as routine context.
+5. Gemini TTS bridge and approval review work without exposing supervisor secrets to model bash.
+6. Deterministic overlap/motion checks pass and one full manual episode reaches `publication_created`.
+7. Repeat several manual parity episodes before any scheduler migration.
 
-## Inspect cost and cache usage
+## Cost/cache inspection
 
 ```bash
 cat runs/<run_id>/openrouter-cost.json
 tail -n 20 runs/<run_id>/openrouter-usage.jsonl
 ```
 
-The aggregate is also written back into the existing run manifest/index rather than a parallel accounting store.
+Web cache defaults to `~/.cache/shortvideo/openrouter-web`. OpenRouter cost continues to use the existing run telemetry; no parallel billing store is created.
